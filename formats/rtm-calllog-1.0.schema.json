@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-calllog-1.0",
+  "title": "Call-log export, JSON part (rtm-calllog-1.0)",
+  "description": "An enumerator's whole log for one round so far, for the common folder. File names: {enumerator_id}_{export date}.json, written with a CSV of the same name whose rows are this file's 'dials'. It holds household IDs, times and results, never names or phone numbers. A newer export replaces an older one.",
+  "type": "object",
+  "required": ["schema", "program", "round", "enumerator_id", "assignment_fingerprint", "chain_genesis", "exported_at", "exported_by", "event_count", "last_hash", "contains_contact_information", "events", "dials", "actions"],
+  "properties": {
+    "schema": { "const": "rtm-calllog-1.0" },
+    "tool_version": { "type": "string" },
+    "program": { "type": "string", "minLength": 1 },
+    "country": { "type": "string" },
+    "round": { "type": "integer", "minimum": 1 },
+    "enumerator_id": { "type": "string", "minLength": 1 },
+    "assignment_fingerprint": { "$ref": "#/$defs/hash", "description": "Fingerprint of the assignment in use when exported (it changes when the leader sends an update)." },
+    "chain_genesis": { "$ref": "#/$defs/hash", "description": "Fingerprint of the round's first assignment: the first event's prev_hash." },
+    "exported_at": { "$ref": "#/$defs/instant" },
+    "exported_by": { "type": "string" },
+    "event_count": { "type": "integer", "minimum": 0 },
+    "last_hash": { "$ref": "#/$defs/hash" },
+    "chain_verified": { "type": "boolean" },
+    "contains_contact_information": { "const": false },
+    "contacts_file": { "type": ["string", "null"], "description": "Name of the separate contacts file written with this export, if any number changed." },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/exported_event" } },
+    "dials": { "type": "array", "items": { "$ref": "#/$defs/dial_row" } },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["event_id", "hhid", "action", "logged_by", "logged_at"],
+        "properties": {
+          "event_id": { "$ref": "#/$defs/event_id" }, "hhid": { "type": "string" }, "action": { "$ref": "#/$defs/action" },
+          "target_hhid": { "type": "string" }, "reason": { "type": "string" }, "note": { "type": "string" },
+          "logged_by": { "type": "string" }, "logged_at": { "$ref": "#/$defs/instant" }
+        }
+      }
+    },
+    "corrections": { "type": "array", "items": { "$ref": "#/$defs/exported_event" } },
+    "contact_updates": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["event_id", "hhid", "slot", "change", "logged_by", "logged_at"],
+        "not": { "anyOf": [{ "required": ["number"] }, { "required": ["private"] }] },
+        "properties": {
+          "event_id": { "$ref": "#/$defs/event_id" }, "hhid": { "type": "string" }, "slot": { "type": "integer", "minimum": 1 },
+          "change": { "enum": ["add", "correct", "mark_dead"] }, "label": { "type": "string" }, "private_digest": { "$ref": "#/$defs/hash" },
+          "logged_by": { "type": "string" }, "logged_at": { "$ref": "#/$defs/instant" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "event_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "instant": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
+    "wall": { "type": "string", "pattern": "^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2})?$", "description": "Local wall-clock time; the dial's utc_offset gives the instant. Empty when unknown." },
+    "status": { "enum": ["COMPLETE", "APPOINTMENT", "PARTIAL", "NOT_AVAILABLE", "NO_ANSWER", "BUSY", "SWITCHED_OFF", "DEAD_NUMBER", "WRONG_NUMBER", "REFUSAL_SOFT", "REFUSAL_HARD", "LANGUAGE", "OTHER"] },
+    "action": { "enum": ["RELEASE", "SWITCH_REQUEST", "REMOVE_REQUEST", "ACTIVATE_REPLACEMENT"] },
+    "event": {
+      "description": "One logged event. Every event says who logged it and when, and carries the hash of the event before it (the first carries chain_genesis) and its own hash: SHA-256 of its canonical JSON without 'hash' and 'private'.",
+      "type": "object",
+      "required": ["event_id", "type", "program", "round", "logged_by", "logged_at", "prev_hash", "hash"],
+      "properties": {
+        "event_id": { "$ref": "#/$defs/event_id" },
+        "type": { "enum": ["session", "dial", "action", "correction", "contact_update", "export"] },
+        "program": { "type": "string" },
+        "round": { "type": "integer" },
+        "logged_by": { "type": "string", "minLength": 1 },
+        "logged_at": { "$ref": "#/$defs/instant" },
+        "prev_hash": { "$ref": "#/$defs/hash" },
+        "hash": { "$ref": "#/$defs/hash" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "session" } } }, "then": {
+          "required": ["what"],
+          "properties": {
+            "what": { "enum": ["started", "assignment_updated"] }, "fingerprint": { "$ref": "#/$defs/hash" }, "fingerprint_ok": { "enum": [0, 1] },
+            "file": { "type": "string" }, "protected": { "const": 1 },
+            "households_added": { "type": "integer" }, "households_removed": { "type": "integer" },
+            "added_hhids": { "type": "array", "items": { "type": "string" } }, "removed_hhids": { "type": "array", "items": { "type": "string" } }
+          } } },
+        { "if": { "properties": { "type": { "const": "dial" } } }, "then": {
+          "required": ["hhid", "phone_slot", "ts", "status", "operator"],
+          "properties": {
+            "hhid": { "type": "string" }, "phone_slot": { "type": "integer", "minimum": 1 },
+            "ts": { "$ref": "#/$defs/instant" }, "end_ts": { "$ref": "#/$defs/instant" }, "status": { "$ref": "#/$defs/status" },
+            "operator": { "type": "string" }, "appointment_ts": { "$ref": "#/$defs/instant" }, "action": { "$ref": "#/$defs/action" },
+            "note": { "type": "string" }, "replaces": { "type": "string" }, "entered": { "const": "after the call" }
+          } } },
+        { "if": { "properties": { "type": { "const": "action" } } }, "then": {
+          "required": ["hhid", "action"],
+          "properties": { "hhid": { "type": "string" }, "action": { "$ref": "#/$defs/action" }, "target_hhid": { "type": "string" }, "reason": { "type": "string" } } } },
+        { "if": { "properties": { "type": { "const": "correction" } } }, "then": {
+          "required": ["target", "reason"],
+          "properties": {
+            "target": { "$ref": "#/$defs/event_id" }, "reason": { "type": "string", "minLength": 1 }, "void": { "const": 1 },
+            "changes": {
+              "type": "object", "minProperties": 1, "additionalProperties": false,
+              "properties": {
+                "status": { "$ref": "#/$defs/status" }, "phone_slot": { "type": "integer", "minimum": 1 }, "ts": { "$ref": "#/$defs/instant" },
+                "end_ts": { "$ref": "#/$defs/instant" }, "appointment_ts": { "$ref": "#/$defs/instant" }, "note": { "type": "string" }
+              }
+            }
+          },
+          "oneOf": [{ "required": ["void"] }, { "required": ["changes"] }] } },
+        { "if": { "properties": { "type": { "const": "contact_update" } } }, "then": {
+          "required": ["hhid", "slot", "change"],
+          "properties": {
+            "hhid": { "type": "string" }, "slot": { "type": "integer", "minimum": 1 }, "change": { "enum": ["add", "correct", "mark_dead"] },
+            "label": { "type": "string" }, "private_digest": { "$ref": "#/$defs/hash", "description": "SHA-256 of the canonical JSON of the private part ({\"number\": ...}); the number itself is only in the saved session and the contacts file." }
+          } } },
+        { "if": { "properties": { "type": { "const": "export" } } }, "then": {
+          "required": ["file_base", "event_count", "last_hash"],
+          "properties": { "file_base": { "type": "string" }, "event_count": { "type": "integer" }, "last_hash": { "$ref": "#/$defs/hash" }, "contacts_file": { "const": 1 } } } }
+      ]
+    },
+    "exported_event": {
+      "description": "An event as it leaves the device: never with a private part.",
+      "allOf": [{ "$ref": "#/$defs/event" }, { "not": { "required": ["private"] } }]
+    },
+    "dial_row": {
+      "description": "One row per dial, corrections applied, voided dials left out. These are the CSV's columns, in this order; the names follow the handbook's harmonised dial table where one exists.",
+      "type": "object",
+      "required": ["program", "round", "hhid", "attempt", "ts", "end_ts", "utc_offset", "dur_min", "status", "is_cmp_code", "operator", "phone_slot", "appointment_ts", "action", "replaces", "note", "corrected", "logged_by", "logged_at", "event_id", "prev_hash"],
+      "additionalProperties": false,
+      "properties": {
+        "program": { "type": "string" },
+        "round": { "type": "integer" },
+        "hhid": { "type": "string" },
+        "attempt": { "type": "integer", "minimum": 1, "description": "Dial number within the case (household x round), in time order." },
+        "ts": { "$ref": "#/$defs/wall" },
+        "end_ts": { "$ref": "#/$defs/wall" },
+        "utc_offset": { "type": "string", "pattern": "^[+-][0-9]{2}:[0-9]{2}$" },
+        "dur_min": { "type": "string", "pattern": "^([0-9]+\\.[0-9]{2})?$", "description": "Minutes, two decimals, as text so the CSV and the JSON agree exactly. Empty when the end is unknown." },
+        "status": { "$ref": "#/$defs/status" },
+        "is_cmp_code": { "enum": [0, 1], "description": "1 when status is COMPLETE. Analysis applies Box 3.0's 3-minute rule on top." },
+        "operator": { "type": "string" },
+        "phone_slot": { "type": "integer", "minimum": 1 },
+        "appointment_ts": { "$ref": "#/$defs/wall" },
+        "action": { "enum": ["", "RELEASE", "SWITCH_REQUEST", "REMOVE_REQUEST", "ACTIVATE_REPLACEMENT"] },
+        "replaces": { "type": "string" },
+        "note": { "type": "string" },
+        "corrected": { "enum": [0, 1] },
+        "logged_by": { "type": "string" },
+        "logged_at": { "$ref": "#/$defs/instant" },
+        "event_id": { "$ref": "#/$defs/event_id" },
+        "prev_hash": { "$ref": "#/$defs/hash" }
+      }
+    }
+  }
+}

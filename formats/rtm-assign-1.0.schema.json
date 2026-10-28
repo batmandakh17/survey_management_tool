@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-assign-1.0",
+  "title": "Assignment file (rtm-assign-1.0)",
+  "description": "One enumerator's households for one round, written by the team leader. It holds the names and phone numbers of that enumerator's households only. File name: {enumerator_id}_assignment_R{round, two digits}.json, for example E07_assignment_R05.json. Fields not listed here are kept but ignored by the tool.",
+  "type": "object",
+  "required": ["schema", "program", "round", "enumerator_id", "generated_by", "generated_at", "calendar", "households"],
+  "properties": {
+    "schema": { "const": "rtm-assign-1.0" },
+    "tool_version": { "type": "string" },
+    "program": { "$ref": "#/$defs/id", "description": "The program's code, for example L2MN-DEMO." },
+    "country": { "type": "string", "pattern": "^[A-Z]{2}$", "description": "ISO 3166-1 alpha-2 code. Selects the bundled holiday table the calendar shows outside the round window." },
+    "round": { "type": "integer", "minimum": 1 },
+    "enumerator_id": { "$ref": "#/$defs/id" },
+    "generated_by": { "$ref": "#/$defs/id", "description": "The leader who generated the file." },
+    "generated_at": { "$ref": "#/$defs/instant" },
+    "rule": {
+      "type": "object",
+      "description": "How the households were assigned. 'keep_same' is the handbook's stated default (Section 3.5.3): keep the same enumerator, rotate a planned share each round, switch the enumerator for a household that becomes hard to reach.",
+      "required": ["name"],
+      "properties": {
+        "name": { "enum": ["keep_same", "equal_split", "share_of_total", "random", "manual"] },
+        "rotation_share": { "type": "number", "minimum": 0, "maximum": 1 },
+        "hard_to_reach": { "type": "string" },
+        "fallback": { "type": "string" },
+        "order_by": { "type": "string", "description": "Equal split and share of total: the column the list is ordered by before it is cut into blocks (psu, stratum, language or hhid)." },
+        "method": { "enum": ["blocks", "random"], "description": "Share of total: households placed by blocks of the ordered list, or dealt at random." },
+        "seed": { "type": "integer" }
+      }
+    },
+    "replacement_policy": {
+      "type": "object",
+      "properties": {
+        "active": { "type": "boolean" },
+        "triggers": { "type": "array", "uniqueItems": true, "items": { "enum": ["REFUSAL_HARD", "ALL_NUMBERS_DEAD", "CAP_REACHED"] } }
+      }
+    },
+    "synthetic": { "type": "boolean", "description": "True for sample files: no real household, name or number." },
+    "note": { "type": "string" },
+    "calendar": { "$ref": "#/$defs/calendar" },
+    "households": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/household" } },
+    "fingerprint": { "$ref": "#/$defs/hash", "description": "SHA-256 of the canonical JSON of the whole file without this field. The tool warns, and logs, when it does not match." }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "instant": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
+    "status": { "enum": ["COMPLETE", "APPOINTMENT", "PARTIAL", "NOT_AVAILABLE", "NO_ANSWER", "BUSY", "SWITCHED_OFF", "DEAD_NUMBER", "WRONG_NUMBER", "REFUSAL_SOFT", "REFUSAL_HARD", "LANGUAGE", "OTHER"] },
+    "calendar": {
+      "type": "object",
+      "required": ["window_start", "window_end", "working_weekdays", "call_hours", "dial_cap"],
+      "properties": {
+        "window_start": { "$ref": "#/$defs/date" },
+        "window_end": { "$ref": "#/$defs/date" },
+        "working_weekdays": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "integer", "minimum": 1, "maximum": 7 }, "description": "1 is Monday, 7 is Sunday." },
+        "call_hours": {
+          "type": "object", "required": ["start", "end"],
+          "properties": { "start": { "type": "integer", "minimum": 0, "maximum": 23 }, "end": { "type": "integer", "minimum": 1, "maximum": 24 } }
+        },
+        "time_zone": { "type": "string", "description": "IANA name, for example Asia/Ulaanbaatar." },
+        "holidays": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["date", "name"],
+            "properties": {
+              "date": { "$ref": "#/$defs/date" },
+              "name": { "type": "string" },
+              "estimated": { "type": "boolean", "description": "The source marks the date as estimated (for example a lunar holiday)." },
+              "working": { "type": "boolean", "description": "Set by the leader: the call center works that day." }
+            }
+          }
+        },
+        "ramadan": {
+          "type": "object",
+          "properties": {
+            "dates": { "type": "array", "items": { "$ref": "#/$defs/date" } },
+            "break_fast_hour": { "type": "integer", "minimum": 0, "maximum": 23 }
+          }
+        },
+        "dial_cap": { "type": "integer", "minimum": 1, "description": "The program's stopping rule, in dials per household per round." }
+      }
+    },
+    "phone": {
+      "type": "object", "required": ["slot", "number"],
+      "properties": {
+        "slot": { "type": "integer", "minimum": 1 },
+        "number": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "description": "Whose number: respondent, spouse, neighbour." },
+        "last_status": { "$ref": "#/$defs/status", "description": "The result of the last dial on this number last round." }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "properties": { "name": { "type": "string" }, "phones": { "type": "array", "items": { "$ref": "#/$defs/phone" } } }
+    },
+    "household": {
+      "type": "object", "required": ["hhid"],
+      "properties": {
+        "hhid": { "$ref": "#/$defs/id", "description": "Household ID, as text, so leading zeros survive." },
+        "psu": { "type": "string" },
+        "stratum": { "type": "string" },
+        "tz": { "type": "string", "description": "IANA time zone, only where the program spans several." },
+        "contact": { "$ref": "#/$defs/contact" },
+        "history": {
+          "type": "object",
+          "properties": {
+            "joined_round": { "type": "integer", "minimum": 1 },
+            "last_interview": {
+              "type": "object",
+              "properties": { "round": { "type": "integer" }, "date": { "$ref": "#/$defs/date" }, "hour": { "type": "integer", "minimum": 0, "maximum": 23 } }
+            },
+            "last3": { "type": ["array", "null"], "maxItems": 3, "items": { "type": ["boolean", "null"] }, "description": "Interviewed in each of the last three rounds, oldest first." },
+            "last_enumerator": { "type": "string" }
+          }
+        },
+        "assignment": {
+          "type": "object",
+          "properties": {
+            "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "replacement"] },
+            "previous_enumerator": { "type": "string" }
+          }
+        },
+        "plan": {
+          "type": "object",
+          "properties": {
+            "first_dial_date": { "$ref": "#/$defs/date" },
+            "target_hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+            "order": { "type": "integer" }
+          }
+        },
+        "replacements": {
+          "type": "array",
+          "description": "This household's replacements, in the order they are used.",
+          "items": {
+            "type": "object", "required": ["hhid"],
+            "properties": { "hhid": { "$ref": "#/$defs/id" }, "rank": { "type": "integer", "minimum": 1 }, "contact": { "$ref": "#/$defs/contact" } }
+          }
+        },
+        "note": { "type": "string", "description": "The leader's operational note." }
+      }
+    }
+  }
+}

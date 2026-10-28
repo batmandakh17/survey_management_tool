@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-roundmanifest-1.0",
+  "title": "Round manifest (rtm-roundmanifest-1.0)",
+  "description": "The round's roster, written by the leader view with the assignment files: every enumerator, their households (IDs only), the rule and seed, and each assignment file's fingerprint. The merge checks every export against it. It holds no names or phone numbers. File name: {program}_R{round, two digits}_manifest.json.",
+  "type": "object",
+  "required": ["schema", "program", "round", "generated_by", "generated_at", "rule", "calendar", "enumerators", "households", "fingerprint"],
+  "not": { "anyOf": [{ "required": ["contact"] }] },
+  "properties": {
+    "schema": { "const": "rtm-roundmanifest-1.0" },
+    "tool_version": { "type": "string" },
+    "program": { "type": "string", "minLength": 1 },
+    "country": { "type": "string" },
+    "round": { "type": "integer", "minimum": 1 },
+    "generated_by": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "synthetic": { "type": "boolean" },
+    "rule": { "$ref": "urn:rtm:schema:rtm-assign-1.0#/properties/rule" },
+    "replacement_policy": { "$ref": "urn:rtm:schema:rtm-assign-1.0#/properties/replacement_policy" },
+    "calendar": { "$ref": "urn:rtm:schema:rtm-assign-1.0#/$defs/calendar" },
+    "away": { "type": "array", "items": { "type": "string" }, "description": "Enumerators marked as away this round." },
+    "enumerators": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "required": ["enumerator_id", "households", "fingerprint"],
+        "properties": {
+          "enumerator_id": { "type": "string" }, "available": { "type": "boolean" }, "share": { "type": "number", "minimum": 0 },
+          "households": { "type": "integer", "minimum": 0 }, "file": { "type": "string" },
+          "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The fingerprint of that enumerator's assignment file." },
+          "protected": { "type": "boolean" }
+        }
+      }
+    },
+    "households": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["hhid", "enumerator_id", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "hhid": { "type": "string" }, "enumerator_id": { "type": "string" },
+          "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule"] },
+          "previous_enumerator": { "type": "string" }, "psu": { "type": "string" }, "stratum": { "type": "string" },
+          "replacements": { "type": "array", "items": { "type": "string" }, "description": "The household's unused replacements, in order (IDs only)." }
+        }
+      }
+    },
+    "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

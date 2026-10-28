@@ -1,0 +1,994 @@
+{
+ "schema": "rtm-riskmodels-1.0",
+ "trained_at": "2026-10-27T18:14:11",
+ "trained_on": {
+  "L2CU": {
+   "rounds": 79,
+   "first_round": 2,
+   "last_round": 82,
+   "cases": 125670,
+   "completed": 119584,
+   "available": {
+    "number": true,
+    "refusal": false,
+    "contact": true,
+    "length": true,
+    "hour": true
+   }
+  },
+  "L2T": {
+   "rounds": 15,
+   "first_round": 1,
+   "last_round": 17,
+   "cases": 35679,
+   "completed": 29639,
+   "available": {
+    "number": false,
+    "refusal": false,
+    "contact": false,
+    "length": true,
+    "hour": true
+   }
+  },
+  "L2KGZ": {
+   "rounds": 30,
+   "first_round": 1,
+   "last_round": 42,
+   "cases": 50948,
+   "completed": 44157,
+   "available": {
+    "number": false,
+    "refusal": false,
+    "contact": false,
+    "length": true,
+    "hour": true
+   }
+  },
+  "L2Kaz": {
+   "rounds": 32,
+   "first_round": 1,
+   "last_round": 33,
+   "cases": 58272,
+   "completed": 47897,
+   "available": {
+    "number": true,
+    "refusal": true,
+    "contact": true,
+    "length": true,
+    "hour": true
+   }
+  },
+  "L2PHL": {
+   "rounds": 9,
+   "first_round": 2,
+   "last_round": 10,
+   "cases": 22055,
+   "completed": 10457,
+   "available": {
+    "number": true,
+    "refusal": true,
+    "contact": true,
+    "length": true,
+    "hour": true
+   }
+  },
+  "L2Indo": {
+   "rounds": 15,
+   "first_round": 1,
+   "last_round": 28,
+   "cases": 68962,
+   "completed": 20722,
+   "available": {
+    "number": true,
+    "refusal": true,
+    "contact": true,
+    "length": false,
+    "hour": true
+   }
+  }
+ },
+ "lambda": 1.0,
+ "tiers": {
+  "high": 0.15,
+  "medium": 0.35,
+  "dropout": [
+   "high",
+   "medium",
+   "low"
+  ],
+  "return": [
+   "high",
+   "low"
+  ],
+  "overlaps": {
+   "dropout": [],
+   "return": [
+    {
+     "table": "rolling_origin/PHL/other_recalibrated",
+     "tiers": [
+      "medium",
+      "low"
+     ],
+     "rates": [
+      0.6047,
+      0.5697
+     ],
+     "intervals": [
+      [
+       0.548,
+       0.6587
+      ],
+      [
+       0.5221,
+       0.6161
+      ]
+     ]
+    }
+   ]
+  }
+ },
+ "tool_codes": {
+  "number": [
+   "DEAD_NUMBER",
+   "WRONG_NUMBER",
+   "SWITCHED_OFF"
+  ],
+  "refusal": [
+   "REFUSAL_SOFT",
+   "REFUSAL_HARD"
+  ],
+  "contact": [
+   "APPOINTMENT",
+   "PARTIAL",
+   "NOT_AVAILABLE",
+   "LANGUAGE",
+   "OTHER"
+  ]
+ },
+ "tenure_bins": [
+  [
+   1,
+   1,
+   "k1"
+  ],
+  [
+   2,
+   2,
+   "k2"
+  ],
+  [
+   3,
+   3,
+   "k3"
+  ],
+  [
+   4,
+   6,
+   "k4_6"
+  ],
+  [
+   7,
+   12,
+   "k7_12"
+  ],
+  [
+   13,
+   1000000,
+   "k13p"
+  ]
+ ],
+ "tenure_reference": "k4_6",
+ "dropout": {
+  "features": [
+   {
+    "key": "k1",
+    "label": "Joined in the round before",
+    "group": "tenure",
+    "mean": 0.06586457144285487,
+    "sd": 0.24804521698977375,
+    "coef": 0.2818011169430897
+   },
+   {
+    "key": "k2",
+    "label": "Joined two rounds before",
+    "group": "tenure",
+    "mean": 0.04684258325765087,
+    "sd": 0.21130157512759087,
+    "coef": 0.13068472159828443
+   },
+   {
+    "key": "k3",
+    "label": "Joined three rounds before",
+    "group": "tenure",
+    "mean": 0.04331814129429507,
+    "sd": 0.20357229656587006,
+    "coef": 0.07397630724347522
+   },
+   {
+    "key": "k7_12",
+    "label": "In the panel 7 to 12 rounds",
+    "group": "tenure",
+    "mean": 0.17241436772511018,
+    "sd": 0.3777401931580232,
+    "coef": -0.060151844316370065
+   },
+   {
+    "key": "k13p",
+    "label": "In the panel 13 rounds or more",
+    "group": "tenure",
+    "mean": 0.5622984694090103,
+    "sd": 0.4961037197091901,
+    "coef": -0.3765938688189143
+   },
+   {
+    "key": "missed_prev",
+    "label": "Rounds missed among the three before",
+    "group": "history",
+    "mean": 0.05308742782392788,
+    "sd": 0.30796984958600276,
+    "coef": 0.20296941113941183
+   },
+   {
+    "key": "missed_t1",
+    "label": "Missed the round before",
+    "group": "history",
+    "mean": 0.016309917596380574,
+    "sd": 0.12666453404319555,
+    "coef": 0.01966210794061109
+   },
+   {
+    "key": "dials_needed",
+    "label": "Dials needed last round (log)",
+    "group": "effort",
+    "mean": 1.2403095713557184,
+    "sd": 0.5980510429047139,
+    "coef": 0.26446872224793716
+   },
+   {
+    "key": "days_needed",
+    "label": "Days needed last round",
+    "group": "effort",
+    "mean": 1.7248727284846566,
+    "sd": 1.4264845998203959,
+    "coef": 0.1103553762462799
+   },
+   {
+    "key": "same_enum",
+    "label": "Same enumerator in the last two interviews",
+    "group": "continuity",
+    "mean": 0.789679134137095,
+    "sd": 0.4075365005071116,
+    "coef": -0.09222216062247454
+   },
+   {
+    "key": "first_within_hour",
+    "label": "Last round's first dial within an hour of the interview before",
+    "group": "timing",
+    "mean": 0.20446345995217424,
+    "sd": 0.4033090049782671,
+    "coef": -0.03133364323994908
+   },
+   {
+    "key": "hour_evening",
+    "label": "Last interview at 18:00 or later",
+    "group": "timing",
+    "mean": 0.20126409819468113,
+    "sd": 0.40094496002888336,
+    "coef": 0.018612153440111526
+   },
+   {
+    "key": "hour_morning",
+    "label": "Last interview before 12:00",
+    "group": "timing",
+    "mean": 0.23636219704765993,
+    "sd": 0.4248471594049596,
+    "coef": -0.03421740012515254
+   },
+   {
+    "key": "interview_min",
+    "label": "Length of the last interview (minutes)",
+    "group": "effort",
+    "mean": 13.07666371181735,
+    "sd": 7.830221289932905,
+    "coef": 0.009620729708773701
+   },
+   {
+    "key": "number_problem",
+    "label": "A number not working or switched off last round",
+    "group": "numbers",
+    "mean": 0.09453314247963003,
+    "sd": 0.29256901314485784,
+    "coef": 0.028969715794154395
+   },
+   {
+    "key": "refusal",
+    "label": "A refusal last round before the interview",
+    "group": "refusal",
+    "mean": 0.015098968666232527,
+    "sd": 0.12194666789809658,
+    "coef": -0.014647762538704524
+   }
+  ],
+  "mean_intercept": -3.7826564365421307,
+  "intercepts": {
+   "L2Indo": -2.393286123112898,
+   "L2Kaz": -2.921214449597489,
+   "L2KGZ": -3.923593385614255,
+   "L2PHL": -2.6475239294612574,
+   "L2T": -3.3128612319645017,
+   "L2CU": -4.415344955030572
+  },
+  "n": {
+   "L2Indo": 12164,
+   "L2Kaz": 44489,
+   "L2KGZ": 33011,
+   "L2PHL": 9378,
+   "L2T": 25387,
+   "L2CU": 115609
+  },
+  "loss_rate": 0.0498,
+  "groups": [
+   {
+    "key": "tenure",
+    "label": "Rounds since joining",
+    "features": [
+     "k1",
+     "k2",
+     "k3",
+     "k7_12",
+     "k13p"
+    ]
+   },
+   {
+    "key": "history",
+    "label": "Rounds missed before the last interview",
+    "features": [
+     "missed_prev",
+     "missed_t1"
+    ]
+   },
+   {
+    "key": "effort",
+    "label": "Effort the last interview needed",
+    "features": [
+     "dials_needed",
+     "days_needed"
+    ]
+   },
+   {
+    "key": "continuity",
+    "label": "Enumerator of the last two interviews",
+    "features": [
+     "same_enum"
+    ]
+   },
+   {
+    "key": "timing",
+    "label": "Time of the last interview",
+    "features": [
+     "first_within_hour",
+     "hour_evening",
+     "hour_morning"
+    ]
+   },
+   {
+    "key": "length",
+    "label": "Length of the last interview",
+    "features": [
+     "interview_min"
+    ]
+   },
+   {
+    "key": "numbers",
+    "label": "Numbers not working last round",
+    "features": [
+     "number_problem"
+    ]
+   },
+   {
+    "key": "refusal",
+    "label": "A refusal last round",
+    "features": [
+     "refusal"
+    ]
+   }
+  ]
+ },
+ "return": {
+  "features": [
+   {
+    "key": "k1",
+    "label": "Joined in the round before the miss",
+    "group": "tenure",
+    "mean": 0.3224025974025974,
+    "sd": 0.4673961516643628,
+    "coef": -0.4075392635596597
+   },
+   {
+    "key": "k2",
+    "label": "Joined two rounds before the miss",
+    "group": "tenure",
+    "mean": 0.10941558441558441,
+    "sd": 0.31215991783472224,
+    "coef": -0.2231256326285937
+   },
+   {
+    "key": "k3",
+    "label": "Joined three rounds before the miss",
+    "group": "tenure",
+    "mean": 0.18051948051948052,
+    "sd": 0.38461954925933933,
+    "coef": -0.07675055334836259
+   },
+   {
+    "key": "k7_12",
+    "label": "In the panel 7 to 12 rounds",
+    "group": "tenure",
+    "mean": 0.05,
+    "sd": 0.2179449471770336,
+    "coef": -0.027485257854207076
+   },
+   {
+    "key": "k13p",
+    "label": "In the panel 13 rounds or more",
+    "group": "tenure",
+    "mean": 0.08896103896103896,
+    "sd": 0.28468749973964697,
+    "coef": -0.30734241702123477
+   },
+   {
+    "key": "missed_prev",
+    "label": "Rounds missed among the three before the last interview",
+    "group": "history",
+    "mean": 0.26785714285714285,
+    "sd": 0.6008700015915389,
+    "coef": -0.20748885345519885
+   },
+   {
+    "key": "dialled_miss",
+    "label": "Dialed in the missed round",
+    "group": "effort",
+    "mean": 0.9928571428571429,
+    "sd": 0.08421304373251141,
+    "coef": -0.04889997560263915
+   },
+   {
+    "key": "dials_miss",
+    "label": "Dials in the missed round (log)",
+    "group": "effort",
+    "mean": 2.078430870958658,
+    "sd": 0.6780570154573462,
+    "coef": -0.13017613006049847
+   },
+   {
+    "key": "days_miss",
+    "label": "Days dialed in the missed round",
+    "group": "effort",
+    "mean": 5.252597402597402,
+    "sd": 3.084917184094336,
+    "coef": -0.29445260672769774
+   },
+   {
+    "key": "contact_miss",
+    "label": "Reached in the missed round, no interview",
+    "group": "contact",
+    "mean": 0.35324675324675325,
+    "sd": 0.4779785398607145,
+    "coef": 0.14650825577782078
+   },
+   {
+    "key": "refusal_miss",
+    "label": "A refusal in the missed round",
+    "group": "refusal",
+    "mean": 0.09707792207792208,
+    "sd": 0.296063842984845,
+    "coef": -0.10015328803118759
+   },
+   {
+    "key": "number_problem_miss",
+    "label": "A number not working or switched off in the missed round",
+    "group": "numbers",
+    "mean": 0.47435064935064936,
+    "sd": 0.4993416774226509,
+    "coef": 0.027789210927359018
+   },
+   {
+    "key": "dials_needed",
+    "label": "Dials needed at the last interview (log)",
+    "group": "effort",
+    "mean": 1.5440334169915773,
+    "sd": 0.6330514228032571,
+    "coef": -0.01678067268002166
+   },
+   {
+    "key": "same_enum_miss",
+    "label": "Missed round first dialed by the enumerator of the last interview",
+    "group": "continuity",
+    "mean": 0.6146103896103896,
+    "sd": 0.48668722871404246,
+    "coef": 0.025968027681738254
+   }
+  ],
+  "mean_intercept": -0.15430932253941118,
+  "intercepts": {
+   "L2Indo": -0.9124973171808133,
+   "L2PHL": 0.74958027961315
+  },
+  "n": {
+   "L2Indo": 1675,
+   "L2PHL": 1405
+  },
+  "return_rate": 0.4656,
+  "groups": [
+   {
+    "key": "tenure",
+    "label": "Rounds since joining",
+    "features": [
+     "k1",
+     "k2",
+     "k3",
+     "k7_12",
+     "k13p"
+    ]
+   },
+   {
+    "key": "history",
+    "label": "Rounds missed before the last interview",
+    "features": [
+     "missed_prev"
+    ]
+   },
+   {
+    "key": "miss_effort",
+    "label": "Effort in the missed round",
+    "features": [
+     "dialled_miss",
+     "dials_miss",
+     "days_miss"
+    ]
+   },
+   {
+    "key": "contact",
+    "label": "Reached in the missed round",
+    "features": [
+     "contact_miss"
+    ]
+   },
+   {
+    "key": "refusal",
+    "label": "A refusal in the missed round",
+    "features": [
+     "refusal_miss"
+    ]
+   },
+   {
+    "key": "numbers",
+    "label": "Numbers not working in the missed round",
+    "features": [
+     "number_problem_miss"
+    ]
+   },
+   {
+    "key": "effort",
+    "label": "Effort the last interview needed",
+    "features": [
+     "dials_needed"
+    ]
+   },
+   {
+    "key": "continuity",
+    "label": "Missed round first dialed by the enumerator of the last interview",
+    "features": [
+     "same_enum_miss"
+    ]
+   }
+  ]
+ },
+ "codes": {
+  "L2CU": {
+   "number": [
+    "Non-working number",
+    "Out of Service Area",
+    "Wrong number"
+   ],
+   "refusal": null,
+   "contact": [
+    "Hangup",
+    "Interrapted survey",
+    "No time"
+   ]
+  },
+  "L2T": {
+   "number": null,
+   "refusal": null,
+   "contact": null
+  },
+  "L2KGZ": {
+   "number": null,
+   "refusal": null,
+   "contact": null
+  },
+  "L2Kaz": {
+   "number": [
+    "Business, government office, other organization",
+    "Disconnected number"
+   ],
+   "refusal": [
+    "Soft Refusal, Respondent"
+   ],
+   "contact": [
+    "Call again",
+    "Definite Appointment - Respondent",
+    "Not available",
+    "Other, Referred to Supervisor (Eligible)"
+   ]
+  },
+  "L2PHL": {
+   "number": [
+    "Don't know the household",
+    "Number does not exist / Not ringing",
+    "Phone off / Not in service"
+   ],
+   "refusal": [
+    "Refused"
+   ],
+   "contact": [
+    "Not yet started (scheduled call)",
+    "Partially complete (no more call)",
+    "Partially complete (scheduled call)"
+   ]
+  },
+  "L2Indo": {
+   "number": [
+    "Failed (no dial tone/silent, voice mail, wrong number)",
+    "NOMER TIDAK AKTIF /TIDAK ADA WA",
+    "Not match with data base"
+   ],
+   "refusal": [
+    "Refused to participate"
+   ],
+   "contact": [
+    "ON APPOINTMENT",
+    "On Appointment",
+    "Partially Completed Interviews",
+    "Partially complete interviews"
+   ]
+  }
+ },
+ "validation_summary": {
+  "dropout_leave_one_program_out": {
+   "L2CU": {
+    "n": 115609,
+    "events": 1158,
+    "rate": 0.01,
+    "auc": 0.7211,
+    "brier": 0.0107,
+    "brier_null": 0.0099,
+    "capture_high": 0.4093,
+    "tiers": {
+     "high": {
+      "rate": 0.0274,
+      "lo": 0.0251,
+      "hi": 0.0299,
+      "n": 17309
+     },
+     "medium": {
+      "rate": 0.0101,
+      "lo": 0.0092,
+      "hi": 0.0111,
+      "n": 40475
+     },
+     "low": {
+      "rate": 0.0048,
+      "lo": 0.0042,
+      "hi": 0.0054,
+      "n": 57825
+     }
+    },
+    "auc_tenure_only": 0.6376,
+    "auc_dials_rule": 0.6025,
+    "auc_trees": 0.7197,
+    "capture_tenure_only": 0.291
+   },
+   "L2T": {
+    "n": 25387,
+    "events": 1724,
+    "rate": 0.0679,
+    "auc": 0.7501,
+    "brier": 0.0607,
+    "brier_null": 0.0633,
+    "capture_high": 0.42,
+    "tiers": {
+     "high": {
+      "rate": 0.1904,
+      "lo": 0.1783,
+      "hi": 0.2032,
+      "n": 3802
+     },
+     "medium": {
+      "rate": 0.0616,
+      "lo": 0.0568,
+      "hi": 0.0668,
+      "n": 8889
+     },
+     "low": {
+      "rate": 0.0356,
+      "lo": 0.0325,
+      "hi": 0.039,
+      "n": 12696
+     }
+    },
+    "auc_tenure_only": 0.6734,
+    "auc_dials_rule": 0.5764,
+    "auc_trees": 0.7408,
+    "capture_tenure_only": 0.3121
+   },
+   "L2KGZ": {
+    "n": 33011,
+    "events": 996,
+    "rate": 0.0302,
+    "auc": 0.7182,
+    "brier": 0.0285,
+    "brier_null": 0.0293,
+    "capture_high": 0.4448,
+    "tiers": {
+     "high": {
+      "rate": 0.0895,
+      "lo": 0.0819,
+      "hi": 0.0978,
+      "n": 4947
+     },
+     "medium": {
+      "rate": 0.0303,
+      "lo": 0.0273,
+      "hi": 0.0336,
+      "n": 11552
+     },
+     "low": {
+      "rate": 0.0123,
+      "lo": 0.0107,
+      "hi": 0.0141,
+      "n": 16512
+     }
+    },
+    "auc_tenure_only": 0.6287,
+    "auc_dials_rule": 0.6103,
+    "auc_trees": 0.7102,
+    "capture_tenure_only": 0.2992
+   },
+   "L2Kaz": {
+    "n": 44489,
+    "events": 4065,
+    "rate": 0.0914,
+    "auc": 0.7451,
+    "brier": 0.0813,
+    "brier_null": 0.083,
+    "capture_high": 0.3503,
+    "tiers": {
+     "high": {
+      "rate": 0.2136,
+      "lo": 0.2039,
+      "hi": 0.2236,
+      "n": 6667
+     },
+     "medium": {
+      "rate": 0.1001,
+      "lo": 0.0955,
+      "hi": 0.1049,
+      "n": 15572
+     },
+     "low": {
+      "rate": 0.0486,
+      "lo": 0.0459,
+      "hi": 0.0515,
+      "n": 22250
+     }
+    },
+    "auc_tenure_only": 0.702,
+    "auc_dials_rule": 0.5893,
+    "auc_trees": 0.7064,
+    "capture_tenure_only": 0.2367
+   },
+   "L2PHL": {
+    "n": 9378,
+    "events": 2148,
+    "rate": 0.229,
+    "auc": 0.7175,
+    "brier": 0.1795,
+    "brier_null": 0.1766,
+    "capture_high": 0.2896,
+    "tiers": {
+     "high": {
+      "rate": 0.4437,
+      "lo": 0.4178,
+      "hi": 0.4698,
+      "n": 1402
+     },
+     "medium": {
+      "rate": 0.3091,
+      "lo": 0.2935,
+      "hi": 0.3251,
+      "n": 3284
+     },
+     "low": {
+      "rate": 0.1089,
+      "lo": 0.1003,
+      "hi": 0.1181,
+      "n": 4692
+     }
+    },
+    "auc_tenure_only": 0.5907,
+    "auc_dials_rule": 0.5789,
+    "auc_trees": 0.6514,
+    "capture_tenure_only": 0.2593
+   },
+   "L2Indo": {
+    "n": 12164,
+    "events": 1867,
+    "rate": 0.1535,
+    "auc": 0.6863,
+    "brier": 0.1373,
+    "brier_null": 0.1299,
+    "capture_high": 0.3064,
+    "tiers": {
+     "high": {
+      "rate": 0.3141,
+      "lo": 0.2932,
+      "hi": 0.3358,
+      "n": 1821
+     },
+     "medium": {
+      "rate": 0.182,
+      "lo": 0.1707,
+      "hi": 0.1938,
+      "n": 4259
+     },
+     "low": {
+      "rate": 0.0855,
+      "lo": 0.0787,
+      "hi": 0.0928,
+      "n": 6084
+     }
+    },
+    "auc_tenure_only": 0.6022,
+    "auc_dials_rule": 0.5682,
+    "auc_trees": 0.6517,
+    "capture_tenure_only": 0.2057
+   }
+  },
+  "dropout_rolling_origin": {
+   "L2CU": {
+    "steps": 75,
+    "auc_own": 0.7353,
+    "auc_pooled_recalibrated": 0.7368,
+    "brier_own": 0.0095,
+    "brier_pooled_recalibrated": 0.0095,
+    "brier_pooled_as_is": 0.0099,
+    "capture_high_recalibrated": 0.4158
+   },
+   "L2T": {
+    "steps": 11,
+    "auc_own": 0.7322,
+    "auc_pooled_recalibrated": 0.7393,
+    "brier_own": 0.0521,
+    "brier_pooled_recalibrated": 0.0515,
+    "brier_pooled_as_is": 0.0524,
+    "capture_high_recalibrated": 0.4872
+   },
+   "L2KGZ": {
+    "steps": 20,
+    "auc_own": 0.7219,
+    "auc_pooled_recalibrated": 0.7116,
+    "brier_own": 0.0262,
+    "brier_pooled_recalibrated": 0.0262,
+    "brier_pooled_as_is": 0.0261,
+    "capture_high_recalibrated": 0.4607
+   },
+   "L2Kaz": {
+    "steps": 28,
+    "auc_own": 0.7471,
+    "auc_pooled_recalibrated": 0.7419,
+    "brier_own": 0.0733,
+    "brier_pooled_recalibrated": 0.0734,
+    "brier_pooled_as_is": 0.077,
+    "capture_high_recalibrated": 0.3692
+   },
+   "L2PHL": {
+    "steps": 6,
+    "auc_own": 0.7166,
+    "auc_pooled_recalibrated": 0.7317,
+    "brier_own": 0.1597,
+    "brier_pooled_recalibrated": 0.1568,
+    "brier_pooled_as_is": 0.1761,
+    "capture_high_recalibrated": 0.3037
+   },
+   "L2Indo": {
+    "steps": 7,
+    "auc_own": 0.6791,
+    "auc_pooled_recalibrated": 0.6746,
+    "brier_own": 0.1123,
+    "brier_pooled_recalibrated": 0.1126,
+    "brier_pooled_as_is": 0.12,
+    "capture_high_recalibrated": 0.3407
+   }
+  },
+  "return_other_program": {
+   "L2PHL": {
+    "n": 1405,
+    "events": 830,
+    "rate": 0.5907,
+    "auc": 0.6086,
+    "brier": 0.3916,
+    "brier_null": 0.2418,
+    "tiers": {
+     "high": {
+      "rate": 0.7452,
+      "lo": 0.6819,
+      "hi": 0.7996,
+      "n": 208
+     },
+     "medium": {
+      "rate": 0.6187,
+      "lo": 0.575,
+      "hi": 0.6605,
+      "n": 493
+     },
+     "low": {
+      "rate": 0.5256,
+      "lo": 0.4886,
+      "hi": 0.5622,
+      "n": 704
+     }
+    },
+    "auc_tenure_only": 0.5506
+   },
+   "L2Indo": {
+    "n": 1675,
+    "events": 604,
+    "rate": 0.3606,
+    "auc": 0.6043,
+    "brier": 0.3738,
+    "brier_null": 0.2306,
+    "tiers": {
+     "high": {
+      "rate": 0.5223,
+      "lo": 0.4601,
+      "hi": 0.5837,
+      "n": 247
+     },
+     "medium": {
+      "rate": 0.4133,
+      "lo": 0.3742,
+      "hi": 0.4535,
+      "n": 588
+     },
+     "low": {
+      "rate": 0.2762,
+      "lo": 0.247,
+      "hi": 0.3074,
+      "n": 840
+     }
+    },
+    "auc_tenure_only": 0.574
+   }
+  },
+  "return_rolling_origin": {
+   "L2PHL": {
+    "steps": 3,
+    "auc_own": 0.5557,
+    "brier_own": 0.2442,
+    "auc_other_recalibrated": 0.5892,
+    "brier_other_recalibrated": 0.2326,
+    "brier_null": 0.2376
+   },
+   "L2Indo": {
+    "steps": 6,
+    "auc_own": 0.5778,
+    "brier_own": 0.2313,
+    "auc_other_recalibrated": 0.6234,
+    "brier_other_recalibrated": 0.2254,
+    "brier_null": 0.2272
+   }
+  }
+ }
+}

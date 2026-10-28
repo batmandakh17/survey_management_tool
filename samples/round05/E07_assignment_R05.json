@@ -1,0 +1,2201 @@
+{
+ "schema": "rtm-assign-1.0",
+ "tool_version": "0.3.0",
+ "program": "L2MN-DEMO",
+ "country": "MN",
+ "round": 5,
+ "enumerator_id": "E07",
+ "generated_by": "L01",
+ "generated_at": "2026-10-23T16:05:00+08:00",
+ "rule": {
+  "name": "keep_same",
+  "rotation_share": 0.1,
+  "hard_to_reach": "missed_with_full_cap_or_request",
+  "fallback": "random",
+  "seed": 20261027
+ },
+ "replacement_policy": {
+  "active": true,
+  "triggers": [
+   "REFUSAL_HARD",
+   "ALL_NUMBERS_DEAD"
+  ]
+ },
+ "synthetic": true,
+ "note": "SYNTHETIC sample for trying the tool. No real household, name or phone number.",
+ "calendar": {
+  "window_start": "2026-10-26",
+  "window_end": "2026-11-20",
+  "working_weekdays": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "call_hours": {
+   "start": 9,
+   "end": 21
+  },
+  "time_zone": "Asia/Ulaanbaatar",
+  "holidays": [
+   {
+    "date": "2026-11-10",
+    "name": "Genghis Khan's Birthday",
+    "estimated": false,
+    "working": false
+   }
+  ],
+  "dial_cap": 8
+ },
+ "households": [
+  {
+   "hhid": "0101-002",
+   "psu": "0101",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0101-002 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 01002 1712",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 2,
+     "date": "2026-07-29",
+     "hour": 9
+    },
+    "last3": [
+     true,
+     false,
+     false
+    ],
+    "last_enumerator": "E01"
+   },
+   "assignment": {
+    "reason": "switch_hard_to_reach",
+    "previous_enumerator": "E01"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-26",
+    "target_hour": 9
+   },
+   "replacements": [
+    {
+     "hhid": "0101-102",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0101-102 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 01102 1305",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0101-004",
+   "psu": "0101",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0101-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 01004 1128",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last3": [
+     false,
+     false,
+     false
+    ]
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-26",
+    "target_hour": 10
+   }
+  },
+  {
+   "hhid": "0101-005",
+   "psu": "0101",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0101-005 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 01005 1530",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 01005 2667",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-28",
+     "hour": 18
+    },
+    "last3": [
+     false,
+     false,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-29",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0101-008",
+   "psu": "0101",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0101-008 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 01008 1822",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 01008 2312",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-05",
+     "hour": 18
+    },
+    "last3": [
+     true,
+     false,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-30",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0102-001",
+   "psu": "0102",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0102-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 02001 1517",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 02001 2232",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-06",
+     "hour": 12
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-30",
+    "target_hour": 12
+   },
+   "replacements": [
+    {
+     "hhid": "0102-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0102-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 02101 1681",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0102-006",
+   "psu": "0102",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0102-006 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 02006 1376",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 02006 2185",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-06",
+     "hour": 17
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-30",
+    "target_hour": 17
+   }
+  },
+  {
+   "hhid": "0103-001",
+   "psu": "0103",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0103-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 03001 1493",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 03001 2751",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-06",
+     "hour": 18
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-30",
+    "target_hour": 18
+   },
+   "replacements": [
+    {
+     "hhid": "0103-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0103-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 03101 1124",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0103-002",
+   "psu": "0103",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0103-002 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 03002 1900",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 03002 2462",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-05",
+     "hour": 16
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-31",
+    "target_hour": 16
+   },
+   "replacements": [
+    {
+     "hhid": "0103-102",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0103-102 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 03102 1584",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0104-001",
+   "psu": "0104",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0104-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 04001 1835",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 04001 2230",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 1,
+     "date": "2026-07-04",
+     "hour": 11
+    },
+    "last3": [
+     false,
+     false,
+     false
+    ],
+    "last_enumerator": "E02"
+   },
+   "assignment": {
+    "reason": "switch_hard_to_reach",
+    "previous_enumerator": "E02"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-26",
+    "target_hour": 11
+   },
+   "replacements": [
+    {
+     "hhid": "0104-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0104-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 04101 1457",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0104-004",
+   "psu": "0104",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0104-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 04004 1330",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 04004 2579",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-06",
+     "hour": 20
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-31",
+    "target_hour": 20
+   }
+  },
+  {
+   "hhid": "0104-005",
+   "psu": "0104",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0104-005 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 04005 1749",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 04005 2186",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-05",
+     "hour": 16
+    },
+    "last3": [
+     true,
+     false,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-31",
+    "target_hour": 16
+   }
+  },
+  {
+   "hhid": "0104-008",
+   "psu": "0104",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0104-008 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 04008 1513",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 04008 2804",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 2,
+     "date": "2026-08-03",
+     "hour": 15
+    },
+    "last3": [
+     true,
+     false,
+     false
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-31",
+    "target_hour": 15
+   }
+  },
+  {
+   "hhid": "0104-009",
+   "psu": "0104",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0104-009 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 04009 1219",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 04009 2510",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-10",
+     "hour": 18
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E02"
+   },
+   "assignment": {
+    "reason": "rotation",
+    "previous_enumerator": "E02"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-31",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0105-001",
+   "psu": "0105",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0105-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 05001 1643",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 05001 2635",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 1,
+     "date": "2026-07-08",
+     "hour": 19
+    },
+    "last3": [
+     false,
+     false,
+     false
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-02",
+    "target_hour": 19
+   },
+   "replacements": [
+    {
+     "hhid": "0105-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0105-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 05101 1640",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0105-003",
+   "psu": "0105",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0105-003 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 05003 1328",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-30",
+     "hour": 12
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-27",
+    "target_hour": 12
+   },
+   "replacements": [
+    {
+     "hhid": "0105-103",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0105-103 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 05103 1565",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0105-006",
+   "psu": "0105",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0105-006 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 05006 1797",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-28",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     false,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-27",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0106-001",
+   "psu": "0106",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0106-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 06001 1751",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 06001 2860",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-12",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-02",
+    "target_hour": 19
+   },
+   "replacements": [
+    {
+     "hhid": "0106-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0106-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 06101 1110",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0106-002",
+   "psu": "0106",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0106-002 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 06002 1770",
+      "label": "respondent",
+      "last_status": "SWITCHED_OFF"
+     },
+     {
+      "slot": 2,
+      "number": "+000 06002 2587",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 1,
+     "date": "2026-07-04",
+     "hour": 12
+    },
+    "last3": [
+     false,
+     false,
+     false
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-02",
+    "target_hour": 12
+   },
+   "replacements": [
+    {
+     "hhid": "0106-102",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0106-102 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 06102 1312",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0106-004",
+   "psu": "0106",
+   "stratum": "1",
+   "contact": {
+    "name": "Contact 0106-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 06004 1870",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 06004 2833",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-29",
+     "hour": 18
+    },
+    "last3": [
+     false,
+     false,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-02",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0107-001",
+   "psu": "0107",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0107-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 07001 1478",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-02",
+     "hour": 17
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-27",
+    "target_hour": 17
+   },
+   "replacements": [
+    {
+     "hhid": "0107-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0107-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 07101 1291",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0107-004",
+   "psu": "0107",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0107-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 07004 1754",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-02",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-27",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0107-005",
+   "psu": "0107",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0107-005 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 07005 1762",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-03",
+     "hour": 20
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E01"
+   },
+   "assignment": {
+    "reason": "rotation",
+    "previous_enumerator": "E01"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-28",
+    "target_hour": 20
+   }
+  },
+  {
+   "hhid": "0108-004",
+   "psu": "0108",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0108-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 08004 1258",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 08004 2487",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-08",
+     "hour": 19
+    },
+    "last3": [
+     false,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-03",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0108-008",
+   "psu": "0108",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0108-008 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 08008 1563",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 08008 2858",
+      "label": "spouse"
+     },
+     {
+      "slot": 3,
+      "number": "+000 08008 3669",
+      "label": "son or daughter"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-06",
+     "hour": 18
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-03",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0108-009",
+   "psu": "0108",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0108-009 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 08009 1116",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 08009 2221",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 2,
+     "date": "2026-07-28",
+     "hour": 14
+    },
+    "last3": [
+     true,
+     false,
+     false
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-03",
+    "target_hour": 14
+   }
+  },
+  {
+   "hhid": "0109-001",
+   "psu": "0109",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0109-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 09001 1755",
+      "label": "respondent",
+      "last_status": "DEAD_NUMBER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 09001 2379",
+      "label": "spouse",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-12",
+     "hour": 20
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-03",
+    "target_hour": 20
+   },
+   "replacements": [
+    {
+     "hhid": "0109-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0109-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 09101 1681",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0109-002",
+   "psu": "0109",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0109-002 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 09002 1203",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 09002 2219",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-10",
+     "hour": 19
+    },
+    "last3": [
+     false,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-04",
+    "target_hour": 19
+   },
+   "replacements": [
+    {
+     "hhid": "0109-102",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0109-102 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 09102 1748",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0109-003",
+   "psu": "0109",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0109-003 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 09003 1918",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-05",
+     "hour": 20
+    },
+    "last3": [
+     true,
+     false,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-28",
+    "target_hour": 20
+   },
+   "replacements": [
+    {
+     "hhid": "0109-103",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0109-103 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 09103 1190",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0109-005",
+   "psu": "0109",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0109-005 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 09005 1428",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 09005 2401",
+      "label": "spouse"
+     },
+     {
+      "slot": 3,
+      "number": "+000 09005 3908",
+      "label": "son or daughter"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 3,
+     "date": "2026-09-14",
+     "hour": 17
+    },
+    "last3": [
+     true,
+     true,
+     false
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-04",
+    "target_hour": 17
+   }
+  },
+  {
+   "hhid": "0109-007",
+   "psu": "0109",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0109-007 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 09007 1261",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 09007 2568",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-07",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-04",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0110-002",
+   "psu": "0110",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0110-002 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 10002 1277",
+      "label": "respondent",
+      "last_status": "NO_ANSWER"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 1,
+     "date": "2026-07-03",
+     "hour": 17
+    },
+    "last3": [
+     false,
+     false,
+     false
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-28",
+    "target_hour": 17
+   },
+   "replacements": [
+    {
+     "hhid": "0110-102",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0110-102 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 10102 1404",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0110-004",
+   "psu": "0110",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0110-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 10004 1925",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 10004 2662",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-08",
+     "hour": 18
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-04",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0110-005",
+   "psu": "0110",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0110-005 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 10005 1862",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 10005 2333",
+      "label": "spouse"
+     },
+     {
+      "slot": 3,
+      "number": "+000 10005 3147",
+      "label": "son or daughter"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-28",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     false,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-05",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0110-006",
+   "psu": "0110",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0110-006 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 10006 1313",
+      "label": "respondent",
+      "last_status": "DEAD_NUMBER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 10006 2636",
+      "label": "spouse",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 3,
+      "number": "+000 10006 3456",
+      "label": "son or daughter"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-12",
+     "hour": 17
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-05",
+    "target_hour": 17
+   }
+  },
+  {
+   "hhid": "0110-007",
+   "psu": "0110",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0110-007 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 10007 1689",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 10007 2120",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-30",
+     "hour": 16
+    },
+    "last3": [
+     false,
+     false,
+     true
+    ],
+    "last_enumerator": "E03"
+   },
+   "assignment": {
+    "reason": "enumerator_unavailable",
+    "previous_enumerator": "E03"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-05",
+    "target_hour": 16
+   }
+  },
+  {
+   "hhid": "0111-001",
+   "psu": "0111",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0111-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 11001 1545",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 11001 2596",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-02",
+     "hour": 20
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-05",
+    "target_hour": 20
+   },
+   "replacements": [
+    {
+     "hhid": "0111-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0111-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 11101 1306",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0111-003",
+   "psu": "0111",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0111-003 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 11003 1907",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-09-30",
+     "hour": 16
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-28",
+    "target_hour": 16
+   },
+   "replacements": [
+    {
+     "hhid": "0111-103",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0111-103 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 11103 1251",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0111-006",
+   "psu": "0111",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0111-006 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 11006 1835",
+      "label": "respondent",
+      "last_status": "DEAD_NUMBER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 11006 2226",
+      "label": "spouse",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 3,
+      "number": "+000 11006 3302",
+      "label": "son or daughter"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-10",
+     "hour": 12
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-06",
+    "target_hour": 12
+   }
+  },
+  {
+   "hhid": "0111-008",
+   "psu": "0111",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0111-008 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 11008 1324",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-01",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-29",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0111-009",
+   "psu": "0111",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0111-009 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 11009 1515",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 11009 2258",
+      "label": "spouse"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-12",
+     "hour": 14
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-06",
+    "target_hour": 14
+   }
+  },
+  {
+   "hhid": "0112-001",
+   "psu": "0112",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0112-001 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 12001 1465",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     },
+     {
+      "slot": 2,
+      "number": "+000 12001 2213",
+      "label": "spouse"
+     },
+     {
+      "slot": 3,
+      "number": "+000 12001 3787",
+      "label": "son or daughter"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-12",
+     "hour": 15
+    },
+    "last3": [
+     true,
+     false,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-06",
+    "target_hour": 15
+   },
+   "replacements": [
+    {
+     "hhid": "0112-101",
+     "rank": 1,
+     "contact": {
+      "name": "Reserve 0112-101 (synthetic)",
+      "phones": [
+       {
+        "slot": 1,
+        "number": "+000 12101 1820",
+        "label": "respondent"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "hhid": "0112-004",
+   "psu": "0112",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0112-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 12004 1132",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 4,
+     "date": "2026-10-01",
+     "hour": 19
+    },
+    "last3": [
+     true,
+     true,
+     true
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-29",
+    "target_hour": 19
+   }
+  },
+  {
+   "hhid": "0112-005",
+   "psu": "0112",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0112-005 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 12005 1808",
+      "label": "respondent",
+      "last_status": "DEAD_NUMBER"
+     },
+     {
+      "slot": 2,
+      "number": "+000 12005 2180",
+      "label": "spouse",
+      "last_status": "BUSY"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 2,
+     "date": "2026-08-11",
+     "hour": 18
+    },
+    "last3": [
+     true,
+     false,
+     false
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-11-06",
+    "target_hour": 18
+   }
+  },
+  {
+   "hhid": "0112-008",
+   "psu": "0112",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0112-008 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 12008 1499",
+      "label": "respondent",
+      "last_status": "COMPLETE"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 1,
+    "last_interview": {
+     "round": 3,
+     "date": "2026-09-09",
+     "hour": 13
+    },
+    "last3": [
+     true,
+     true,
+     false
+    ],
+    "last_enumerator": "E07"
+   },
+   "assignment": {
+    "reason": "keep"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-29",
+    "target_hour": 13
+   }
+  },
+  {
+   "hhid": "0113-004",
+   "psu": "0113",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0113-004 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 13004 1753",
+      "label": "respondent"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 5
+   },
+   "assignment": {
+    "reason": "new"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-26",
+    "target_hour": 11
+   }
+  },
+  {
+   "hhid": "0113-006",
+   "psu": "0113",
+   "stratum": "2",
+   "contact": {
+    "name": "Contact 0113-006 (synthetic)",
+    "phones": [
+     {
+      "slot": 1,
+      "number": "+000 13006 1653",
+      "label": "respondent"
+     }
+    ]
+   },
+   "history": {
+    "joined_round": 5
+   },
+   "assignment": {
+    "reason": "new"
+   },
+   "plan": {
+    "first_dial_date": "2026-10-26",
+    "target_hour": 12
+   }
+  }
+ ],
+ "fingerprint": "b58170d17d218cbaa23b647a7111161b6ef0080cd9f463441dce43ef89e624e7"
+}

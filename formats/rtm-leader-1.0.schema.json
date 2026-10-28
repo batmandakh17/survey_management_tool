@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-leader-1.0",
+  "title": "Leader session (rtm-leader-1.0)",
+  "description": "The leader's saved session: the round's settings and inputs (the household list included, so it holds contact information), the assignment and its manifest, every imported export, the leader's decisions on the merge, and the leader's own log of actions with who and when. File name: leader_{program}_R{round, two digits}.json, or with _{date}_{HHMM} added when the browser cannot overwrite a file. Keep it in the leader's own folder; it can be protected with a passphrase (rtm-sealed-1.0).",
+  "type": "object",
+  "required": ["schema", "saved_at", "saved_by", "program", "round", "chain_genesis", "settings", "inputs", "events", "checksum"],
+  "properties": {
+    "schema": { "const": "rtm-leader-1.0" },
+    "tool_version": { "type": "string" },
+    "saved_at": { "type": "string" }, "saved_by": { "type": "string" },
+    "program": { "type": "string" }, "country": { "type": "string" }, "round": { "type": "integer" }, "started_at": { "type": "string" },
+    "chain_genesis": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "settings": { "type": "object" },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "households": { "type": ["object", "null"], "properties": { "name": { "type": "string" }, "text": { "type": "string" } } },
+        "replacements": { "type": ["object", "null"] }, "manual": { "type": ["object", "null"] },
+        "history": { "type": "array", "items": { "type": "object", "required": ["name", "text"] } }
+      }
+    },
+    "plan": { "type": ["object", "null"] },
+    "generated": { "type": ["object", "null"] },
+    "manifest": { "oneOf": [{ "type": "null" }, { "$ref": "urn:rtm:schema:rtm-roundmanifest-1.0" }] },
+    "imports": { "type": "array", "items": { "type": "object", "required": ["name", "text"] } },
+    "resolutions": {
+      "type": "array",
+      "items": { "type": "object", "required": ["key", "decision", "logged_by", "logged_at"], "properties": { "key": { "type": "string" }, "decision": { "type": "string" }, "note": { "type": "string" }, "logged_by": { "type": "string" }, "logged_at": { "type": "string" } } }
+    },
+    "events": {
+      "type": "array",
+      "items": { "type": "object", "required": ["event_id", "type", "what", "logged_by", "logged_at", "prev_hash", "hash"], "properties": { "type": { "const": "leader" } } }
+    },
+    "contains_contact_information": { "const": true },
+    "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

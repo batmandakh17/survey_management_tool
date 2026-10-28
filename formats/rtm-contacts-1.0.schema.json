@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-contacts-1.0",
+  "title": "Contacts file (rtm-contacts-1.0)",
+  "description": "New or corrected phone numbers reported during the round. Written only when a number changed, as {enumerator_id}_{export date}_contacts.json. It holds phone numbers: the enumerator gives it to the leader directly, never through the common folder. When the session came from a protected assignment, this file is protected too (rtm-sealed-1.0).",
+  "type": "object",
+  "required": ["schema", "program", "round", "enumerator_id", "exported_at", "contains_contact_information", "updates"],
+  "properties": {
+    "schema": { "const": "rtm-contacts-1.0" },
+    "tool_version": { "type": "string" },
+    "program": { "type": "string" },
+    "round": { "type": "integer", "minimum": 1 },
+    "enumerator_id": { "type": "string" },
+    "exported_at": { "type": "string" },
+    "contains_contact_information": { "const": true },
+    "note": { "type": "string" },
+    "updates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "hhid", "slot", "change", "logged_by", "logged_at"],
+        "properties": {
+          "event_id": { "type": "string" },
+          "hhid": { "type": "string" },
+          "slot": { "type": "integer", "minimum": 1 },
+          "change": { "enum": ["add", "correct", "mark_dead"] },
+          "label": { "type": "string" },
+          "number": { "type": "string", "description": "Absent when the change only marks a number as not working." },
+          "private_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Equals the digest in the call log's event, so the leader can match the number to the logged event." },
+          "logged_by": { "type": "string" },
+          "logged_at": { "type": "string" }
+        },
+        "if": { "properties": { "change": { "enum": ["add", "correct"] } } },
+        "then": { "required": ["number", "private_digest"] }
+      }
+    }
+  }
+}

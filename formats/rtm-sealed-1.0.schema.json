@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-sealed-1.0",
+  "title": "Protected file (rtm-sealed-1.0)",
+  "description": "Optional passphrase protection (decision D11) of an assignment, a saved session or a contacts file. A key is derived from the passphrase with PBKDF2-SHA-256 and the content encrypted with AES-256-GCM, in the browser and offline. The header fields schema, contains, program, round and enumerator_id are bound to the ciphertext as additional authenticated data (their canonical JSON), so the label cannot be moved to another file. The passphrase is never stored.",
+  "type": "object",
+  "required": [
+    "schema",
+    "contains",
+    "kdf",
+    "cipher",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rtm-sealed-1.0"
+    },
+    "contains": {
+      "enum": [
+        "rtm-assign-1.0",
+        "rtm-project-1.0",
+        "rtm-contacts-1.0",
+        "rtm-leader-1.0"
+      ]
+    },
+    "program": {
+      "type": "string"
+    },
+    "round": {
+      "type": "integer"
+    },
+    "enumerator_id": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "kdf": {
+      "type": "object",
+      "required": [
+        "name",
+        "hash",
+        "iterations",
+        "salt"
+      ],
+      "properties": {
+        "name": {
+          "const": "PBKDF2"
+        },
+        "hash": {
+          "const": "SHA-256"
+        },
+        "iterations": {
+          "type": "integer",
+          "minimum": 100000,
+          "maximum": 5000000
+        },
+        "salt": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      }
+    },
+    "cipher": {
+      "type": "object",
+      "required": [
+        "name",
+        "iv"
+      ],
+      "properties": {
+        "name": {
+          "const": "AES-GCM"
+        },
+        "iv": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "tag_bits": {
+          "const": 128
+        }
+      }
+    },
+    "data": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Ciphertext followed by the 16-byte authentication tag, as WebCrypto and the Python cryptography package both write it."
+    }
+  }
+}

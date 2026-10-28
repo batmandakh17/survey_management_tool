@@ -1,0 +1,23 @@
+{
+ "schema": "rtm-contacts-1.0",
+ "tool_version": "0.3.0",
+ "program": "L2MN-DEMO",
+ "round": 5,
+ "enumerator_id": "E01",
+ "exported_at": "2026-11-06T18:00:00+08:00",
+ "contains_contact_information": true,
+ "note": "Contains phone numbers. Give this file to your team leader directly; do not put it in the common folder.",
+ "updates": [
+  {
+   "event_id": "8eabdfa2-5657-4678-8357-cb173b1ab4dd",
+   "hhid": "0102-008",
+   "slot": 3,
+   "change": "add",
+   "label": "son or daughter",
+   "number": "+000 02008 3826",
+   "private_digest": "ff71f361afd55a59f6e8dc6aedd96c69569502bbb74caf40bb97e881577c68e3",
+   "logged_by": "E01",
+   "logged_at": "2026-11-03T12:38:58+08:00"
+  }
+ ]
+}

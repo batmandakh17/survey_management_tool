@@ -1,0 +1,958 @@
+{
+ "schema": "rtm-roundmanifest-1.0",
+ "tool_version": "0.3.0",
+ "program": "L2MN-DEMO",
+ "country": "MN",
+ "round": 3,
+ "generated_by": "L01",
+ "generated_at": "2026-08-28T16:05:00+08:00",
+ "synthetic": true,
+ "rule": {
+  "name": "keep_same",
+  "rotation_share": 0.1,
+  "hard_to_reach": "missed_with_full_cap_or_request",
+  "fallback": "random",
+  "seed": 20261027
+ },
+ "replacement_policy": {
+  "active": true,
+  "triggers": [
+   "REFUSAL_HARD",
+   "ALL_NUMBERS_DEAD"
+  ]
+ },
+ "calendar": {
+  "window_start": "2026-08-31",
+  "window_end": "2026-09-23",
+  "working_weekdays": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "call_hours": {
+   "start": 9,
+   "end": 21
+  },
+  "time_zone": "Asia/Ulaanbaatar",
+  "holidays": [],
+  "dial_cap": 8
+ },
+ "away": [
+  "E02"
+ ],
+ "enumerators": [
+  {
+   "enumerator_id": "E01",
+   "available": true,
+   "share": 0.3333,
+   "households": 33,
+   "file": "E01_assignment_R03.json",
+   "fingerprint": "7aff1a5739fbf98d64fdc8d2e045372dbd6bd2a58a67f78594cdebe20e2e9f5e"
+  },
+  {
+   "enumerator_id": "E03",
+   "available": true,
+   "share": 0.3333,
+   "households": 35,
+   "file": "E03_assignment_R03.json",
+   "fingerprint": "8477c0405fac90d44108529b4f4890544ebae4e3bf3126e37ab397ea38b30ef1"
+  },
+  {
+   "enumerator_id": "E07",
+   "available": true,
+   "share": 0.3333,
+   "households": 37,
+   "file": "E07_assignment_R03.json",
+   "fingerprint": "03e6d2f14371514f75f0ae961b0e88f9329de0bb3c580f6b0a05818201a7d1ca"
+  }
+ ],
+ "households": [
+  {
+   "hhid": "0101-001",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0101",
+   "stratum": "1",
+   "replacements": [
+    "0101-101"
+   ]
+  },
+  {
+   "hhid": "0101-002",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0101",
+   "stratum": "1",
+   "replacements": [
+    "0101-102"
+   ]
+  },
+  {
+   "hhid": "0101-003",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0101",
+   "stratum": "1",
+   "replacements": [
+    "0101-103"
+   ]
+  },
+  {
+   "hhid": "0101-004",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0101",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0101-005",
+   "enumerator_id": "E03",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E01",
+   "psu": "0101",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0101-006",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0101",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0101-007",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0101",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0101-008",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0101",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0102-001",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0102",
+   "stratum": "1",
+   "replacements": [
+    "0102-101"
+   ]
+  },
+  {
+   "hhid": "0102-002",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0102",
+   "stratum": "1",
+   "replacements": [
+    "0102-102"
+   ]
+  },
+  {
+   "hhid": "0102-003",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0102",
+   "stratum": "1",
+   "replacements": [
+    "0102-103"
+   ]
+  },
+  {
+   "hhid": "0102-004",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0102",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0102-005",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0102",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0102-006",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0102",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0102-007",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0102",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0102-008",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0102",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0102-009",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0102",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0103-001",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0103",
+   "stratum": "1",
+   "replacements": [
+    "0103-101"
+   ]
+  },
+  {
+   "hhid": "0103-002",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1",
+   "replacements": [
+    "0103-102"
+   ]
+  },
+  {
+   "hhid": "0103-003",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1",
+   "replacements": [
+    "0103-103"
+   ]
+  },
+  {
+   "hhid": "0103-004",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0103-005",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0103",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0103-006",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0103-007",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0103-008",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0103-009",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0103",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0104-001",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0104",
+   "stratum": "1",
+   "replacements": [
+    "0104-101"
+   ]
+  },
+  {
+   "hhid": "0104-002",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0104",
+   "stratum": "1",
+   "replacements": [
+    "0104-102"
+   ]
+  },
+  {
+   "hhid": "0104-003",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0104",
+   "stratum": "1",
+   "replacements": [
+    "0104-103"
+   ]
+  },
+  {
+   "hhid": "0104-004",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0104",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0104-005",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0104",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0104-006",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0104",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0104-007",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0104",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0104-008",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0104",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0104-009",
+   "enumerator_id": "E01",
+   "reason": "rotation",
+   "previous_enumerator": "E07",
+   "psu": "0104",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0105-001",
+   "enumerator_id": "E03",
+   "reason": "rotation",
+   "previous_enumerator": "E07",
+   "psu": "0105",
+   "stratum": "1",
+   "replacements": [
+    "0105-101"
+   ]
+  },
+  {
+   "hhid": "0105-002",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0105",
+   "stratum": "1",
+   "replacements": [
+    "0105-102"
+   ]
+  },
+  {
+   "hhid": "0105-003",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0105",
+   "stratum": "1",
+   "replacements": [
+    "0105-103"
+   ]
+  },
+  {
+   "hhid": "0105-004",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0105",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0105-005",
+   "enumerator_id": "E07",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E03",
+   "psu": "0105",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0105-006",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0105",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0105-007",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0105",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0105-008",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0105",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0105-009",
+   "enumerator_id": "E07",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E01",
+   "psu": "0105",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0106-001",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0106",
+   "stratum": "1",
+   "replacements": [
+    "0106-101"
+   ]
+  },
+  {
+   "hhid": "0106-002",
+   "enumerator_id": "E01",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E03",
+   "psu": "0106",
+   "stratum": "1",
+   "replacements": [
+    "0106-102"
+   ]
+  },
+  {
+   "hhid": "0106-003",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0106",
+   "stratum": "1",
+   "replacements": [
+    "0106-103"
+   ]
+  },
+  {
+   "hhid": "0106-004",
+   "enumerator_id": "E01",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E07",
+   "psu": "0106",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0106-006",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0106",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0106-007",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0106",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0106-008",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0106",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0106-009",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0106",
+   "stratum": "1"
+  },
+  {
+   "hhid": "0107-001",
+   "enumerator_id": "E07",
+   "reason": "rotation",
+   "previous_enumerator": "E01",
+   "psu": "0107",
+   "stratum": "2",
+   "replacements": [
+    "0107-101"
+   ]
+  },
+  {
+   "hhid": "0107-002",
+   "enumerator_id": "E03",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E01",
+   "psu": "0107",
+   "stratum": "2",
+   "replacements": [
+    "0107-102"
+   ]
+  },
+  {
+   "hhid": "0107-003",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0107",
+   "stratum": "2",
+   "replacements": [
+    "0107-103"
+   ]
+  },
+  {
+   "hhid": "0107-004",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0107",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0107-005",
+   "enumerator_id": "E01",
+   "reason": "rotation",
+   "previous_enumerator": "E07",
+   "psu": "0107",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0107-006",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0107",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0107-007",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0107",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0107-008",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0107",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0107-009",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0107",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0108-001",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0108",
+   "stratum": "2",
+   "replacements": [
+    "0108-101"
+   ]
+  },
+  {
+   "hhid": "0108-002",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0108",
+   "stratum": "2",
+   "replacements": [
+    "0108-102"
+   ]
+  },
+  {
+   "hhid": "0108-003",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0108",
+   "stratum": "2",
+   "replacements": [
+    "0108-103"
+   ]
+  },
+  {
+   "hhid": "0108-004",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0108",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0108-005",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0108",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0108-006",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0108",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0108-007",
+   "enumerator_id": "E01",
+   "reason": "rotation",
+   "previous_enumerator": "E03",
+   "psu": "0108",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0108-008",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0108",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0108-009",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0108",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0109-001",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0109",
+   "stratum": "2",
+   "replacements": [
+    "0109-101"
+   ]
+  },
+  {
+   "hhid": "0109-002",
+   "enumerator_id": "E07",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E03",
+   "psu": "0109",
+   "stratum": "2",
+   "replacements": [
+    "0109-102"
+   ]
+  },
+  {
+   "hhid": "0109-003",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0109",
+   "stratum": "2",
+   "replacements": [
+    "0109-103"
+   ]
+  },
+  {
+   "hhid": "0109-004",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0109",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0109-005",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0109",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0109-006",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0109",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0109-007",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0109",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0109-008",
+   "enumerator_id": "E03",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E07",
+   "psu": "0109",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0109-009",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0109",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0110-001",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0110",
+   "stratum": "2",
+   "replacements": [
+    "0110-101"
+   ]
+  },
+  {
+   "hhid": "0110-002",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0110",
+   "stratum": "2",
+   "replacements": [
+    "0110-102"
+   ]
+  },
+  {
+   "hhid": "0110-003",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0110",
+   "stratum": "2",
+   "replacements": [
+    "0110-103"
+   ]
+  },
+  {
+   "hhid": "0110-004",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0110",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0110-005",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0110",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0110-006",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0110",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0110-007",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0110",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0110-008",
+   "enumerator_id": "E03",
+   "reason": "rotation",
+   "previous_enumerator": "E01",
+   "psu": "0110",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0110-009",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0110",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-001",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2",
+   "replacements": [
+    "0111-101"
+   ]
+  },
+  {
+   "hhid": "0111-003",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2",
+   "replacements": [
+    "0111-103"
+   ]
+  },
+  {
+   "hhid": "0111-004",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-005",
+   "enumerator_id": "E01",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-006",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-007",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-008",
+   "enumerator_id": "E07",
+   "reason": "rotation",
+   "previous_enumerator": "E03",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-009",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0111-102",
+   "enumerator_id": "E01",
+   "reason": "keep",
+   "psu": "0111",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0112-001",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0112",
+   "stratum": "2",
+   "replacements": [
+    "0112-101"
+   ]
+  },
+  {
+   "hhid": "0112-002",
+   "enumerator_id": "E03",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0112",
+   "stratum": "2",
+   "replacements": [
+    "0112-102"
+   ]
+  },
+  {
+   "hhid": "0112-003",
+   "enumerator_id": "E07",
+   "reason": "enumerator_unavailable",
+   "previous_enumerator": "E02",
+   "psu": "0112",
+   "stratum": "2",
+   "replacements": [
+    "0112-103"
+   ]
+  },
+  {
+   "hhid": "0112-004",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0112",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0112-005",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0112",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0112-006",
+   "enumerator_id": "E01",
+   "reason": "switch_hard_to_reach",
+   "previous_enumerator": "E03",
+   "psu": "0112",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0112-007",
+   "enumerator_id": "E03",
+   "reason": "keep",
+   "psu": "0112",
+   "stratum": "2"
+  },
+  {
+   "hhid": "0112-008",
+   "enumerator_id": "E07",
+   "reason": "keep",
+   "psu": "0112",
+   "stratum": "2"
+  }
+ ],
+ "fingerprint": "75e05e9c866d8034bd79bd07e7fd5d8a8d523872504677e8264b728d4e1ae65c"
+}

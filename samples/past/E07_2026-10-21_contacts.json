@@ -1,0 +1,34 @@
+{
+ "schema": "rtm-contacts-1.0",
+ "tool_version": "0.3.0",
+ "program": "L2MN-DEMO",
+ "round": 4,
+ "enumerator_id": "E07",
+ "exported_at": "2026-10-21T21:30:00+08:00",
+ "contains_contact_information": true,
+ "note": "Contains phone numbers. Give this file to your team leader directly; do not put it in the common folder.",
+ "updates": [
+  {
+   "event_id": "071d2977-b939-4487-b942-dc372e938ebb",
+   "hhid": "0111-001",
+   "slot": 2,
+   "change": "add",
+   "label": "spouse",
+   "number": "+000 11001 2596",
+   "private_digest": "03e752cf904a7dcb76eef5a60b33c317c8dfd1790ccdbd443b2ff2757f57ef06",
+   "logged_by": "E07",
+   "logged_at": "2026-10-02T20:29:09+08:00"
+  },
+  {
+   "event_id": "2ea8c197-1337-4e37-9d39-d1df2896f7b9",
+   "hhid": "0108-008",
+   "slot": 3,
+   "change": "add",
+   "label": "son or daughter",
+   "number": "+000 08008 3669",
+   "private_digest": "be7e25f6ff7b02e423f2c97bf3a504979ee002613ae2e10f3c2bfacccb1dbf41",
+   "logged_by": "E07",
+   "logged_at": "2026-10-06T18:31:35+08:00"
+  }
+ ]
+}

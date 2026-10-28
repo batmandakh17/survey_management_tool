@@ -1,0 +1,4963 @@
+{
+ "schema": "rtm-project-1.0",
+ "tool_version": "0.3.0",
+ "saved_at": "2026-10-27T12:30:00+08:00",
+ "saved_by": "E07",
+ "assignment": {
+  "schema": "rtm-assign-1.0",
+  "tool_version": "0.3.0",
+  "program": "L2MN-DEMO",
+  "country": "MN",
+  "round": 5,
+  "enumerator_id": "E07",
+  "generated_by": "L01",
+  "generated_at": "2026-10-23T16:05:00+08:00",
+  "rule": {
+   "name": "keep_same",
+   "rotation_share": 0.1,
+   "hard_to_reach": "missed_with_full_cap_or_request",
+   "fallback": "random",
+   "seed": 20261027
+  },
+  "replacement_policy": {
+   "active": true,
+   "triggers": [
+    "REFUSAL_HARD",
+    "ALL_NUMBERS_DEAD"
+   ]
+  },
+  "synthetic": true,
+  "note": "SYNTHETIC sample for trying the tool. No real household, name or phone number.",
+  "calendar": {
+   "window_start": "2026-10-26",
+   "window_end": "2026-11-20",
+   "working_weekdays": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "call_hours": {
+    "start": 9,
+    "end": 21
+   },
+   "time_zone": "Asia/Ulaanbaatar",
+   "holidays": [
+    {
+     "date": "2026-11-10",
+     "name": "Genghis Khan's Birthday",
+     "estimated": false,
+     "working": false
+    }
+   ],
+   "dial_cap": 8
+  },
+  "households": [
+   {
+    "hhid": "0101-002",
+    "psu": "0101",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0101-002 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 01002 1712",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 2,
+      "date": "2026-07-29",
+      "hour": 9
+     },
+     "last3": [
+      true,
+      false,
+      false
+     ],
+     "last_enumerator": "E01"
+    },
+    "assignment": {
+     "reason": "switch_hard_to_reach",
+     "previous_enumerator": "E01"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-26",
+     "target_hour": 9
+    },
+    "replacements": [
+     {
+      "hhid": "0101-102",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0101-102 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 01102 1305",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0101-004",
+    "psu": "0101",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0101-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 01004 1128",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last3": [
+      false,
+      false,
+      false
+     ]
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-26",
+     "target_hour": 10
+    }
+   },
+   {
+    "hhid": "0101-005",
+    "psu": "0101",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0101-005 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 01005 1530",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 01005 2667",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-28",
+      "hour": 18
+     },
+     "last3": [
+      false,
+      false,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-29",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0101-008",
+    "psu": "0101",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0101-008 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 01008 1822",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 01008 2312",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-05",
+      "hour": 18
+     },
+     "last3": [
+      true,
+      false,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-30",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0102-001",
+    "psu": "0102",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0102-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 02001 1517",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 02001 2232",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-06",
+      "hour": 12
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-30",
+     "target_hour": 12
+    },
+    "replacements": [
+     {
+      "hhid": "0102-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0102-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 02101 1681",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0102-006",
+    "psu": "0102",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0102-006 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 02006 1376",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 02006 2185",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-06",
+      "hour": 17
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-30",
+     "target_hour": 17
+    }
+   },
+   {
+    "hhid": "0103-001",
+    "psu": "0103",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0103-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 03001 1493",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 03001 2751",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-06",
+      "hour": 18
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-30",
+     "target_hour": 18
+    },
+    "replacements": [
+     {
+      "hhid": "0103-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0103-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 03101 1124",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0103-002",
+    "psu": "0103",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0103-002 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 03002 1900",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 03002 2462",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-05",
+      "hour": 16
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-31",
+     "target_hour": 16
+    },
+    "replacements": [
+     {
+      "hhid": "0103-102",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0103-102 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 03102 1584",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0104-001",
+    "psu": "0104",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0104-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 04001 1835",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 04001 2230",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 1,
+      "date": "2026-07-04",
+      "hour": 11
+     },
+     "last3": [
+      false,
+      false,
+      false
+     ],
+     "last_enumerator": "E02"
+    },
+    "assignment": {
+     "reason": "switch_hard_to_reach",
+     "previous_enumerator": "E02"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-26",
+     "target_hour": 11
+    },
+    "replacements": [
+     {
+      "hhid": "0104-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0104-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 04101 1457",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0104-004",
+    "psu": "0104",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0104-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 04004 1330",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 04004 2579",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-06",
+      "hour": 20
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-31",
+     "target_hour": 20
+    }
+   },
+   {
+    "hhid": "0104-005",
+    "psu": "0104",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0104-005 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 04005 1749",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 04005 2186",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-05",
+      "hour": 16
+     },
+     "last3": [
+      true,
+      false,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-31",
+     "target_hour": 16
+    }
+   },
+   {
+    "hhid": "0104-008",
+    "psu": "0104",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0104-008 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 04008 1513",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 04008 2804",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 2,
+      "date": "2026-08-03",
+      "hour": 15
+     },
+     "last3": [
+      true,
+      false,
+      false
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-31",
+     "target_hour": 15
+    }
+   },
+   {
+    "hhid": "0104-009",
+    "psu": "0104",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0104-009 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 04009 1219",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 04009 2510",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-10",
+      "hour": 18
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E02"
+    },
+    "assignment": {
+     "reason": "rotation",
+     "previous_enumerator": "E02"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-31",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0105-001",
+    "psu": "0105",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0105-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 05001 1643",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 05001 2635",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 1,
+      "date": "2026-07-08",
+      "hour": 19
+     },
+     "last3": [
+      false,
+      false,
+      false
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-02",
+     "target_hour": 19
+    },
+    "replacements": [
+     {
+      "hhid": "0105-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0105-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 05101 1640",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0105-003",
+    "psu": "0105",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0105-003 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 05003 1328",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-30",
+      "hour": 12
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-27",
+     "target_hour": 12
+    },
+    "replacements": [
+     {
+      "hhid": "0105-103",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0105-103 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 05103 1565",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0105-006",
+    "psu": "0105",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0105-006 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 05006 1797",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-28",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      false,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-27",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0106-001",
+    "psu": "0106",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0106-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 06001 1751",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 06001 2860",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-12",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-02",
+     "target_hour": 19
+    },
+    "replacements": [
+     {
+      "hhid": "0106-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0106-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 06101 1110",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0106-002",
+    "psu": "0106",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0106-002 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 06002 1770",
+       "label": "respondent",
+       "last_status": "SWITCHED_OFF"
+      },
+      {
+       "slot": 2,
+       "number": "+000 06002 2587",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 1,
+      "date": "2026-07-04",
+      "hour": 12
+     },
+     "last3": [
+      false,
+      false,
+      false
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-02",
+     "target_hour": 12
+    },
+    "replacements": [
+     {
+      "hhid": "0106-102",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0106-102 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 06102 1312",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0106-004",
+    "psu": "0106",
+    "stratum": "1",
+    "contact": {
+     "name": "Contact 0106-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 06004 1870",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 06004 2833",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-29",
+      "hour": 18
+     },
+     "last3": [
+      false,
+      false,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-02",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0107-001",
+    "psu": "0107",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0107-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 07001 1478",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-02",
+      "hour": 17
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-27",
+     "target_hour": 17
+    },
+    "replacements": [
+     {
+      "hhid": "0107-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0107-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 07101 1291",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0107-004",
+    "psu": "0107",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0107-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 07004 1754",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-02",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-27",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0107-005",
+    "psu": "0107",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0107-005 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 07005 1762",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-03",
+      "hour": 20
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E01"
+    },
+    "assignment": {
+     "reason": "rotation",
+     "previous_enumerator": "E01"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-28",
+     "target_hour": 20
+    }
+   },
+   {
+    "hhid": "0108-004",
+    "psu": "0108",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0108-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 08004 1258",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 08004 2487",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-08",
+      "hour": 19
+     },
+     "last3": [
+      false,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-03",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0108-008",
+    "psu": "0108",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0108-008 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 08008 1563",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 08008 2858",
+       "label": "spouse"
+      },
+      {
+       "slot": 3,
+       "number": "+000 08008 3669",
+       "label": "son or daughter"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-06",
+      "hour": 18
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-03",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0108-009",
+    "psu": "0108",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0108-009 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 08009 1116",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 08009 2221",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 2,
+      "date": "2026-07-28",
+      "hour": 14
+     },
+     "last3": [
+      true,
+      false,
+      false
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-03",
+     "target_hour": 14
+    }
+   },
+   {
+    "hhid": "0109-001",
+    "psu": "0109",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0109-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 09001 1755",
+       "label": "respondent",
+       "last_status": "DEAD_NUMBER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 09001 2379",
+       "label": "spouse",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-12",
+      "hour": 20
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-03",
+     "target_hour": 20
+    },
+    "replacements": [
+     {
+      "hhid": "0109-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0109-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 09101 1681",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0109-002",
+    "psu": "0109",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0109-002 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 09002 1203",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 09002 2219",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-10",
+      "hour": 19
+     },
+     "last3": [
+      false,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-04",
+     "target_hour": 19
+    },
+    "replacements": [
+     {
+      "hhid": "0109-102",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0109-102 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 09102 1748",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0109-003",
+    "psu": "0109",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0109-003 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 09003 1918",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-05",
+      "hour": 20
+     },
+     "last3": [
+      true,
+      false,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-28",
+     "target_hour": 20
+    },
+    "replacements": [
+     {
+      "hhid": "0109-103",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0109-103 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 09103 1190",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0109-005",
+    "psu": "0109",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0109-005 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 09005 1428",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 09005 2401",
+       "label": "spouse"
+      },
+      {
+       "slot": 3,
+       "number": "+000 09005 3908",
+       "label": "son or daughter"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 3,
+      "date": "2026-09-14",
+      "hour": 17
+     },
+     "last3": [
+      true,
+      true,
+      false
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-04",
+     "target_hour": 17
+    }
+   },
+   {
+    "hhid": "0109-007",
+    "psu": "0109",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0109-007 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 09007 1261",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 09007 2568",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-07",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-04",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0110-002",
+    "psu": "0110",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0110-002 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 10002 1277",
+       "label": "respondent",
+       "last_status": "NO_ANSWER"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 1,
+      "date": "2026-07-03",
+      "hour": 17
+     },
+     "last3": [
+      false,
+      false,
+      false
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-28",
+     "target_hour": 17
+    },
+    "replacements": [
+     {
+      "hhid": "0110-102",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0110-102 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 10102 1404",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0110-004",
+    "psu": "0110",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0110-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 10004 1925",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 10004 2662",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-08",
+      "hour": 18
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-04",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0110-005",
+    "psu": "0110",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0110-005 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 10005 1862",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 10005 2333",
+       "label": "spouse"
+      },
+      {
+       "slot": 3,
+       "number": "+000 10005 3147",
+       "label": "son or daughter"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-28",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      false,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-05",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0110-006",
+    "psu": "0110",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0110-006 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 10006 1313",
+       "label": "respondent",
+       "last_status": "DEAD_NUMBER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 10006 2636",
+       "label": "spouse",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 3,
+       "number": "+000 10006 3456",
+       "label": "son or daughter"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-12",
+      "hour": 17
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-05",
+     "target_hour": 17
+    }
+   },
+   {
+    "hhid": "0110-007",
+    "psu": "0110",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0110-007 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 10007 1689",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 10007 2120",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-30",
+      "hour": 16
+     },
+     "last3": [
+      false,
+      false,
+      true
+     ],
+     "last_enumerator": "E03"
+    },
+    "assignment": {
+     "reason": "enumerator_unavailable",
+     "previous_enumerator": "E03"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-05",
+     "target_hour": 16
+    }
+   },
+   {
+    "hhid": "0111-001",
+    "psu": "0111",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0111-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 11001 1545",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 11001 2596",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-02",
+      "hour": 20
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-05",
+     "target_hour": 20
+    },
+    "replacements": [
+     {
+      "hhid": "0111-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0111-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 11101 1306",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0111-003",
+    "psu": "0111",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0111-003 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 11003 1907",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-09-30",
+      "hour": 16
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-28",
+     "target_hour": 16
+    },
+    "replacements": [
+     {
+      "hhid": "0111-103",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0111-103 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 11103 1251",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0111-006",
+    "psu": "0111",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0111-006 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 11006 1835",
+       "label": "respondent",
+       "last_status": "DEAD_NUMBER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 11006 2226",
+       "label": "spouse",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 3,
+       "number": "+000 11006 3302",
+       "label": "son or daughter"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-10",
+      "hour": 12
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-06",
+     "target_hour": 12
+    }
+   },
+   {
+    "hhid": "0111-008",
+    "psu": "0111",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0111-008 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 11008 1324",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-01",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-29",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0111-009",
+    "psu": "0111",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0111-009 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 11009 1515",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 11009 2258",
+       "label": "spouse"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-12",
+      "hour": 14
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-06",
+     "target_hour": 14
+    }
+   },
+   {
+    "hhid": "0112-001",
+    "psu": "0112",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0112-001 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 12001 1465",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      },
+      {
+       "slot": 2,
+       "number": "+000 12001 2213",
+       "label": "spouse"
+      },
+      {
+       "slot": 3,
+       "number": "+000 12001 3787",
+       "label": "son or daughter"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-12",
+      "hour": 15
+     },
+     "last3": [
+      true,
+      false,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-06",
+     "target_hour": 15
+    },
+    "replacements": [
+     {
+      "hhid": "0112-101",
+      "rank": 1,
+      "contact": {
+       "name": "Reserve 0112-101 (synthetic)",
+       "phones": [
+        {
+         "slot": 1,
+         "number": "+000 12101 1820",
+         "label": "respondent"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "hhid": "0112-004",
+    "psu": "0112",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0112-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 12004 1132",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 4,
+      "date": "2026-10-01",
+      "hour": 19
+     },
+     "last3": [
+      true,
+      true,
+      true
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-29",
+     "target_hour": 19
+    }
+   },
+   {
+    "hhid": "0112-005",
+    "psu": "0112",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0112-005 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 12005 1808",
+       "label": "respondent",
+       "last_status": "DEAD_NUMBER"
+      },
+      {
+       "slot": 2,
+       "number": "+000 12005 2180",
+       "label": "spouse",
+       "last_status": "BUSY"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 2,
+      "date": "2026-08-11",
+      "hour": 18
+     },
+     "last3": [
+      true,
+      false,
+      false
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-11-06",
+     "target_hour": 18
+    }
+   },
+   {
+    "hhid": "0112-008",
+    "psu": "0112",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0112-008 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 12008 1499",
+       "label": "respondent",
+       "last_status": "COMPLETE"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 1,
+     "last_interview": {
+      "round": 3,
+      "date": "2026-09-09",
+      "hour": 13
+     },
+     "last3": [
+      true,
+      true,
+      false
+     ],
+     "last_enumerator": "E07"
+    },
+    "assignment": {
+     "reason": "keep"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-29",
+     "target_hour": 13
+    }
+   },
+   {
+    "hhid": "0113-004",
+    "psu": "0113",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0113-004 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 13004 1753",
+       "label": "respondent"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 5
+    },
+    "assignment": {
+     "reason": "new"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-26",
+     "target_hour": 11
+    }
+   },
+   {
+    "hhid": "0113-006",
+    "psu": "0113",
+    "stratum": "2",
+    "contact": {
+     "name": "Contact 0113-006 (synthetic)",
+     "phones": [
+      {
+       "slot": 1,
+       "number": "+000 13006 1653",
+       "label": "respondent"
+      }
+     ]
+    },
+    "history": {
+     "joined_round": 5
+    },
+    "assignment": {
+     "reason": "new"
+    },
+    "plan": {
+     "first_dial_date": "2026-10-26",
+     "target_hour": 12
+    }
+   }
+  ],
+  "fingerprint": "b58170d17d218cbaa23b647a7111161b6ef0080cd9f463441dce43ef89e624e7"
+ },
+ "assignment_fingerprint": "b58170d17d218cbaa23b647a7111161b6ef0080cd9f463441dce43ef89e624e7",
+ "chain_genesis": "b58170d17d218cbaa23b647a7111161b6ef0080cd9f463441dce43ef89e624e7",
+ "events": [
+  {
+   "event_id": "fd69c89f-bc3f-44ca-bd95-b99a0210d69b",
+   "type": "session",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "what": "started",
+   "fingerprint": "b58170d17d218cbaa23b647a7111161b6ef0080cd9f463441dce43ef89e624e7",
+   "fingerprint_ok": 1,
+   "file": "E07_assignment_R05.json",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T08:58:00+08:00",
+   "prev_hash": "b58170d17d218cbaa23b647a7111161b6ef0080cd9f463441dce43ef89e624e7",
+   "hash": "d6f7f876f2d158ec271f36b49e5fc34534cb82a0ebd94eacbc2cabe6f2cee8de"
+  },
+  {
+   "event_id": "c2cf1619-6594-42f5-a9b5-87a5e99a9939",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-002",
+   "phone_slot": 1,
+   "ts": "2026-10-26T09:44:12+08:00",
+   "end_ts": "2026-10-26T09:44:58+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T09:45:21+08:00",
+   "prev_hash": "d6f7f876f2d158ec271f36b49e5fc34534cb82a0ebd94eacbc2cabe6f2cee8de",
+   "hash": "bec34713d9115502abbeecf77c7719f914f1a895a7fbf0b27a32943b7dc74925"
+  },
+  {
+   "event_id": "fd3b5bed-573a-4299-9727-97cb5923880b",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-004",
+   "phone_slot": 1,
+   "ts": "2026-10-26T10:27:36+08:00",
+   "end_ts": "2026-10-26T10:28:04+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T10:28:12+08:00",
+   "prev_hash": "bec34713d9115502abbeecf77c7719f914f1a895a7fbf0b27a32943b7dc74925",
+   "hash": "1cea1b16d6e74861f0b8c25823d190039ff6c816ceca7f63fc4d332065f7c3e0"
+  },
+  {
+   "event_id": "66dc6ff6-cd0a-4c70-9d6f-1b79449960b8",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0113-004",
+   "phone_slot": 1,
+   "ts": "2026-10-26T11:00:04+08:00",
+   "end_ts": "2026-10-26T11:00:47+08:00",
+   "status": "DEAD_NUMBER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T11:01:24+08:00",
+   "prev_hash": "1cea1b16d6e74861f0b8c25823d190039ff6c816ceca7f63fc4d332065f7c3e0",
+   "hash": "96ada4cead3b0acc773360f466242559294652f57f453bd23e96f19e5fb7accd"
+  },
+  {
+   "event_id": "26a93771-9d3d-4117-b12c-a8337a80a299",
+   "type": "action",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0113-004",
+   "action": "REMOVE_REQUEST",
+   "reason": "no number works",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T11:02:24+08:00",
+   "prev_hash": "96ada4cead3b0acc773360f466242559294652f57f453bd23e96f19e5fb7accd",
+   "hash": "749f9c0085117d264894a28e5eb5867c045cd7f3cd2bb7d9e7e16f7a46da594e"
+  },
+  {
+   "event_id": "1b7fed8b-205e-4de1-b77b-871ddac6fbbb",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0104-001",
+   "phone_slot": 1,
+   "ts": "2026-10-26T11:40:53+08:00",
+   "end_ts": "2026-10-26T11:41:32+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T11:41:51+08:00",
+   "prev_hash": "749f9c0085117d264894a28e5eb5867c045cd7f3cd2bb7d9e7e16f7a46da594e",
+   "hash": "f5b7157353e5151d1f9f9d988a403fc0591de23d82ca527c467a84bfaa40676c"
+  },
+  {
+   "event_id": "129ea1f4-8fd4-4758-8eb3-b7a51e087f71",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-002",
+   "phone_slot": 1,
+   "ts": "2026-10-26T12:27:21+08:00",
+   "end_ts": "2026-10-26T12:28:02+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T12:28:10+08:00",
+   "prev_hash": "f5b7157353e5151d1f9f9d988a403fc0591de23d82ca527c467a84bfaa40676c",
+   "hash": "b7549ef2e0bebe2b40e90d6296e19f7e3936442b380d60d550997e0a7db95f49"
+  },
+  {
+   "event_id": "a9b303e3-eda0-4421-9b44-dbae4cb50415",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0113-006",
+   "phone_slot": 1,
+   "ts": "2026-10-26T12:42:38+08:00",
+   "end_ts": "2026-10-26T12:42:50+08:00",
+   "status": "BUSY",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T12:43:14+08:00",
+   "prev_hash": "b7549ef2e0bebe2b40e90d6296e19f7e3936442b380d60d550997e0a7db95f49",
+   "hash": "f1de49e230a0b1636c30e4a11c9847f6d696fedeb7c97ee7ac3f2c707f034d55"
+  },
+  {
+   "event_id": "9b7e806b-18c2-4494-b1af-e870ba6ae611",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0104-001",
+   "phone_slot": 1,
+   "ts": "2026-10-26T13:36:16+08:00",
+   "end_ts": "2026-10-26T13:36:52+08:00",
+   "status": "SWITCHED_OFF",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T13:37:07+08:00",
+   "prev_hash": "f1de49e230a0b1636c30e4a11c9847f6d696fedeb7c97ee7ac3f2c707f034d55",
+   "hash": "37d13016a8437feb9f5ecef6e9e7dd5eff14f20957f43a4bfe3da5fffd460fe6"
+  },
+  {
+   "event_id": "c6efed99-0817-458d-84a1-38ef3640a913",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-004",
+   "phone_slot": 1,
+   "ts": "2026-10-26T13:44:58+08:00",
+   "end_ts": "2026-10-26T13:45:28+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T13:45:36+08:00",
+   "prev_hash": "37d13016a8437feb9f5ecef6e9e7dd5eff14f20957f43a4bfe3da5fffd460fe6",
+   "hash": "9d76152a24183e5f831affb3ae4db776b3c40966a48f25bbd0f90ccd8a9b6b59"
+  },
+  {
+   "event_id": "724a9da3-fd88-44d9-aff3-583fad710dbb",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-002",
+   "phone_slot": 1,
+   "ts": "2026-10-26T14:14:04+08:00",
+   "end_ts": "2026-10-26T14:14:29+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T14:14:35+08:00",
+   "prev_hash": "9d76152a24183e5f831affb3ae4db776b3c40966a48f25bbd0f90ccd8a9b6b59",
+   "hash": "2d93099eee9f0ca3da2ab954b07618c9e2f45dcd51e188e83e002b2b12c887b6"
+  },
+  {
+   "event_id": "2709aba3-c021-47b2-8a0d-701d2512e30d",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-002",
+   "phone_slot": 1,
+   "ts": "2026-10-26T16:21:28+08:00",
+   "end_ts": "2026-10-26T16:22:08+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-26T16:22:28+08:00",
+   "prev_hash": "2d93099eee9f0ca3da2ab954b07618c9e2f45dcd51e188e83e002b2b12c887b6",
+   "hash": "f0b9fcade2d25f092d7b9710cfb8dc1a9205ee5338b5ce9a07d03ce16a507820"
+  },
+  {
+   "event_id": "924abeaa-754f-4ca2-ae70-817e5a647eee",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-002",
+   "phone_slot": 1,
+   "ts": "2026-10-27T10:00:13+08:00",
+   "end_ts": "2026-10-27T10:01:00+08:00",
+   "status": "NO_ANSWER",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-27T10:01:25+08:00",
+   "prev_hash": "f0b9fcade2d25f092d7b9710cfb8dc1a9205ee5338b5ce9a07d03ce16a507820",
+   "hash": "692f8e8996f040e1c4edf94e5d95bbda192b0230946f74f83a49ab71571b483a"
+  },
+  {
+   "event_id": "952e2c2c-898e-427e-8c13-29919375eccf",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-004",
+   "phone_slot": 1,
+   "ts": "2026-10-27T10:10:40+08:00",
+   "end_ts": "2026-10-27T10:11:20+08:00",
+   "status": "SWITCHED_OFF",
+   "operator": "E07",
+   "logged_by": "E07",
+   "logged_at": "2026-10-27T10:11:55+08:00",
+   "prev_hash": "692f8e8996f040e1c4edf94e5d95bbda192b0230946f74f83a49ab71571b483a",
+   "hash": "b2593be127de0473be875bac9e28d7ecf802e6da70a89c8c0c0e5ffceb62974e"
+  },
+  {
+   "event_id": "f2b33aa7-d3e7-48c2-b886-f840fb8e0f73",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0105-003",
+   "phone_slot": 1,
+   "ts": "2026-10-27T12:09:58+08:00",
+   "end_ts": "2026-10-27T12:10:34+08:00",
+   "status": "APPOINTMENT",
+   "operator": "E07",
+   "appointment_ts": "2026-10-27T18:00:00+08:00",
+   "logged_by": "E07",
+   "logged_at": "2026-10-27T12:11:04+08:00",
+   "prev_hash": "b2593be127de0473be875bac9e28d7ecf802e6da70a89c8c0c0e5ffceb62974e",
+   "hash": "ed89003f66484e35a69d912697b96e8f7988d5cf227e20ddb390d2496ebcbb33"
+  },
+  {
+   "event_id": "8a7ebc40-0a70-47a5-8998-5eca972a061c",
+   "type": "dial",
+   "program": "L2MN-DEMO",
+   "round": 5,
+   "hhid": "0101-004",
+   "phone_slot": 1,
+   "ts": "2026-10-27T12:12:32+08:00",
+   "end_ts": "2026-10-27T12:12:49+08:00",
+   "status": "SWITCHED_OFF",
+   "operator": "E07",
+   "action": "RELEASE",
+   "logged_by": "E07",
+   "logged_at": "2026-10-27T12:13:08+08:00",
+   "prev_hash": "ed89003f66484e35a69d912697b96e8f7988d5cf227e20ddb390d2496ebcbb33",
+   "hash": "ef09ac2e85549b8f436c4402c4b44f7fe3fa0009af10e606a01bebb881cf4531"
+  }
+ ],
+ "past": {
+  "files": [
+   {
+    "name": "E07_2026-10-21.json",
+    "round": 4,
+    "rows": 108,
+    "added": 108
+   }
+  ],
+  "dials": [
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-004",
+    "attempt": "1",
+    "ts": "2026-09-28 09:08:33",
+    "end_ts": "2026-09-28 09:09:15",
+    "utc_offset": "+08:00",
+    "dur_min": "0.70",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-28T09:09:39+08:00",
+    "event_id": "6808cdd3-15ec-44a6-8a60-0697faf219c5",
+    "prev_hash": "60f413245691de7b91fa9425be5fe7fda706a53513c48ab3e60ec9171d39620b"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-004",
+    "attempt": "2",
+    "ts": "2026-09-29 10:12:24",
+    "end_ts": "2026-09-29 10:12:40",
+    "utc_offset": "+08:00",
+    "dur_min": "0.27",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T10:12:51+08:00",
+    "event_id": "775f4273-03b7-45c6-ac52-1ae65c183061",
+    "prev_hash": "e808d9e06fd936184585b7b2e40b3afa0099a3aa4e1fb5fe6d0a493152d24fb3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-004",
+    "attempt": "3",
+    "ts": "2026-09-29 13:25:20",
+    "end_ts": "2026-09-29 13:26:02",
+    "utc_offset": "+08:00",
+    "dur_min": "0.70",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T13:26:20+08:00",
+    "event_id": "cdac0e70-56c8-4d9a-8542-b1c12d244118",
+    "prev_hash": "73d60ce906724a319e783ef96284160d7ed8ac4b296c0a1bb3b89d1661f6f768"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-004",
+    "attempt": "4",
+    "ts": "2026-09-30 10:12:50",
+    "end_ts": "2026-09-30 10:13:30",
+    "utc_offset": "+08:00",
+    "dur_min": "0.67",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "RELEASE",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T10:13:50+08:00",
+    "event_id": "f5eb7d3f-5461-439a-ad8b-05efa3e8ddb2",
+    "prev_hash": "9aa55bbec41b6c94d9378aefb30fc3ac59ccb7addebd1575c20f38bbec315068"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-008",
+    "attempt": "1",
+    "ts": "2026-10-02 18:21:36",
+    "end_ts": "2026-10-02 18:22:06",
+    "utc_offset": "+08:00",
+    "dur_min": "0.50",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-02T18:22:37+08:00",
+    "event_id": "fefe6e25-7557-482e-8c2c-6c7f39b27f17",
+    "prev_hash": "8612914a9f17a9ba7eb67bf1f33c671f0ba28f6983266aa07e0d6e45d8042d5a"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-008",
+    "attempt": "2",
+    "ts": "2026-10-03 18:16:21",
+    "end_ts": "2026-10-03 18:16:58",
+    "utc_offset": "+08:00",
+    "dur_min": "0.62",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T18:17:31+08:00",
+    "event_id": "c5738166-f8d3-446c-addc-223f9f395439",
+    "prev_hash": "90155926e5566a07c17ea2ac806a0bc198897f5756fe72242eb2a6389dda0852"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0101-008",
+    "attempt": "3",
+    "ts": "2026-10-05 18:12:59",
+    "end_ts": "2026-10-05 18:25:15",
+    "utc_offset": "+08:00",
+    "dur_min": "12.27",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T18:25:33+08:00",
+    "event_id": "7d762a0f-bfe3-4eff-b872-19c05251d51f",
+    "prev_hash": "b3e7fb60796a4458738d7d0998d8e949e1075aecb7726cbcc690c73c1b0c9434"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-001",
+    "attempt": "1",
+    "ts": "2026-10-02 13:16:35",
+    "end_ts": "2026-10-02 13:16:48",
+    "utc_offset": "+08:00",
+    "dur_min": "0.22",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-02T13:16:53+08:00",
+    "event_id": "c676cc9d-9018-4caa-9cf4-03e863f7572f",
+    "prev_hash": "0802ed1e309f025410e7d4f634f56fe8d0b8b46b80a170a20241df0ff5392962"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-001",
+    "attempt": "2",
+    "ts": "2026-10-02 15:30:46",
+    "end_ts": "2026-10-02 15:30:59",
+    "utc_offset": "+08:00",
+    "dur_min": "0.22",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-02T15:31:08+08:00",
+    "event_id": "9cafa248-d868-44bb-a824-750aedbcc984",
+    "prev_hash": "89785eb80da970628d6a6dd758b1c8b027c5d9d1631f6a0cba0f2a8a2a1159dd"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-001",
+    "attempt": "3",
+    "ts": "2026-10-05 13:19:44",
+    "end_ts": "2026-10-05 13:20:01",
+    "utc_offset": "+08:00",
+    "dur_min": "0.28",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T13:20:40+08:00",
+    "event_id": "8fbf91af-9995-4879-b085-27cbb64b2458",
+    "prev_hash": "4d11b0a9fd49ffd56cc9d3178ba6a858e8b748850dbd6e4d31a69b320fc0293b"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-001",
+    "attempt": "4",
+    "ts": "2026-10-06 12:21:09",
+    "end_ts": "2026-10-06 12:44:02",
+    "utc_offset": "+08:00",
+    "dur_min": "22.88",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T12:44:28+08:00",
+    "event_id": "dc63679e-9df2-439a-9473-cbc4a36a4ad1",
+    "prev_hash": "e9272c39a1dea28f06a1efed275bc17fa4597b5a650adde28e9e1d44d705ead2"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "1",
+    "ts": "2026-10-02 19:33:20",
+    "end_ts": "2026-10-02 19:33:54",
+    "utc_offset": "+08:00",
+    "dur_min": "0.57",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-02T19:34:18+08:00",
+    "event_id": "49bb3b9b-866a-4b91-84c6-c436c6accf43",
+    "prev_hash": "0841d9a6d466fc4ea4fda2a48cc8495b7dcba414bcfb227b3a138ca4b205f26f"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "2",
+    "ts": "2026-10-03 19:28:38",
+    "end_ts": "2026-10-03 19:29:16",
+    "utc_offset": "+08:00",
+    "dur_min": "0.63",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T19:29:22+08:00",
+    "event_id": "fc29654d-dc8e-4ce4-9198-86852046f023",
+    "prev_hash": "4d4e2ad63d88f2f2f30706cda5083942949351d966d44f5701eb03f901744db5"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "3",
+    "ts": "2026-10-05 19:20:58",
+    "end_ts": "2026-10-05 19:21:30",
+    "utc_offset": "+08:00",
+    "dur_min": "0.53",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T19:21:58+08:00",
+    "event_id": "4569a454-c7ad-4899-8679-0435b8cf9188",
+    "prev_hash": "4df7655113a82cae4b7b125925f71dc73af1141414bdb2ccdc95b37e79058634"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "4",
+    "ts": "2026-10-07 19:00:02",
+    "end_ts": "2026-10-07 19:00:40",
+    "utc_offset": "+08:00",
+    "dur_min": "0.63",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T19:00:58+08:00",
+    "event_id": "213d2a32-d076-47e3-8ea2-60396384d0ad",
+    "prev_hash": "b2e26d36e550ea32ce303ae265c5b36c44606c96432e6fdbe2647f7c0b8bdf05"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "5",
+    "ts": "2026-10-08 18:14:04",
+    "end_ts": "2026-10-08 18:14:43",
+    "utc_offset": "+08:00",
+    "dur_min": "0.65",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T18:15:15+08:00",
+    "event_id": "0fbbd28a-1ef0-4f00-b984-536881e986b8",
+    "prev_hash": "87504fea4fe77e5c420b894a818becabd06c5cf864cf4e4b0ec5163581118709"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "6",
+    "ts": "2026-10-10 19:44:46",
+    "end_ts": "2026-10-10 19:45:07",
+    "utc_offset": "+08:00",
+    "dur_min": "0.35",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T19:45:18+08:00",
+    "event_id": "9b07f5d9-aed8-4bca-807d-d2213b490d67",
+    "prev_hash": "905a82f5369ead2eb6b5a640a8588175ed00a031d9131d429cc63313dd559bfe"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "7",
+    "ts": "2026-10-13 20:28:53",
+    "end_ts": "2026-10-13 20:29:29",
+    "utc_offset": "+08:00",
+    "dur_min": "0.60",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-13T20:29:48+08:00",
+    "event_id": "25ab7d8c-84f3-4860-9d2f-19f03f53f4bc",
+    "prev_hash": "634565481e5e279f393e221b791251c3c1d07ad03df3eddf5c2b1bdf2410efd6"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-004",
+    "attempt": "8",
+    "ts": "2026-10-15 18:28:44",
+    "end_ts": "2026-10-15 18:29:16",
+    "utc_offset": "+08:00",
+    "dur_min": "0.53",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "RELEASE",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-15T18:29:25+08:00",
+    "event_id": "9f0dacb9-202f-4a83-8f51-da50a2e12d6e",
+    "prev_hash": "a76b9afdc0af96547b6792da0c24003cc605857070e056406bf64943c23a7132"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-005",
+    "attempt": "1",
+    "ts": "2026-10-03 20:16:49",
+    "end_ts": "2026-10-03 20:17:27",
+    "utc_offset": "+08:00",
+    "dur_min": "0.63",
+    "status": "DEAD_NUMBER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T20:17:59+08:00",
+    "event_id": "984f7b0c-a361-4fd7-b64a-00444885e756",
+    "prev_hash": "00502e4b745326fe603f7afb065c8e9c911bf1eadb24e1d9b11e50088fdebbf4"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-005",
+    "attempt": "2",
+    "ts": "2026-10-05 20:18:55",
+    "end_ts": "2026-10-05 20:27:55",
+    "utc_offset": "+08:00",
+    "dur_min": "9.00",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T20:28:01+08:00",
+    "event_id": "6a8ca265-1a26-45f3-9c3a-1b0ffe80e9b9",
+    "prev_hash": "ad4e9ea1c186e6e91e4dcc6a03231267cea48f6a652990900873e734fc92131c"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-006",
+    "attempt": "1",
+    "ts": "2026-10-03 17:40:14",
+    "end_ts": "2026-10-03 17:40:38",
+    "utc_offset": "+08:00",
+    "dur_min": "0.40",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T17:41:10+08:00",
+    "event_id": "982648eb-85f3-4c65-a1f8-09cca382a48a",
+    "prev_hash": "465d402cb03b83f46cb244d2585ed5040d57f3fd94de31bc411127e03b9f6457"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-006",
+    "attempt": "2",
+    "ts": "2026-10-03 20:26:02",
+    "end_ts": "2026-10-03 20:26:38",
+    "utc_offset": "+08:00",
+    "dur_min": "0.60",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-05 17:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T20:27:08+08:00",
+    "event_id": "6edae5ec-c03e-4c25-9ba0-55b7e62f9173",
+    "prev_hash": "74d41b7cb42a7b596f1652a0d6053ce90c812ba4c44c5be090706e243de1d3c7"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-006",
+    "attempt": "3",
+    "ts": "2026-10-05 17:06:21",
+    "end_ts": "2026-10-05 17:07:24",
+    "utc_offset": "+08:00",
+    "dur_min": "1.05",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-06 17:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T17:07:58+08:00",
+    "event_id": "139c4e8e-fba8-4c08-ab97-d1cc702fe864",
+    "prev_hash": "91760864bcf0103fda51c30e1a7f915e57e0c75e34e50bf249dc37bd5085eda7"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0102-006",
+    "attempt": "4",
+    "ts": "2026-10-06 17:02:05",
+    "end_ts": "2026-10-06 17:13:00",
+    "utc_offset": "+08:00",
+    "dur_min": "10.92",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T17:13:23+08:00",
+    "event_id": "3a2b1614-acb5-4bad-b59b-996173738699",
+    "prev_hash": "c2cdd0544e7a0bbbb6ca5c974cc01d9eaa600407c85b8c0b2555c783ff00d1c4"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0103-001",
+    "attempt": "1",
+    "ts": "2026-10-03 17:36:04",
+    "end_ts": "2026-10-03 17:38:31",
+    "utc_offset": "+08:00",
+    "dur_min": "2.45",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-05 18:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "corrected after checking the paper log",
+    "corrected": "1",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T17:39:02+08:00",
+    "event_id": "e898c767-9763-411f-8a69-0d08e10961df",
+    "prev_hash": "c687c72a33113544b4e76a3abafc98a20d76e4299235ef66912cad71f1915e9a"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0103-001",
+    "attempt": "2",
+    "ts": "2026-10-05 18:06:07",
+    "end_ts": "2026-10-05 18:07:21",
+    "utc_offset": "+08:00",
+    "dur_min": "1.23",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-06 18:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T18:07:42+08:00",
+    "event_id": "f803adf8-f15b-4e0a-9973-98c3f18c71a3",
+    "prev_hash": "b50a315d9802f3d8d193b31baf92de4fa4c7898d756bb51f799c70aee975df1a"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0103-001",
+    "attempt": "3",
+    "ts": "2026-10-06 18:10:12",
+    "end_ts": "2026-10-06 18:27:58",
+    "utc_offset": "+08:00",
+    "dur_min": "17.77",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T18:28:17+08:00",
+    "event_id": "ff8e9992-9404-4574-9627-3c10de6907b9",
+    "prev_hash": "871dc8d8fdad975409cc8807f6f04af085678e24cdbf37c1687ccd12735b97b6"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0103-002",
+    "attempt": "1",
+    "ts": "2026-10-03 16:26:45",
+    "end_ts": "2026-10-03 16:27:31",
+    "utc_offset": "+08:00",
+    "dur_min": "0.77",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T16:28:05+08:00",
+    "event_id": "a5aa120d-a21d-4abc-9b05-986f34a1cb40",
+    "prev_hash": "8267c1fc5ec1928e19959d7b5e74e8a8b8a3bae827141a0c47c67dd37ad17df2"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0103-002",
+    "attempt": "2",
+    "ts": "2026-10-03 18:15:21",
+    "end_ts": "2026-10-03 18:16:01",
+    "utc_offset": "+08:00",
+    "dur_min": "0.67",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T18:16:28+08:00",
+    "event_id": "f1790103-8554-413e-8cc9-0f647fec928c",
+    "prev_hash": "da45dd405002fb9cae3b85f366e4ba33841cc1fb01ebb9606315f3d2fa7c3bfb"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0103-002",
+    "attempt": "3",
+    "ts": "2026-10-05 16:28:34",
+    "end_ts": "2026-10-05 16:45:08",
+    "utc_offset": "+08:00",
+    "dur_min": "16.57",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T16:45:33+08:00",
+    "event_id": "71510ff3-123d-4593-ae52-cab013ca121b",
+    "prev_hash": "f5cd4b741dbb1e45f291acbdac434e62c3e6ecde842e46654e94011bdc728365"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0104-002",
+    "attempt": "1",
+    "ts": "2026-09-29 10:02:54",
+    "end_ts": "2026-09-29 10:14:01",
+    "utc_offset": "+08:00",
+    "dur_min": "11.12",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T10:14:34+08:00",
+    "event_id": "0b26afb5-07a9-4dcc-b0eb-ed2a1ba52417",
+    "prev_hash": "4ab8e2d21d23552bf6ca754462d7702e9d02fea91ed48fcc0f481747a8418b0c"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0104-003",
+    "attempt": "1",
+    "ts": "2026-09-29 18:38:05",
+    "end_ts": "2026-09-29 18:55:30",
+    "utc_offset": "+08:00",
+    "dur_min": "17.42",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T18:55:53+08:00",
+    "event_id": "21d10793-28ce-4faa-b652-cc447b17afa7",
+    "prev_hash": "12272556e46f427d75779ebc4acebc27077af32a55edc1d41c1996e650fd07b5"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0104-005",
+    "attempt": "1",
+    "ts": "2026-10-05 16:01:05",
+    "end_ts": "2026-10-05 16:16:25",
+    "utc_offset": "+08:00",
+    "dur_min": "15.33",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "corrected after checking the paper log",
+    "corrected": "1",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T16:16:56+08:00",
+    "event_id": "34943852-0456-41a3-96c0-db7ca2c35b54",
+    "prev_hash": "7e46a6823a9de482878356b99e2695c82ccd460408b7785facb05a101e5ffc88"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0104-008",
+    "attempt": "1",
+    "ts": "2026-10-05 15:27:56",
+    "end_ts": "2026-10-05 15:29:49",
+    "utc_offset": "+08:00",
+    "dur_min": "1.88",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T15:30:04+08:00",
+    "event_id": "d15a1e35-b782-4b9d-ab90-961229700bcb",
+    "prev_hash": "5003f1bd2ff065f108717a9f3b8c74026fe6331eacaf216da6437e16c884a8a6"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0105-003",
+    "attempt": "1",
+    "ts": "2026-09-29 09:19:47",
+    "end_ts": "2026-09-29 09:21:09",
+    "utc_offset": "+08:00",
+    "dur_min": "1.37",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-09-29 18:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T09:21:29+08:00",
+    "event_id": "d485cff6-a180-4342-b33c-5be5cede7739",
+    "prev_hash": "46ed70707478f3726e8405e5c65c060a63d269eef5e6e3094407b4b67787f0b4"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0105-003",
+    "attempt": "2",
+    "ts": "2026-09-29 18:04:03",
+    "end_ts": "2026-09-29 18:05:37",
+    "utc_offset": "+08:00",
+    "dur_min": "1.57",
+    "status": "NOT_AVAILABLE",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T18:06:15+08:00",
+    "event_id": "31fda298-d6af-4ed1-9537-e0be6d66bc74",
+    "prev_hash": "cc3742a36c0e8a47909b17bc695ece0a5874efa6a8a48822c6052ddaede9a3c3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0105-003",
+    "attempt": "3",
+    "ts": "2026-09-30 09:44:43",
+    "end_ts": "2026-09-30 09:45:00",
+    "utc_offset": "+08:00",
+    "dur_min": "0.28",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T09:45:14+08:00",
+    "event_id": "6b02feac-75d5-4263-ad79-2d8594fe8745",
+    "prev_hash": "395741b23cee585cf95dc52e954be9c434a5e60be0b8a24bc62b354fcc0c65b3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0105-003",
+    "attempt": "4",
+    "ts": "2026-09-30 12:13:11",
+    "end_ts": "2026-09-30 12:25:31",
+    "utc_offset": "+08:00",
+    "dur_min": "12.33",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T12:25:54+08:00",
+    "event_id": "83ac51b5-2644-430c-bf0c-9f4611a6b2a0",
+    "prev_hash": "20f78de256580a2247c7fbb98b8d9faba1fb97817e0f2a030cf3b385cc6de4e5"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0105-006",
+    "attempt": "1",
+    "ts": "2026-09-28 17:40:54",
+    "end_ts": "2026-09-28 17:42:46",
+    "utc_offset": "+08:00",
+    "dur_min": "1.87",
+    "status": "REFUSAL_SOFT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-28T17:42:51+08:00",
+    "event_id": "d1531f06-81cb-49af-aef4-872ae547feff",
+    "prev_hash": "d56b1f2a7dd10a8d0a785012b08ea9365b0ae00e0b1ba7a16a64c3bb554ffa01"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0105-006",
+    "attempt": "2",
+    "ts": "2026-09-28 19:31:13",
+    "end_ts": "2026-09-28 19:53:14",
+    "utc_offset": "+08:00",
+    "dur_min": "22.02",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-28T19:53:37+08:00",
+    "event_id": "ca7528cc-00a9-4306-88ed-d935f8af9ca9",
+    "prev_hash": "91e663e2049e82625c3ef6711aae657b865c0ef03ad89cdba6d462b16eba82fe"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0107-001",
+    "attempt": "1",
+    "ts": "2026-09-30 17:36:51",
+    "end_ts": "2026-09-30 17:37:09",
+    "utc_offset": "+08:00",
+    "dur_min": "0.30",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T17:37:38+08:00",
+    "event_id": "f7bec176-c353-4883-b90f-601f6d599faa",
+    "prev_hash": "68c314151e1543f76f1a2b1a4247c2121af773ee3c8753ae54b35754982bdfbb"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0107-001",
+    "attempt": "2",
+    "ts": "2026-10-01 18:36:43",
+    "end_ts": "2026-10-01 18:37:30",
+    "utc_offset": "+08:00",
+    "dur_min": "0.78",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T18:37:56+08:00",
+    "event_id": "b561bd07-c8b7-48f3-84c0-fdf2bcfc47df",
+    "prev_hash": "dea4f97df0db97ec9088d617be59bb3dd3119177e57882dfeec9452230856e10"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0107-001",
+    "attempt": "3",
+    "ts": "2026-10-02 17:21:22",
+    "end_ts": "2026-10-02 17:38:33",
+    "utc_offset": "+08:00",
+    "dur_min": "17.18",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-02T17:38:56+08:00",
+    "event_id": "7308829d-5d18-4218-8d6b-1fc55874b59b",
+    "prev_hash": "f16deabb4e093884806578434e9342719739ea134a9cd55db800d049e9665274"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-004",
+    "attempt": "1",
+    "ts": "2026-10-05 18:25:43",
+    "end_ts": "2026-10-05 18:26:13",
+    "utc_offset": "+08:00",
+    "dur_min": "0.50",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T18:26:45+08:00",
+    "event_id": "4d9cdb7a-d664-48a7-ad3d-a3fb0d05d193",
+    "prev_hash": "0f919310e74e42d7ecbe8398800ebde1eb1df666d630004318ce90356acde462"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-004",
+    "attempt": "2",
+    "ts": "2026-10-06 19:43:15",
+    "end_ts": "2026-10-06 19:44:41",
+    "utc_offset": "+08:00",
+    "dur_min": "1.43",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-07 19:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T19:45:09+08:00",
+    "event_id": "43ca7874-c9a9-4bc3-ac82-062f08429502",
+    "prev_hash": "24e280c4fa4362365db75937d327b3eb871e16dfcd78d517f5aafc7f7e228ffe"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-004",
+    "attempt": "3",
+    "ts": "2026-10-07 19:05:17",
+    "end_ts": "2026-10-07 19:05:38",
+    "utc_offset": "+08:00",
+    "dur_min": "0.35",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T19:06:14+08:00",
+    "event_id": "bdce8ebc-2fc1-4fd8-a37a-c5660ea46e76",
+    "prev_hash": "b78415406ecf198462761df6fd485e46ce2a9ce332c02f4924f7bf4083bc4534"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-004",
+    "attempt": "4",
+    "ts": "2026-10-08 19:13:57",
+    "end_ts": "2026-10-08 19:26:40",
+    "utc_offset": "+08:00",
+    "dur_min": "12.72",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T19:26:51+08:00",
+    "event_id": "46c4717d-a531-4ded-a948-4704110e5798",
+    "prev_hash": "1802eb45fa840f1b5cdbc6e05fe9b1be5c5341ad5882279e3ce44471de634aa8"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-008",
+    "attempt": "1",
+    "ts": "2026-10-06 18:12:19",
+    "end_ts": "2026-10-06 18:30:20",
+    "utc_offset": "+08:00",
+    "dur_min": "18.02",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T18:30:35+08:00",
+    "event_id": "6bf2c68a-848c-423e-b802-b42531aa82b1",
+    "prev_hash": "55c3fb04b0422db66920787dd60d18bd7e9f7662ad0c3b013de8e6f862db6b95"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-009",
+    "attempt": "1",
+    "ts": "2026-10-06 14:00:57",
+    "end_ts": "2026-10-06 14:01:36",
+    "utc_offset": "+08:00",
+    "dur_min": "0.65",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T14:01:42+08:00",
+    "event_id": "1e7eef45-0ef4-4328-bc10-71e16ac35b2d",
+    "prev_hash": "27da3777ac5a2b10d0fbdab7e0759d07594f9acdc46fefb28a9e20675f17e613"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-009",
+    "attempt": "2",
+    "ts": "2026-10-07 14:35:38",
+    "end_ts": "2026-10-07 14:35:59",
+    "utc_offset": "+08:00",
+    "dur_min": "0.35",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T14:36:18+08:00",
+    "event_id": "351d7efd-8a57-4dc1-8261-c9cfd2a4ac32",
+    "prev_hash": "d26647891dbbb20569354fe7c8342bc586d258e81d48a8e57dde8b90718e2c7f"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-009",
+    "attempt": "3",
+    "ts": "2026-10-07 16:05:09",
+    "end_ts": "2026-10-07 16:05:47",
+    "utc_offset": "+08:00",
+    "dur_min": "0.63",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T16:05:55+08:00",
+    "event_id": "dca070fc-e064-457d-b625-a8a05072d5a8",
+    "prev_hash": "e79ec9af80696ad8895d21d9dc3290748bf08d145b5920788d37b0a1a951dd9e"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-009",
+    "attempt": "4",
+    "ts": "2026-10-09 14:09:28",
+    "end_ts": "2026-10-09 14:09:53",
+    "utc_offset": "+08:00",
+    "dur_min": "0.42",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T14:10:16+08:00",
+    "event_id": "350c97cf-d982-4e69-a40c-81017152d935",
+    "prev_hash": "5f94cf5e08c5597d8f56a29b52eb93f16f6edd8ec9380b6abfbbd363ce79ba3d"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0108-009",
+    "attempt": "5",
+    "ts": "2026-10-09 17:03:36",
+    "end_ts": "2026-10-09 17:04:19",
+    "utc_offset": "+08:00",
+    "dur_min": "0.72",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "RELEASE",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T17:04:44+08:00",
+    "event_id": "61b529b0-7bb2-4f1a-bab4-8a9fda32e558",
+    "prev_hash": "a4e90fa7d6a2d7cb4daf89ad20a6bb1a5d1b941284d18d317ee825a8299a21ec"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-001",
+    "attempt": "1",
+    "ts": "2026-10-06 20:37:33",
+    "end_ts": "2026-10-06 20:38:01",
+    "utc_offset": "+08:00",
+    "dur_min": "0.47",
+    "status": "DEAD_NUMBER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-06T20:38:37+08:00",
+    "event_id": "cbb095dc-dcf2-43c2-ac07-193d848f6f3c",
+    "prev_hash": "511c98b3ca66e6dbb313a96f59988a5a794d266eb5d16c875539c5f45a869655"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-001",
+    "attempt": "2",
+    "ts": "2026-10-08 20:08:59",
+    "end_ts": "2026-10-08 20:10:04",
+    "utc_offset": "+08:00",
+    "dur_min": "1.08",
+    "status": "NOT_AVAILABLE",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T20:10:10+08:00",
+    "event_id": "29d2cbdd-9cac-4adc-b596-89a9479227fa",
+    "prev_hash": "d3c4ca2a1aebeeec6787ce336fa46ce2fbfd05723b041e009686bdd7865fe9ee"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-001",
+    "attempt": "3",
+    "ts": "2026-10-09 20:32:00",
+    "end_ts": "2026-10-09 20:33:18",
+    "utc_offset": "+08:00",
+    "dur_min": "1.30",
+    "status": "NOT_AVAILABLE",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T20:33:39+08:00",
+    "event_id": "b09eeb9a-8ef7-49b1-9ca4-8744f2da660f",
+    "prev_hash": "c4fa627a4e3309767ca20d158b5dcc98ff2a84a4b3478482f10d71f3868c6a57"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-001",
+    "attempt": "4",
+    "ts": "2026-10-10 20:26:10",
+    "end_ts": "2026-10-10 20:26:28",
+    "utc_offset": "+08:00",
+    "dur_min": "0.30",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T20:26:40+08:00",
+    "event_id": "6eea5d80-d335-46e0-8042-381711623b6c",
+    "prev_hash": "8c9eb6de751e2470bb3cbd82fb056bb59bff5bcbbf1f6b50d3305ff421545f83"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-001",
+    "attempt": "5",
+    "ts": "2026-10-12 20:23:23",
+    "end_ts": "2026-10-12 20:46:20",
+    "utc_offset": "+08:00",
+    "dur_min": "22.95",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-12T20:46:42+08:00",
+    "event_id": "08c83a20-6055-4971-90b7-12bb3b3b89d4",
+    "prev_hash": "e09641f5e794c2b20e272255fa8c5c21a7cdc53f0e5e7a9ccd78258a3de13d67"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-002",
+    "attempt": "1",
+    "ts": "2026-10-07 15:01:56",
+    "end_ts": "2026-10-07 15:02:11",
+    "utc_offset": "+08:00",
+    "dur_min": "0.25",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T15:02:19+08:00",
+    "event_id": "62f6d0ba-bab5-49bb-a6db-6eae23cffeea",
+    "prev_hash": "8b909ecac176d9dec6b57e31fef145d04ffa180bf1a6a0307af85e1f259825cb"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-002",
+    "attempt": "2",
+    "ts": "2026-10-09 15:06:46",
+    "end_ts": "2026-10-09 15:07:00",
+    "utc_offset": "+08:00",
+    "dur_min": "0.23",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T15:07:09+08:00",
+    "event_id": "1fa67dc7-9731-4358-a970-233031314099",
+    "prev_hash": "83132247de9e5df8b090a3ab3fdaa56b2f998e843e0790ef9054606be42904fb"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-002",
+    "attempt": "3",
+    "ts": "2026-10-10 16:32:53",
+    "end_ts": "2026-10-10 16:33:34",
+    "utc_offset": "+08:00",
+    "dur_min": "0.68",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T16:34:02+08:00",
+    "event_id": "e5dfdf8a-0c77-4ab1-8913-230806f5bff0",
+    "prev_hash": "b6bc460ef136590213165c6d32114522ceab73751192fb67e003243cd8b305d7"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-002",
+    "attempt": "4",
+    "ts": "2026-10-10 19:38:51",
+    "end_ts": "2026-10-10 20:00:04",
+    "utc_offset": "+08:00",
+    "dur_min": "21.22",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T20:00:31+08:00",
+    "event_id": "1d40c657-8669-48fd-80a2-a2322ea4b3ed",
+    "prev_hash": "29c6e5b362dd4235e89397068031fb3febe73e66aeafcda7124971282de84935"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-005",
+    "attempt": "1",
+    "ts": "2026-10-07 17:02:19",
+    "end_ts": "2026-10-07 17:02:38",
+    "utc_offset": "+08:00",
+    "dur_min": "0.32",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T17:02:50+08:00",
+    "event_id": "4140d1c2-fea5-4d99-9051-3f045d88da11",
+    "prev_hash": "4958b2c5a83d2079843d7ac894f169cb672a4b75985d999a257ea5f2ce4a81cc"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-005",
+    "attempt": "2",
+    "ts": "2026-10-07 19:24:45",
+    "end_ts": "2026-10-07 19:25:30",
+    "utc_offset": "+08:00",
+    "dur_min": "0.75",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T19:25:46+08:00",
+    "event_id": "36cd4898-214c-40ce-b274-6dda4f4a42ae",
+    "prev_hash": "7f936f6f25830a3f38eb0d79cf01df455333e5f63e5be289e8d6d80672fbe73d"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-005",
+    "attempt": "3",
+    "ts": "2026-10-08 18:45:22",
+    "end_ts": "2026-10-08 18:45:54",
+    "utc_offset": "+08:00",
+    "dur_min": "0.53",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T18:46:20+08:00",
+    "event_id": "4880615b-31f8-46c0-ae54-1a3c19b3d7fe",
+    "prev_hash": "4fa52fbb48c889c1770d7e62930a99b1e9e179311b45485e5032e447c021d799"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-005",
+    "attempt": "4",
+    "ts": "2026-10-09 18:31:05",
+    "end_ts": "2026-10-09 18:31:24",
+    "utc_offset": "+08:00",
+    "dur_min": "0.32",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T18:31:32+08:00",
+    "event_id": "720c55ee-85ba-415f-8955-8bc8c078c852",
+    "prev_hash": "e4c112fa389c2b30333c64af2f3b5b338d6dfda25786b7f81b270e7030b34e8b"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-005",
+    "attempt": "5",
+    "ts": "2026-10-10 18:05:54",
+    "end_ts": "2026-10-10 18:06:32",
+    "utc_offset": "+08:00",
+    "dur_min": "0.63",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "RELEASE",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T18:06:40+08:00",
+    "event_id": "e2cc2d44-c7af-486e-966a-2164533b0413",
+    "prev_hash": "84037675cf6b82dc9bceafbcf21b4701aba498b7d221bcdec8a9317a8a0faff2"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0109-007",
+    "attempt": "1",
+    "ts": "2026-10-07 19:45:55",
+    "end_ts": "2026-10-07 20:06:31",
+    "utc_offset": "+08:00",
+    "dur_min": "20.60",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-07T20:07:03+08:00",
+    "event_id": "027a1be1-c8db-41a4-b02e-e5a03b4c9a2c",
+    "prev_hash": "741063ad1b2d647f62e6440ea7b52cd374ccad6ccdeab314e39cd167385718d3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "1",
+    "ts": "2026-09-28 17:44:03",
+    "end_ts": "2026-09-28 17:44:23",
+    "utc_offset": "+08:00",
+    "dur_min": "0.33",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-28T17:44:37+08:00",
+    "event_id": "dc028873-c24a-49bc-8464-723310739e4e",
+    "prev_hash": "80246f43fb7566889524fbd078a668dab6424e9fb210c95c231a98a82e8a01b3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "2",
+    "ts": "2026-09-29 17:30:07",
+    "end_ts": "2026-09-29 17:30:41",
+    "utc_offset": "+08:00",
+    "dur_min": "0.57",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T17:31:10+08:00",
+    "event_id": "5c61851f-c2be-489c-94ac-7a26d55a9a3e",
+    "prev_hash": "a44dfabdf9cd07bad6405057030ef4d0b20585a33c09b76a5d793700fea6840b"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "3",
+    "ts": "2026-09-29 20:31:08",
+    "end_ts": "2026-09-29 20:31:50",
+    "utc_offset": "+08:00",
+    "dur_min": "0.70",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-29T20:32:00+08:00",
+    "event_id": "7670e85d-339a-43f4-93c3-05f8dd859be1",
+    "prev_hash": "adfd114594900514b03cad114344a0e103db057c22bd37109c97f057fe852a6e"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "4",
+    "ts": "2026-09-30 18:42:16",
+    "end_ts": "2026-09-30 18:42:38",
+    "utc_offset": "+08:00",
+    "dur_min": "0.37",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T18:42:44+08:00",
+    "event_id": "d74be43f-0e33-47d6-ab1f-a2c0db869d60",
+    "prev_hash": "9054cc1898e3957b816d12004e6e983cc9a88b4932ad72452be69956bdd75da5"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "5",
+    "ts": "2026-10-01 18:30:17",
+    "end_ts": "2026-10-01 18:30:42",
+    "utc_offset": "+08:00",
+    "dur_min": "0.42",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T18:31:12+08:00",
+    "event_id": "92a3789f-a02c-437d-bc61-3e53e32a38ad",
+    "prev_hash": "56aa150793f2c7727b856cafce7beda68bbd2464c87e858c19164dd2247637a7"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "6",
+    "ts": "2026-10-03 16:19:00",
+    "end_ts": "2026-10-03 16:19:31",
+    "utc_offset": "+08:00",
+    "dur_min": "0.52",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T16:19:39+08:00",
+    "event_id": "b06e5160-f625-48ef-ab90-09f80eafbd7a",
+    "prev_hash": "4f9591b3e8ff0b2f8ee12b618e6d44901c166091df4ac27326ef0a35b803f6fe"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "7",
+    "ts": "2026-10-03 19:15:53",
+    "end_ts": "2026-10-03 19:16:34",
+    "utc_offset": "+08:00",
+    "dur_min": "0.68",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-03T19:16:52+08:00",
+    "event_id": "25c81c9a-d313-4b9d-9e64-974a17f91994",
+    "prev_hash": "a372f596a98e2518e561e882929305828165c667c21824872c7f370b6d7534da"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-002",
+    "attempt": "8",
+    "ts": "2026-10-05 18:23:50",
+    "end_ts": "2026-10-05 18:24:24",
+    "utc_offset": "+08:00",
+    "dur_min": "0.57",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-05T18:24:54+08:00",
+    "event_id": "efbb667b-6628-436a-bfd1-b1b737e581db",
+    "prev_hash": "76de6cbf8d340e0da4e88a17de29e345450f47427fffe26803e633d6deb914d0"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-004",
+    "attempt": "1",
+    "ts": "2026-10-08 18:24:36",
+    "end_ts": "2026-10-08 18:36:16",
+    "utc_offset": "+08:00",
+    "dur_min": "11.67",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T18:36:55+08:00",
+    "event_id": "e37e7640-3356-4062-baf0-1b77777e8e0c",
+    "prev_hash": "85942aa817661b97e328e32f44a18f3b35b59a2f8dfbc79a54ac930947b4485a"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-005",
+    "attempt": "1",
+    "ts": "2026-09-28 19:10:20",
+    "end_ts": "2026-09-28 19:27:59",
+    "utc_offset": "+08:00",
+    "dur_min": "17.65",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-28T19:28:05+08:00",
+    "event_id": "5ef7b673-9c70-459a-89b8-40642dbce021",
+    "prev_hash": "090fcd212dd619114601f636c74de262e9510968005f7aa178b974d8eedfeb64"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-006",
+    "attempt": "1",
+    "ts": "2026-10-08 18:20:59",
+    "end_ts": "2026-10-08 18:21:44",
+    "utc_offset": "+08:00",
+    "dur_min": "0.75",
+    "status": "DEAD_NUMBER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T18:22:07+08:00",
+    "event_id": "838e3158-35ba-4333-b69f-f9024d5c7507",
+    "prev_hash": "96cb046c1046944e682ccdf3f79b8dede2caa2aa75c5d597e49524203bc4ef1c"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-006",
+    "attempt": "2",
+    "ts": "2026-10-09 17:43:14",
+    "end_ts": "2026-10-09 17:43:33",
+    "utc_offset": "+08:00",
+    "dur_min": "0.32",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T17:44:04+08:00",
+    "event_id": "81e84c2d-6d13-4737-af3e-0b2269e65f74",
+    "prev_hash": "bde04fe32b5c9c429c7d206861edadda5c0163550ec412c8a17a7092aed4878b"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-006",
+    "attempt": "3",
+    "ts": "2026-10-09 20:12:39",
+    "end_ts": "2026-10-09 20:13:00",
+    "utc_offset": "+08:00",
+    "dur_min": "0.35",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T20:13:36+08:00",
+    "event_id": "9ee1c5d9-9c24-4a88-965f-e6569fb8c07a",
+    "prev_hash": "3d867c5eaf166e1a6a4976594e3984e7e3ae76028adea8c91a3129d653c52c72"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-006",
+    "attempt": "4",
+    "ts": "2026-10-10 18:13:46",
+    "end_ts": "2026-10-10 18:14:29",
+    "utc_offset": "+08:00",
+    "dur_min": "0.72",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T18:14:36+08:00",
+    "event_id": "3fd977e9-99ce-41c6-bacd-bab493d837ce",
+    "prev_hash": "00af349f82d3fc09f329f4e1495c410d444a04af0434a23c24257c992e6dccde"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0110-006",
+    "attempt": "5",
+    "ts": "2026-10-12 17:28:41",
+    "end_ts": "2026-10-12 17:43:01",
+    "utc_offset": "+08:00",
+    "dur_min": "14.33",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-12T17:43:25+08:00",
+    "event_id": "fcdbd781-f30f-4d4d-8b65-38974e680060",
+    "prev_hash": "4e4c374a40412209c134f2123c18dbb774beb09e2915b0adee9a6a87f4f3602a"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-001",
+    "attempt": "1",
+    "ts": "2026-09-30 20:37:59",
+    "end_ts": "2026-09-30 20:38:20",
+    "utc_offset": "+08:00",
+    "dur_min": "0.35",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T20:38:57+08:00",
+    "event_id": "ecb30cc8-e058-42c6-bdf4-f34bb66fed0d",
+    "prev_hash": "60b2c07d29872c4dc244334cc0f4bd923a0a47ece14400769f2db956af196e1c"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-001",
+    "attempt": "2",
+    "ts": "2026-10-01 20:37:47",
+    "end_ts": "2026-10-01 20:38:03",
+    "utc_offset": "+08:00",
+    "dur_min": "0.27",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T20:38:26+08:00",
+    "event_id": "0bc9fa07-5bb3-4209-8a7b-3b0ba8c6d388",
+    "prev_hash": "e3bb812185db336561b27436d3bdc5c995ff9cfcc5834fb1e78a71973da1af73"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-001",
+    "attempt": "3",
+    "ts": "2026-10-02 20:08:12",
+    "end_ts": "2026-10-02 20:27:48",
+    "utc_offset": "+08:00",
+    "dur_min": "19.60",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-02T20:28:09+08:00",
+    "event_id": "a6b83141-e565-47bc-afbf-bc8bd76eca1f",
+    "prev_hash": "71851071c221ee1d0914574c2ef38df17a5329136ad83549860b3804290acfb9"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-003",
+    "attempt": "1",
+    "ts": "2026-09-30 16:10:29",
+    "end_ts": "2026-09-30 16:24:49",
+    "utc_offset": "+08:00",
+    "dur_min": "14.33",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-09-30T16:25:13+08:00",
+    "event_id": "5317ce00-64f0-4068-8072-ec29e6928c45",
+    "prev_hash": "4f3d26297bda74b94b88baad7a9e2e28a6defba76b3bd46f9e11f86e4fe64ed2"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-006",
+    "attempt": "1",
+    "ts": "2026-10-08 12:07:09",
+    "end_ts": "2026-10-08 12:07:31",
+    "utc_offset": "+08:00",
+    "dur_min": "0.37",
+    "status": "DEAD_NUMBER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T12:07:36+08:00",
+    "event_id": "c7a929b6-6642-4693-bf8d-27628de9af62",
+    "prev_hash": "6c122530b3a62a77ff840b45f7f06a8c8302094ff499ee704b556640b6d20888"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-006",
+    "attempt": "2",
+    "ts": "2026-10-08 15:37:33",
+    "end_ts": "2026-10-08 15:38:04",
+    "utc_offset": "+08:00",
+    "dur_min": "0.52",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-08T15:38:13+08:00",
+    "event_id": "1032269b-5d55-4585-a035-4fb3155e90a1",
+    "prev_hash": "7c0e4f0f76568889c6ffcac35b7469db6d6d1fd1732dbf1b0bebf6e30ff4cbf6"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-006",
+    "attempt": "3",
+    "ts": "2026-10-09 13:20:06",
+    "end_ts": "2026-10-09 13:21:03",
+    "utc_offset": "+08:00",
+    "dur_min": "0.95",
+    "status": "NOT_AVAILABLE",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T13:21:42+08:00",
+    "event_id": "1dbf7e52-63fa-451b-924b-8785dc71ecd0",
+    "prev_hash": "c7c906812c694c1c478fb8379a3b0e84e50cc4de32c3a9870fdb6df47582db29"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-006",
+    "attempt": "4",
+    "ts": "2026-10-10 12:31:06",
+    "end_ts": "2026-10-10 12:49:37",
+    "utc_offset": "+08:00",
+    "dur_min": "18.52",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T12:49:57+08:00",
+    "event_id": "76fb69e6-ce9f-4ac3-96cc-1f41292ca69c",
+    "prev_hash": "e1bad6f542659e5f1db348e107e89b8d9db2ee4ed65fe4d95f43c240efe3a563"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-008",
+    "attempt": "1",
+    "ts": "2026-10-01 19:43:47",
+    "end_ts": "2026-10-01 20:04:38",
+    "utc_offset": "+08:00",
+    "dur_min": "20.85",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T20:05:02+08:00",
+    "event_id": "5d91804f-fd3d-4f96-9b7a-d1189b3fbcab",
+    "prev_hash": "dbd3f3a8fe502bbfec682e9d7701ad00e0cb59e637a06472472c15493fe4d692"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-009",
+    "attempt": "1",
+    "ts": "2026-10-09 13:15:29",
+    "end_ts": "2026-10-09 13:16:09",
+    "utc_offset": "+08:00",
+    "dur_min": "0.67",
+    "status": "SWITCHED_OFF",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T13:16:27+08:00",
+    "event_id": "d9fabbbb-0fb8-4879-96d0-83e7f65e3130",
+    "prev_hash": "f15300e6e22a08e9435db315a127b8a9c4e85f5f19f450e01721d3ff016ea284"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-009",
+    "attempt": "2",
+    "ts": "2026-10-10 14:10:11",
+    "end_ts": "2026-10-10 14:10:41",
+    "utc_offset": "+08:00",
+    "dur_min": "0.50",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T14:11:07+08:00",
+    "event_id": "95c3d874-a058-447f-8854-bfaf1305bc9c",
+    "prev_hash": "8aa19ab4c031811e142cdf4f4c6416a5475ef6469d40080bb050e2496373fed6"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-009",
+    "attempt": "3",
+    "ts": "2026-10-10 16:21:45",
+    "end_ts": "2026-10-10 16:22:33",
+    "utc_offset": "+08:00",
+    "dur_min": "0.80",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-12 14:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "said to call in the evening",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T16:22:51+08:00",
+    "event_id": "b05a33b2-a931-4616-932f-e602a9547258",
+    "prev_hash": "51579119e6844fe114ae8de0baa314ff2f2806384e682e57cc1380090a2d639a"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0111-009",
+    "attempt": "4",
+    "ts": "2026-10-12 14:01:09",
+    "end_ts": "2026-10-12 14:18:08",
+    "utc_offset": "+08:00",
+    "dur_min": "16.98",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-12T14:18:48+08:00",
+    "event_id": "3ab9f4e6-773d-4e77-96ec-9de5902b04ac",
+    "prev_hash": "a038155038f99d820bcad8fd32aee4fef08926f79e4576c8e324b9a1c46cfbfe"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-001",
+    "attempt": "1",
+    "ts": "2026-10-09 15:17:37",
+    "end_ts": "2026-10-09 15:18:18",
+    "utc_offset": "+08:00",
+    "dur_min": "0.68",
+    "status": "APPOINTMENT",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "2026-10-09 19:00:00",
+    "action": "",
+    "replaces": "",
+    "note": "said to call in the evening",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T15:18:39+08:00",
+    "event_id": "79e351f3-a4e3-4fbc-a3dc-89b6f8a09c1d",
+    "prev_hash": "30ddaef03abc889b247813eae62f6750d4eb4b56e21d9c4a3f86781cb9cbc2a3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-001",
+    "attempt": "2",
+    "ts": "2026-10-09 19:01:37",
+    "end_ts": "2026-10-09 19:03:57",
+    "utc_offset": "+08:00",
+    "dur_min": "2.33",
+    "status": "NOT_AVAILABLE",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T19:04:07+08:00",
+    "event_id": "dd7614d6-84f2-4b2d-b2af-87f9d865b115",
+    "prev_hash": "89461356c0f1425873f11ef136a30b0d100ccaee0b61aee00df627021eed4ff5"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-001",
+    "attempt": "3",
+    "ts": "2026-10-12 15:29:17",
+    "end_ts": "2026-10-12 15:42:55",
+    "utc_offset": "+08:00",
+    "dur_min": "13.63",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-12T15:43:33+08:00",
+    "event_id": "fa10718c-018d-40ec-beaa-e0c601d651e6",
+    "prev_hash": "7a3f97639eddcb627176f569a2c32d63045e0b8c6016a8b16e8fc57c395ea603"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-004",
+    "attempt": "1",
+    "ts": "2026-10-01 15:20:24",
+    "end_ts": "2026-10-01 15:21:04",
+    "utc_offset": "+08:00",
+    "dur_min": "0.67",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T15:21:15+08:00",
+    "event_id": "db3c54aa-d606-4dbd-8113-f69764e3aecc",
+    "prev_hash": "959ca0181845c9880fa6e3d9454bfa2ff52ef0bed983760d5ced5b37bc425ea9"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-004",
+    "attempt": "2",
+    "ts": "2026-10-01 19:37:01",
+    "end_ts": "2026-10-01 19:47:17",
+    "utc_offset": "+08:00",
+    "dur_min": "10.27",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T19:47:51+08:00",
+    "event_id": "42add81f-e5e8-476e-9679-9e339fa19549",
+    "prev_hash": "54b9bd85a07d6bae6fbdfe41d485b1c724f26cfe7710f8d6a39726bd70f7fdc3"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-005",
+    "attempt": "1",
+    "ts": "2026-10-09 18:31:47",
+    "end_ts": "2026-10-09 18:32:02",
+    "utc_offset": "+08:00",
+    "dur_min": "0.25",
+    "status": "DEAD_NUMBER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-09T18:32:23+08:00",
+    "event_id": "d5bc8c09-a1c5-474c-8cd0-df7c1033b123",
+    "prev_hash": "1ac6f6f0bc7a1176115bea9c2e6a8dbc7f0099ab3f5dfaf9b7895302d35d1194"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-005",
+    "attempt": "2",
+    "ts": "2026-10-10 18:20:38",
+    "end_ts": "2026-10-10 18:21:04",
+    "utc_offset": "+08:00",
+    "dur_min": "0.43",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-10T18:21:36+08:00",
+    "event_id": "940a4b43-3d6b-4705-82c3-9028b1817cd4",
+    "prev_hash": "6c49001d158c5ecfc9d58dbf418d08493ff7d718f65087b0b92c248e5f0b51c5"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-005",
+    "attempt": "3",
+    "ts": "2026-10-12 18:21:42",
+    "end_ts": "2026-10-12 18:22:15",
+    "utc_offset": "+08:00",
+    "dur_min": "0.55",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-12T18:22:34+08:00",
+    "event_id": "4bc556f3-68f1-4b62-96a0-68533d2e2a1d",
+    "prev_hash": "576302b095adaa21ae95d9f496da528c74a000430f6f2c091cde64bb5b0ac407"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-005",
+    "attempt": "4",
+    "ts": "2026-10-14 18:35:28",
+    "end_ts": "2026-10-14 18:35:41",
+    "utc_offset": "+08:00",
+    "dur_min": "0.22",
+    "status": "NO_ANSWER",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-14T18:35:51+08:00",
+    "event_id": "f6902dae-7a30-4624-bee4-8cf9c6d59814",
+    "prev_hash": "f643d3dcc2d209cec2e2260eebabe6b2a2882e7cdfab5a43b2d721d5ca0cc43b"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-005",
+    "attempt": "5",
+    "ts": "2026-10-16 18:41:03",
+    "end_ts": "2026-10-16 18:41:42",
+    "utc_offset": "+08:00",
+    "dur_min": "0.65",
+    "status": "BUSY",
+    "is_cmp_code": "0",
+    "operator": "E07",
+    "phone_slot": "2",
+    "appointment_ts": "",
+    "action": "RELEASE",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-16T18:42:07+08:00",
+    "event_id": "2f8c798b-3a33-4a40-bcb4-33031b8dab6e",
+    "prev_hash": "dd6afa3f6d8dff655df6db02eb71d989fba140594fe931cc7b677ca5ff2d470e"
+   },
+   {
+    "program": "L2MN-DEMO",
+    "round": "4",
+    "hhid": "0112-008",
+    "attempt": "1",
+    "ts": "2026-10-01 13:01:44",
+    "end_ts": "2026-10-01 13:03:38",
+    "utc_offset": "+08:00",
+    "dur_min": "1.90",
+    "status": "COMPLETE",
+    "is_cmp_code": "1",
+    "operator": "E07",
+    "phone_slot": "1",
+    "appointment_ts": "",
+    "action": "",
+    "replaces": "",
+    "note": "",
+    "corrected": "0",
+    "logged_by": "E07",
+    "logged_at": "2026-10-01T13:03:44+08:00",
+    "event_id": "70b97d82-803e-49dd-adf0-0fa824793b40",
+    "prev_hash": "253fd7508c47ac114a0f6e5e6d0c3991c07d1d19f290c88a6956e3b17ae009b5"
+   }
+  ]
+ },
+ "ui": {},
+ "last_export": null,
+ "checksum": "432cb56b4804b5768c00ca12db4e99c8c0a659ec60fa1eb6bba77579e316196d"
+}

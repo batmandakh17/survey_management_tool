@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rtm:schema:rtm-project-1.0",
+  "title": "Saved session (rtm-project-1.0)",
+  "description": "Everything an enumerator needs to continue later: the assignment, every event logged so far (with the private parts), earlier logs loaded for the performance view, and the view state. File name: {enumerator_id}_project_R{round, two digits}.json, or with _{date}_{HHMM} added when the browser cannot overwrite a file. It holds names and phone numbers: keep it in the enumerator's own folder. When the session came from a protected assignment, the file is protected too (rtm-sealed-1.0).",
+  "type": "object",
+  "required": ["schema", "saved_at", "saved_by", "assignment", "assignment_fingerprint", "chain_genesis", "events", "checksum"],
+  "properties": {
+    "schema": { "const": "rtm-project-1.0" },
+    "tool_version": { "type": "string" },
+    "saved_at": { "type": "string" },
+    "saved_by": { "type": "string" },
+    "assignment": { "$ref": "urn:rtm:schema:rtm-assign-1.0" },
+    "assignment_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "chain_genesis": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "events": {
+      "type": "array",
+      "items": {
+        "allOf": [{ "$ref": "urn:rtm:schema:rtm-calllog-1.0#/$defs/event" }],
+        "properties": { "private": { "type": "object", "properties": { "number": { "type": "string" } }, "additionalProperties": false } }
+      }
+    },
+    "past": {
+      "type": "object",
+      "properties": {
+        "files": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "round": { "type": ["integer", "null"] }, "rows": { "type": "integer" }, "added": { "type": "integer" } } } },
+        "dials": { "type": "array", "items": { "type": "object" }, "description": "Rows from the enumerator's own earlier exports, as read (CSV columns as text)." }
+      }
+    },
+    "ui": { "type": "object" },
+    "last_export": { "type": ["object", "null"] },
+    "checksum": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the canonical JSON of the whole file without this field." }
+  }
+}
