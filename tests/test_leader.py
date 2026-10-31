@@ -490,6 +490,234 @@ def main():
         else:
             check("an Excel workbook is read by the built-in reader (openpyxl missing: not tested)", False, "install openpyxl to run this check")
 
+        # ================= D. matching criteria, the day list, and moving households during the round =================
+        # (the author's requests of 28 October 2026: assign by language, sex or dialect and record the criteria; longer day
+        # lists so that nobody waits; move waiting households from slower to faster enumerators without double calls)
+        import check_formats as cfm
+        b.ws.call("Emulation.clearDeviceMetricsOverride")
+        b.js("RTM.setNow('2026-10-23T15:00:00+08:00'); true")
+        start()
+        b.set_files("#lf-hh", [os.path.join(S, "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
+        b.set_files("#lf-hist", HIST); b.wait(f"LEAD.state().inputs.history.length === {len(HIST)}")
+        b.set_files("#lf-repl", [os.path.join(S, "selection.csv")]); b.wait("!!LEAD.state().inputs.replacements")
+        setv('[data-lset="cal.window_start"]', "2026-10-26"); setv('[data-lset="cal.window_end"]', "2026-11-20")
+        tick('[data-lteam="2"][data-f="available"]', False)
+        setv('[data-lset="rule.rotation_share"]', "10"); setv('[data-lset="rule.seed"]', "20261027")
+        txt = b.js("document.querySelector('.panel').innerText")
+        check("step 5 offers the household list's columns as matching criteria, with their values (language: kk, mn; respondent sex: f, m)",
+              "Match households to enumerators by" in txt and "language" in txt and "respondent sex" in txt and "(f, m;" in txt and "(kk, mn;" in txt, txt[:300])
+        tick('[data-lcrit="language"]', True)
+        b.click('[data-lact="apply"]')
+        check("with a criterion ticked, the rule refuses to run until every available enumerator has values for it", any("values for language" in e for e in b.js("LEAD.ui.errors")), b.js("LEAD.ui.errors"))
+        team = b.js("LEAD.state().team.map(t => t.id)")
+        for e, v in {"E01": "mn kk", "E02": "mn", "E07": "mn"}.items():
+            setv(f'[data-lattr="{team.index(e)}"][data-c="language"]', v)
+        b.click('[data-lact="apply"]'); b.wait("!!LEAD.state().plan")
+        b.shot(os.path.join(SCREENS, "leader_09_criteria.png"), full=True)
+        kk = {r["hhid"] for r in hl if r["language"] == "kk"}
+        out = {h: x for h, x in json.loads(b.js("JSON.stringify([...LEAD.state().plan.out])"))}
+        kk_in = sorted(h for h in kk if h in out)
+        check("every Kazakh-speaking household is with the one enumerator who speaks Kazakh, and no household is left without an enumerator",
+              kk_in and all(out[h]["enumerator_id"] == "E01" for h in kk_in) and len(out) == 110 and b.js("LEAD.state().plan.unmatched.length") == 0, {h: out[h]["enumerator_id"] for h in kk_in})
+        moved = [h for h, x in out.items() if x["reason"] == "match"]
+        check("a kept household whose enumerator does not match moves with the reason 'match' and its previous enumerator recorded",
+              moved and all(h in kk and out[h]["previous_enumerator"] in ("E02", "E07") for h in moved), moved)
+        check("every household is marked as matched, and the note counts the moves", all(x.get("matched") is True for x in out.values()) and any("moved to match the criteria" in n for n in b.js("LEAD.state().plan.notes")), b.js("LEAD.state().plan.notes"))
+        if b.js("!!document.querySelector('[data-lact=\"balance\"]')"):
+            b.click('[data-lact="balance"]'); time.sleep(0.3)
+            out2 = {h: x for h, x in json.loads(b.js("JSON.stringify([...LEAD.state().plan.out])"))}
+            check("balancing the loads respects the criteria: no Kazakh-speaking household leaves E01", all(out2[h]["enumerator_id"] == "E01" for h in kk_in))
+        else:
+            check("balancing the loads respects the criteria (loads already within the margin: not exercised)", True)
+        # nobody speaks Kazakh: the households wait for the leader
+        setv(f'[data-lattr="{team.index("E01")}"][data-c="language"]', "mn")
+        b.click('[data-lact="apply"]'); b.wait("!!LEAD.state().plan")
+        un = b.js("LEAD.state().plan.unmatched")
+        check("when no available enumerator matches, the households are listed without an enumerator and no file can be written",
+              sorted(un) == kk_in and b.js("document.querySelector('[data-lact=\"write\"]').disabled") and any("match no available enumerator" in w for w in b.js("LEAD.state().plan.warnings")), un)
+        setv(f'[data-lmove="{un[0]}"]', "E02")
+        check("the leader assigns such a household by hand: it leaves the list, marked as not matched, with a warning",
+              b.js("LEAD.state().plan.unmatched.length") == len(un) - 1 and b.js(f"LEAD.state().plan.out.get('{un[0]}').matched") is False and b.js("APP.toasts.some(t => /does not match E02/.test(t.text))"))
+        setv(f'[data-lattr="{team.index("E01")}"][data-c="language"]', "kk, mn")
+        b.click('[data-lact="apply"]'); b.wait("!!LEAD.state().plan")
+        check("the day list is taken from the last round's manifest, like the dial cap and the call hours", b.js("LEAD.state().cal.day_list") == 5)
+        setv('[data-lset="cal.day_list"]', "")
+        dl_default = b.js("LEAD.state().plan.dayListDefault")
+        check("left empty, the day list defaults to 1.5 × the busiest enumerator's planned first dials per day, shown in step 4",
+              dl_default >= 1 and f"empty means 1.5 × that, {dl_default}" in b.js("document.querySelector('.panel').innerText") and b.js("LEAD.state().cal.day_list") is None, dl_default)
+        before = snapshot()
+        b.click('[data-lact="write"]'); b.wait("!!LEAD.ui.ready", timeout=30)
+        b.click('[data-lact="dlall"]')
+        got = [wait_new(n, before) for n in ("E01_assignment_R05.json", "E02_assignment_R05.json", "E07_assignment_R05.json", "L2MN-DEMO_R05_manifest.json")]
+        A = {e: json.load(open(os.path.join(DL, f"{e}_assignment_R05.json"), encoding="utf-8")) for e in ("E01", "E02", "E07")}
+        M = json.load(open(os.path.join(DL, "L2MN-DEMO_R05_manifest.json"), encoding="utf-8"))
+        check("the manifest records the criteria and every enumerator's values; each file carries the criteria and its enumerator's values",
+              all(got) and M.get("matching") == {"criteria": ["language"], "enumerators": {"E01": {"language": ["kk", "mn"]}, "E02": {"language": ["mn"]}, "E07": {"language": ["mn"]}}}
+              and all(a["matching"] == {"criteria": ["language"], "enumerator": M["matching"]["enumerators"][e]} for e, a in A.items()), M.get("matching"))
+        check("each household in a file carries its own value and whether its enumerator matches; the kk households are all in E01's file",
+              all(h["criteria"]["language"] in ("kk", "mn") and h["assignment"]["matched"] is True for a in A.values() for h in a["households"])
+              and sorted(h["hhid"] for h in A["E01"]["households"] if h["criteria"]["language"] == "kk") == kk_in
+              and not any(h["criteria"]["language"] == "kk" for e in ("E02", "E07") for h in A[e]["households"]))
+        check("the files carry the day list, equal to the default when the leader left it empty", all(a["calendar"]["day_list"] == dl_default for a in A.values()) and M["calendar"]["day_list"] == dl_default and all(a["revision"] == 1 for a in A.values()),
+              [dl_default, M["calendar"].get("day_list"), {e: (a["calendar"].get("day_list"), a.get("revision")) for e, a in A.items()}])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = cfm.main([os.path.join(DL, f"{e}_assignment_R05.json") for e in A] + [os.path.join(DL, "L2MN-DEMO_R05_manifest.json")])
+        check("files with criteria and a day list pass the format checker", code == 0 and "warning" not in buf.getvalue(), buf.getvalue())
+        setv('[data-lset="cal.day_list"]', "9")
+        check("changing the day list sets the files aside but keeps the assignment", b.js("LEAD.ui.ready === null && !!LEAD.state().plan"))
+        before = snapshot()
+        b.click('[data-lact="write"]'); b.wait("!!LEAD.ui.ready", timeout=30)
+        b.click('[data-lact="dlall"]')
+        wait_new("E07_assignment_R05.json", before)
+        check("the leader's own day list is written instead", json.load(open(os.path.join(DL, "E07_assignment_R05.json"), encoding="utf-8"))["calendar"]["day_list"] == 9)
+        # the saved session keeps the criteria and the values
+        before = snapshot()
+        b.click('[data-lact="save"]'); b.wait("APP.modal"); b.click('[data-act="modalok"]')
+        fpc = wait_new("leader_L2MN-DEMO_R05*.json", before)
+        Pc = json.load(open(fpc, encoding="utf-8"))
+        check("the saved leader session keeps the criteria and each enumerator's values", Pc["settings"]["criteria"] == ["language"] and Pc["settings"]["team"][team.index("E01")]["attrs"] == {"language": "kk, mn"})
+
+        # the proposal of moves, on fabricated paces: from the enumerator furthest behind to the one with most spare days
+        unit = b.js("""(() => { const rows = [
+            { enumerator_id: 'A', known: true, fresh: true, need: 3.4 }, { enumerator_id: 'B', known: true, fresh: true, need: -2.6 },
+            { enumerator_id: 'C', known: true, fresh: true, need: -0.4 }, { enumerator_id: 'D', known: true, fresh: false, export_day: '2026-11-01', need: -9, why: 'last export 2026-11-01, not today' } ];
+          const C = new Map(); const add = (h, e, state, extra) => C.set(h, Object.assign({ hhid: h, enumerator_id: e, state, dials: [], n: 0 }, extra || {}));
+          add('a1', 'A', 'not_started'); add('a2', 'A', 'not_started'); add('a3', 'A', 'in_progress', { dials: [{ status: 'NO_ANSWER' }], n: 1 }); add('a4', 'A', 'complete');
+          add('a5', 'A', 'in_progress', { dials: [{ status: 'NO_ANSWER', appointment_ts: '2026-11-10T10:00:00+08:00' }], n: 1 }); add('b1', 'B', 'not_started'); add('d1', 'D', 'not_started');
+          const r1 = LCORE.proposeMoves({ rows }, C, { include: 'not_started' });
+          const r2 = LCORE.proposeMoves({ rows }, C, { include: 'in_progress' });
+          const r3 = LCORE.proposeMoves({ rows }, C, { include: 'not_started', eligible: (h, e) => !(h.hhid === 'a2' && e === 'B'), hh: new Map([['a1', { hhid: 'a1' }], ['a2', { hhid: 'a2' }]]) });
+          const r4 = LCORE.proposeMoves({ rows }, C, { include: 'not_started', allowStale: true });
+          const mv = (r) => r.moves.map(m => [m.hhid, m.from, m.to]);
+          return { r1: mv(r1), r2: mv(r2), r3: mv(r3), r4: mv(r4), left: r1.left_out }; })()""")
+        check("moves go one at a time from the enumerator furthest behind to the one with most spare days, never dialed households first, until nobody is more than half a household off",
+              unit["r1"] == [["a2", "A", "B"], ["a1", "A", "B"]], unit)
+        check("called households without a booked callback move only when the leader allows it; a booked callback or a complete never moves", unit["r2"] == [["a2", "A", "B"], ["a1", "A", "B"], ["a3", "A", "B"]], unit)
+        check("a household moves only to an enumerator who matches its criteria", unit["r3"] == [["a1", "A", "B"]], unit)
+        check("an enumerator whose export is from an earlier day is not judged unless the leader says so", unit["left"] == [{"id": "D", "why": "last export 2026-11-01, not today"}] and unit["r4"][0] == ["a2", "A", "D"], unit)
+
+        # moving households during the round: the sample's exports of 6 November, judged on Friday 13 November with 7 working days left
+        start()
+        b.set_files("#lf-hh", [os.path.join(S, "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
+        b.set_files("#lf-hist", HIST); b.wait(f"LEAD.state().inputs.history.length === {len(HIST)}")
+        b.click('[data-lact="tab"][data-t="import"]')
+        b.js("RTM.setNow('2026-11-13T09:00:00+08:00'); true")
+        b.set_files("#lf-manifest", [MANIFEST]); b.wait("!!LEAD.state().manifest")
+        b.set_files("#lf-imports", EXPORTS); b.wait(f"LEAD.state().imports.length === {len(EXPORTS)}")
+        b.click('[data-lact="tab"][data-t="progress"]')
+        txt = b.js("document.querySelector('.panel').innerText")
+        check("the Progress tab shows each enumerator's pace and capacity for the working days left, and who is short or has spare days",
+              "Move waiting households" in txt and "Completes per day" in txt and "7 working days left" in txt, txt[:200])
+        man = json.load(open(MANIFEST, encoding="utf-8"))
+        hold = {h["hhid"]: h["enumerator_id"] for h in man["households"]}
+        py_pace = ref_stats.pace_by_enumerator(exp_calls, exp_acts, man, days_left=7)
+        js_pace = {r["enumerator_id"]: r for r in b.js("LCORE.pace(LEAD.state().manifest, LEAD.merged().C, LEAD.merged().P, RTM.now()).rows")}
+        check("pace, capacity and the shortfall per enumerator equal an independent computation from the merged log",
+              all(abs(js_pace[e]["pace"] - p["pace"]) < 1e-9 and js_pace[e]["open"] == p["open"] and abs(js_pace[e]["need"] - p["need"]) < 1e-9 for e, p in py_pace.items()), [py_pace, {e: (r["pace"], r["open"], r["need"]) for e, r in js_pace.items()}])
+        b.click('[data-lact="propose"]'); time.sleep(0.3)
+        check("exports from an earlier day are not judged unless the leader says so", b.js("LEAD.ui.moves.list.length") == 0 and "not today" in b.js("document.querySelector('.panel').innerText"))
+        tick('[data-lset="__movesStale"]', True)
+        b.click('[data-lact="propose"]'); time.sleep(0.3)
+        mv = b.js("LEAD.ui.moves.list")
+        waiting = {e: b.js(f"[...LEAD.merged().C.values()].filter(c => c.enumerator_id === '{e}' && c.state === 'not_started').map(c => c.hhid).sort().reverse()") for e in ("E01", "E07")}
+        exp_need = {e: round(p["need"], 1) for e, p in py_pace.items()}
+        check("on 13 November two households move to E02, the only enumerator with spare days (2.3): first from E01 (1.9 short), then from E07 (1.0 short, now the furthest behind), each its latest-planned household, until E02 is within half a household",
+              exp_need == {"E01": 1.9, "E02": -2.3, "E07": 1.0} and len(mv) == 2 and [(m["from"], m["to"], m["state"], m["hhid"]) for m in mv] == [("E01", "E02", "not_started", waiting["E01"][0]), ("E07", "E02", "not_started", waiting["E07"][0])], [mv, exp_need, waiting])
+        by_hand = next(h for h in reversed(waiting["E01"]) if h != mv[0]["hhid"])
+        b.js(f"document.querySelector('#lmv-hh').value = {json.dumps(by_hand)}; document.querySelector('#lmv-to').value = 'E02'; true")
+        b.click('[data-lact="addmove"]'); time.sleep(0.3)
+        n_list = b.js("LEAD.ui.moves.list.length")
+        b.js("document.querySelector('#lmv-hh').value = [...LEAD.merged().C.values()].find(c => c.state === 'complete').hhid; true"); b.click('[data-lact="addmove"]'); time.sleep(0.2)
+        check("the leader adds a move by hand; a household already complete is refused",
+              n_list == 3 and b.js("LEAD.ui.moves.list[2].by_hand") is True and b.js("APP.toasts.some(t => /cannot move: it is Complete/.test(t.text)) && LEAD.ui.moves.list.length === 3"),
+              [n_list, b.js("APP.toasts.map(t => t.text)")])
+        b.shot(os.path.join(SCREENS, "leader_10_moves.png"), full=True)
+        old_fp = {e["enumerator_id"]: e["fingerprint"] for e in man["enumerators"]}
+        before = snapshot()
+        b.click('[data-lact="writemoves"]'); b.wait("!!LEAD.ui.ready && LEAD.ui.readyKind === 'moves'", timeout=30)
+        b.click('[data-lact="dlall"]')
+        got = [wait_new(n, before) for n in ("E01_assignment_R05.json", "E02_assignment_R05.json", "E07_assignment_R05.json", "L2MN-DEMO_R05_manifest.json")]
+        R2 = {e: json.load(open(os.path.join(DL, f"{e}_assignment_R05.json"), encoding="utf-8")) for e in ("E01", "E02", "E07")}
+        M2 = json.load(open(os.path.join(DL, "L2MN-DEMO_R05_manifest.json"), encoding="utf-8"))
+        moved_ids = {mv[0]["hhid"], mv[1]["hhid"], by_hand}
+        check("revised files are written for the three enumerators concerned, and the manifest's revision 2 supersedes revision 1",
+              all(got) and M2["revision"] == 2 and M2["supersedes"] == man["fingerprint"] and all(a["revision"] == 2 and a["supersedes"] == old_fp[e] for e, a in R2.items()), [M2.get("revision"), M2.get("supersedes") == man["fingerprint"]])
+        check("the manifest lists the three moves with when and by whom, the households now with E02 for the reason 'mid_round', their previous enumerator kept",
+              [(m["hhid"], m["from"], m["to"]) for m in M2["moves"]] == [(mv[0]["hhid"], "E01", "E02"), (mv[1]["hhid"], "E07", "E02"), (by_hand, "E01", "E02")] and all(m["by"] == "L01" and m["at"].startswith("2026-11-13T09:00") for m in M2["moves"])
+              and all(h["enumerator_id"] == "E02" and h["reason"] == "mid_round" and h["previous_enumerator"] == hold[h["hhid"]] for h in M2["households"] if h["hhid"] in moved_ids), M2["moves"])
+        check("the roster counts follow the moves, and each revised file's earlier fingerprint is kept so that logs begun from it still belong",
+              {e["enumerator_id"]: e["households"] for e in M2["enumerators"]} == {"E01": 38, "E02": 27, "E07": 45} and all(e["previous_fingerprints"] == [old_fp[e["enumerator_id"]]] for e in M2["enumerators"]),
+              {e["enumerator_id"]: e["households"] for e in M2["enumerators"]})
+        e02new = {h["hhid"]: h for h in R2["E02"]["households"]}
+        check("E02's revised file holds its 24 households and the 3 moved ones, with the previous enumerator's dials (handover), a first dial today and the household's usual hour",
+              len(e02new) == 27 and all(e02new[h]["handover"]["dials"] == 0 and e02new[h]["handover"]["from"] == hold[h] and e02new[h]["plan"]["first_dial_date"] == "2026-11-13" and e02new[h]["assignment"]["reason"] == "mid_round" for h in moved_ids)
+              and all("handover" not in h for k, h in e02new.items() if k not in moved_ids), [e02new[h].get("handover") for h in moved_ids])
+        hl_by = {r["hhid"]: r for r in hl}
+        corrected = {}                      # numbers enumerators corrected this round go into the revised files (the contacts file of the exports)
+        for cfile in glob.glob(os.path.join(S, "exports_R05", "*_contacts.json")):
+            for u in json.load(open(cfile, encoding="utf-8"))["updates"]:
+                if u.get("number"): corrected.setdefault(u["hhid"], set()).add(u["number"])
+        own = lambda h: {hl_by[h][k] for k in ("phone_1", "phone_2", "phone_3")} | corrected.get(h, set())
+        check("access control holds: each revised file carries only its own households' numbers, with the numbers corrected this round",
+              all(all(p["number"] in own(h["hhid"]) for h in a["households"] for p in h["contact"]["phones"]) for a in R2.values())
+              and any(p["number"] in corrected.get(h["hhid"], set()) for a in R2.values() for h in a["households"] for p in h["contact"]["phones"]), corrected)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = cfm.main([os.path.join(DL, f"{e}_assignment_R05.json") for e in R2] + [os.path.join(DL, "L2MN-DEMO_R05_manifest.json")])
+        check("the revised files and the manifest pass the format checker", code == 0 and "warning" not in buf.getvalue(), buf.getvalue())
+        # the merge with the revised manifest: dials before the move are the previous enumerator's; a dial after it is a double call
+        rows7 = open(os.path.join(S, "exports_R05", "E07_2026-11-06.csv"), encoding="utf-8").read().rstrip("\n").split("\n")
+        hdr7 = rows7[0].split(","); ix = {k: hdr7.index(k) for k in ("hhid", "ts", "end_ts", "logged_at", "event_id", "prev_hash", "attempt", "appointment_ts", "action")}
+        gone7 = mv[1]["hhid"]              # the household that left E07
+        def dial_row(ts, eid):
+            f = rows7[-1].split(","); f[ix["hhid"]] = gone7; f[ix["ts"]] = ts; f[ix["end_ts"]] = ts[:14] + "01:00"; f[ix["logged_at"]] = ts.replace(" ", "T") + "+08:00"
+            f[ix["event_id"]] = eid; f[ix["attempt"]] = "1"; f[ix["appointment_ts"]] = ""; f[ix["action"]] = ""
+            return ",".join(f)
+        later7 = "\n".join(rows7 + [dial_row("2026-11-06 15:00:00", "00000000-0000-4000-8000-00000000000a"), dial_row("2026-11-13 10:00:00", "00000000-0000-4000-8000-00000000000b")]) + "\n"
+        g9 = b.js(f"""(() => {{ const st = LEAD.state(), base = st.imports.map(f => LCORE.readImport(f.name, f.text)).concat([LCORE.readImport('E07_2026-11-13.csv', {json.dumps(later7)})]);
+                     const G = LCORE.merge(st.manifest, base, new Map(), RTM.now());
+                     const iss = G.issues.filter(i => i.hhid === {json.dumps(gone7)}).map(i => [i.type, i.enumerator, i.detail]);
+                     return {{ iss, before: G.dials.some(d => d.event_id === '00000000-0000-4000-8000-00000000000a'), after: G.dials.some(d => d.event_id === '00000000-0000-4000-8000-00000000000b'),
+                               holder: LCORE.cases(st.manifest, G).get({json.dumps(gone7)}).enumerator_id }}; }})()""")
+        check("after the move, E07's dial on the household before the move is accepted without a question; the one after it is flagged as a double call, kept until the leader decides",
+              [t for t, _, _ in g9["iss"]] == ["after_move"] and g9["iss"][0][1] == "E07" and "moved to E02" in g9["iss"][0][2] and g9["before"] and g9["after"] and g9["holder"] == "E02", g9)
+        # the leader's session keeps the revised manifest
+        before = snapshot()
+        b.click('[data-lact="save"]'); b.wait("APP.modal"); b.click('[data-act="modalok"]')
+        fpm = wait_new("leader_L2MN-DEMO_R05*.json", before)
+        check("the saved leader session holds the revised manifest and logs the moves", json.load(open(fpm, encoding="utf-8"))["manifest"]["revision"] == 2 and any(e["what"] == "households_moved_mid_round" and e["moves"] == 3 for e in json.load(open(fpm, encoding="utf-8"))["events"]))
+        # the enumerators open the revised files as updates
+        b.click('[data-act="view"][data-v="enum"]')
+        b.set_files("#f-assign", [os.path.join(ROOT, "samples", "round05", "E02_assignment_R05.json")]); b.wait("!!APP.S")
+        keep02 = next(h["hhid"] for h in json.load(open(os.path.join(ROOT, "samples", "round05", "E02_assignment_R05.json"), encoding="utf-8"))["households"] if h["hhid"] not in moved_ids)
+        plan_before = b.js(f"JSON.stringify(APP.C.map.get('{keep02}').h.plan)")
+        b.set_files("#f-update", [os.path.join(DL, "E02_assignment_R05.json")]); b.wait("APP.S.events.some(e => e.what === 'assignment_updated')")
+        ev = b.js("APP.S.events.find(e => e.what === 'assignment_updated')")
+        check("E02 loads the revised file as an update: 3 households added, revision 2 logged, the log kept",
+              ev["households_added"] == 3 and ev["households_removed"] == 0 and ev["revision"] == 2 and ev["fingerprint_ok"] == 1, ev)
+        check("a household E02 already had keeps its planned first dial and history (carried beside the revised file, which omits them)",
+              b.js(f"JSON.stringify(APP.C.map.get('{keep02}').h.plan)") == plan_before and b.js(f"!!APP.S.carry['{keep02}']"))
+        prior = b.js(f"(() => {{ const c = APP.C.map.get({json.dumps(mv[0]['hhid'])}); return [c.prior.from, c.nAll, c.state, c.next.kind, RTM.partsIn(c.next.at, APP.C.cal.tz).key]; }})()")
+        check("a moved household shows who had it, counts their dials toward the cap and is due today", prior == ["E01", 0, "not_started", "first", "2026-11-13"], prior)
+        nev = b.js("APP.S.events.length")
+        b.set_files("#f-update", [os.path.join(ROOT, "samples", "round05", "E02_assignment_R05.json")])
+        b.wait("APP.toasts.some(t => /older than the assignment in your session/.test(t.text))")
+        check("the earlier file, opened again by mistake, is refused as older", b.js("APP.S.events.length") == nev)
+        before = snapshot()
+        b.click('[data-act="save"]'); wait_new("E02_project_R05*.json", before)
+        newest = wait_new("E02_project_R05*.json", before)
+        b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        b.set_files("#f-project", [newest]); b.wait("!!APP.S || APP.loadErrors.length")
+        check("a session saved after the update reopens with the carried plans", b.js(f"!!APP.S && APP.loadErrors.length === 0 && JSON.stringify(APP.C.map.get('{keep02}').h.plan)") == plan_before, b.js("APP.loadErrors"))
+        b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        b.set_files("#f-assign", [os.path.join(ROOT, "samples", "round05", "E07_assignment_R05.json")]); b.wait("!!APP.S")
+        b.set_files("#f-update", [os.path.join(DL, "E07_assignment_R05.json")]); b.wait("APP.S.events.some(e => e.what === 'assignment_updated')")
+        check("E07 loads the revised file: the moved household is no longer theirs, shown read-only",
+              b.js(f"[APP.S.events.find(e => e.what === 'assignment_updated').households_removed, APP.C.map.get({json.dumps(gone7)}).kind]") == [1, "removed"])
+        b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        b.click('[data-act="view"][data-v="leader"]')
+
         # phone width
         b.ws.call("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=2, mobile=True)
         b.click('[data-lact="tab"][data-t="progress"]')

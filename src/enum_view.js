@@ -382,7 +382,7 @@
     return `<button class="card" data-act="open" data-hh="${esc(c.hhid)}">
       <span class="when">${t}</span><span class="kind k-${s.kind}">${kindLabel[s.kind] || ''}</span>
       <span class="id">${esc(c.hhid)}</span><span class="name">${esc((c.h.contact || {}).name || '')}</span>
-      <span class="meta">${c.n ? `${c.n} dial${c.n > 1 ? 's' : ''} · last: ${esc(statusLabel(c.last.status))}` : esc(reasonText(c.h))}${c.kind === 'replacement' ? ' · replacement' : ''}</span>
+      <span class="meta">${c.n ? `${c.n} dial${c.n > 1 ? 's' : ''} · last: ${esc(statusLabel(c.last.status))}` : c.prior && c.prior.dials ? `${R.plural(c.prior.dials, 'dial')} by ${esc(c.prior.from)} before the move${c.prior.last_status ? ` · last: ${esc(statusLabel(c.prior.last_status))}` : ''}` : esc(reasonText(c.h))}${c.kind === 'replacement' ? ' · replacement' : ''}</span>
     </button>`;
   }
   function todayPanel(C, now) {
@@ -400,8 +400,10 @@
       <div class="today">
         ${q.isToday ? col('Due now', q.due, 'Nothing is due right now.', true) : ''}
         ${col(q.isToday ? 'Later today' : 'Planned for this day', q.later, 'No calls planned.', false)}
+        ${q.isToday && q.dayList ? col('Ahead of plan', q.ahead, q.due.length + q.later.length >= q.dayList ? `Your day list of ${q.dayList} is full with the calls above.` : 'Nothing left to pull forward.', true) : ''}
         ${q.isToday ? col('Needs your decision', q.decide, 'No decisions waiting.', false) : ''}
-      </div>`;
+      </div>
+      ${q.isToday && q.dayList ? `<p class="muted small">Your leader set a day list of ${q.dayList} households. When the calls due today are done, continue with “Ahead of plan”: households planned for later days, soonest first, so that unanswered calls do not leave you waiting.</p>` : ''}`;
   }
   const RULE_NOTE = 'How households are assigned: the handbook\'s stated default is to keep the same enumerator, rotate a planned share of households each round, and switch the enumerator for a household that becomes hard to reach (Section 3.5.3).';
   const RULE_REASONS = new Set(['keep', 'rotation', 'switch_hard_to_reach']);
@@ -422,6 +424,8 @@
     const a = h.assignment || {}, hist = h.history || {}, li = hist.last_interview, rule = ruleName();
     // 'rule' since the review loop; files written before it gave such households 'rotation'
     if (a.reason === 'rule' || (rule !== 'keep_same' && a.reason === 'rotation')) return ruleReason();
+    if (a.reason === 'mid_round') return `Moved to you during the round${a.previous_enumerator ? ` from ${a.previous_enumerator}` : ''}, so that the round finishes on time`;
+    if (a.reason === 'match') return `Matched to you by your leader's criteria${h.criteria ? ` (${criteriaText(h)})` : ''}`;
     if (a.reason !== 'keep') return R.REASONS[a.reason] || '';
     const t = APP.S ? APP.S.assignment.round : null;
     if (li && t !== null && li.round === t - 1) return 'Kept with you: you interviewed it last round';
@@ -429,7 +433,10 @@
     return 'Kept with you: you had it last round';
   }
   const reasonShort = { keep: 'Kept with you', rotation: 'Rotation', switch_hard_to_reach: 'Switched: hard to reach', enumerator_unavailable: 'Previous enumerator away',
-    new: 'New to the panel', manual: 'Assigned by hand', capacity: 'Workload balance', replacement: 'Replacement' };
+    new: 'New to the panel', manual: 'Assigned by hand', capacity: 'Workload balance', match: 'Matched to you', mid_round: 'Moved to you mid-round', replacement: 'Replacement' };
+  // the criteria the leader matched on (language, sex, area…): the household's values and the enumerator's
+  const criteriaText = h => { const A = APP.S && APP.S.assignment, m = A && A.matching; if (!m || !h.criteria) return '';
+    return Object.entries(h.criteria).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · '); };
   const shortReason = h => { const r = (h.assignment || {}).reason || '';
     return r === 'rule' || (ruleName() !== 'keep_same' && r === 'rotation') ? (byBlocks() ? 'By a block of the list' : 'Dealt at random') : reasonShort[r] || r.replace(/_/g, ' '); };
   const stateLabel = { reassigned: 'No longer yours', complete: 'Complete', in_progress: 'In progress', not_started: 'Not started', released: 'Released', replaced: 'Replaced', remove_requested: 'Removal requested' };
@@ -604,6 +611,7 @@
         : RULE_REASONS.has((h.assignment || {}).reason) ? `<details class="why"><summary>Why is this household with me?</summary><p class="muted small">${RULE_NOTE}</p></details>` : ''}
       ${c.flags.complete_short && c.open ? `<div class="alert warn">The complete you logged lasted under ${R.MIN_COMPLETE_MIN} minutes. Box 3.0 counts it as an appointment contact, not a complete, so the household stays open: call again, or correct the time if it is wrong.</div>` : ''}
       ${c.kind === 'removed' ? `<div class="alert info">This household is no longer in your assignment${h.removed_at ? ` (your leader's update, opened ${isoWhen(h.removed_at)})` : ''}. The calls you logged stay in your log and in your exports; you cannot log new calls for it.</div>` : ''}
+      ${c.prior ? `<div class="alert info">Moved to you by your leader${c.prior.moved_at ? ` on ${isoWhen(c.prior.moved_at)}` : ''}${c.prior.from ? ` from ${esc(c.prior.from)}` : ''}, who made ${R.plural(c.prior.dials, 'dial')}${c.prior.last_status ? ` (last: ${esc(statusLabel(c.prior.last_status))}${c.prior.last_ts ? ', ' + isoWhen(c.prior.last_ts) : ''})` : ''}. ${c.prior.dials ? `Those dials count toward the cap of ${C.cal.cap}: ${Math.max(0, C.cal.cap - c.nAll)} left.` : ''}</div>` : ''}
       ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}</div>` : ''}
       <dl class="facts">
         <dt>Usual time</dt><dd>${usual ? (hist.last_interview ? `${usual}, from the last interview` : `${usual}, planned by your leader (no interview yet)`) : 'not known'}${tzNote}</dd>
@@ -613,6 +621,7 @@
         <dt>In the panel since</dt><dd>${hist.joined_round ? 'round ' + hist.joined_round : '–'}</dd>
         <dt>First dial planned</dt><dd>${pl.first_dial_date ? dayLabel(pl.first_dial_date) + (usual ? ' at ' + usual : '') : '–'}</dd>
         <dt>Sampling unit</dt><dd>${esc(h.psu || '')}${h.stratum ? ' · stratum ' + esc(h.stratum) : ''}</dd>
+        ${h.criteria && Object.keys(h.criteria).length ? `<dt>Matching</dt><dd>${esc(criteriaText(h))}${(h.assignment || {}).matched === false ? ' <span class="tag warn">not matched to you</span>' : ''}</dd>` : ''}
         ${h.note ? `<dt>Leader's note</dt><dd>${esc(h.note)}</dd>` : ''}
       </dl>
       <section class="sec"><h4>Phone numbers</h4>${phones}

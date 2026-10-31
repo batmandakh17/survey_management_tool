@@ -99,9 +99,31 @@ def main():
       "only coefficients and the aggregates below, with no household ID and with cells under 10 suppressed.\n")
     w("## Features\n")
     w("Operational only: no demographic feature. Each is computed from what is known before the round predicted.\n")
-    w(table(["Dropout model", "Coefficient", "Mean", "SD"], [[f["label"], f"{f['coef']:+.3f}", f2(f["mean"]), f2(f["sd"])] for f in M["dropout"]["features"]]))
+    C = json.load(open(os.path.join(HERE, "coefficients.json"))) if os.path.exists(os.path.join(HERE, "coefficients.json")) else None
+
+    def feature_rows(kind):
+        sig = {f["key"]: f for f in C[kind]["features"]} if C else {}
+        rows = []
+        for f in M[kind]["features"]:
+            x = sig.get(f["key"])
+            p_ = "–" if not x else ("<0.001" if x["p"] < 0.001 else f"{x['p']:.3f}")
+            rows.append([f["label"], f"{f['coef']:+.3f}", f"{x['ci_lo']:+.3f} to {x['ci_hi']:+.3f}" if x else "–", f"{x['z']:.1f}" if x else "–", p_,
+                         f2(f["mean"]), f2(f["sd"])])
+        return rows
+    head = ["Coefficient", "95% interval", "z", "p", "Mean", "SD"]
+    w(table(["Dropout model"] + head, feature_rows("dropout")))
     w("\n")
-    w(table(["Return model", "Coefficient", "Mean", "SD"], [[f["label"], f"{f['coef']:+.3f}", f2(f["mean"]), f2(f["sd"])] for f in M["return"]["features"]]))
+    w(table(["Return model"] + head, feature_rows("return")))
+    if C:
+        d, r = C["dropout"], C["return"]
+        sig_out = lambda kind: [f["label"].lower() for f in C[kind]["features"] if f["ci_lo"] <= 0 <= f["ci_hi"]]
+        w(f"\nSignificance (`models/coef_significance.py`): standard errors from the sandwich estimator of the same penalised fit, with "
+          f"households as clusters, since a household contributes several household-rounds ({d['n']:,} household-rounds from "
+          f"{d['households']:,} households for dropout; {r['n']:,} from {r['households']:,} for return). z is the coefficient over its "
+          "standard error; p is two-sided. With this many household-rounds, small effects reach significance: the size of a coefficient "
+          "and the backtests below say more about the lists than p does. Features are correlated (the tenure bands, the missed rounds), "
+          "so each coefficient is the feature's effect with the others held fixed. 95% intervals that include zero: "
+          f"dropout, {', '.join(sig_out('dropout')) or 'none'}; return, {', '.join(sig_out('return')) or 'none'}.\n")
     w("\nCoefficients are per standard deviation, from a ridge-penalised logistic regression with one intercept per program. "
       "Rounds since joining is compared with 4 to 6 rounds. A feature a program's codes do not define counts as average for that "
       "program. In the tool, the explanation adds up the contributions of related features and describes the household's own values.\n")

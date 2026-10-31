@@ -164,3 +164,38 @@ def reference(paths):
     out["same"] = bins
     out["cont35"] = [n_cont, jsround(same / n_cont, 1e6)]
     return out
+
+
+def pace_by_enumerator(calls_text, actions_text, manifest, days_left):
+    """The Progress tab's pace table, computed again from the merged log: per enumerator, the households of the round
+    (assigned ones plus replacements they activated), completes by the tool's rule, open households (never dialed, or
+    dialed without a complete, release, removal request or replacement), enumerator-days (distinct dates with a dial),
+    pace = completes per enumerator-day, and need = open - pace x days_left (positive: behind at this pace)."""
+    rows = list(csv.DictReader(io.StringIO(calls_text)))
+    acts = list(csv.DictReader(io.StringIO(actions_text)))
+    holder = {h["hhid"]: h["enumerator_id"] for h in manifest["households"]}
+    replaced = set()
+    for a in acts:
+        if a["action"] == "ACTIVATE_REPLACEMENT" and a["target_hhid"]:
+            holder.setdefault(a["target_hhid"], a["logged_by"]); replaced.add(a["hhid"])
+    for r in rows:
+        if r["replaces"] and r["hhid"] not in holder:
+            holder[r["hhid"]] = r["operator"]
+    done, dialed, days = {}, set(), {}
+    for r in sorted(rows, key=lambda r: (r["hhid"], r["ts"])):
+        if r["hhid"] in holder:
+            dialed.add(r["hhid"])
+            if r["status"] == "COMPLETE" and (r["dur_min"] == "" or float(r["dur_min"]) >= 3):
+                done.setdefault(r["hhid"], True)
+        days.setdefault(r["operator"], set()).add(r["ts"][:10])
+    closed = {a["hhid"] for a in acts if a["action"] in ("RELEASE", "REMOVE_REQUEST")}
+    out = {}
+    for e in sorted({x["enumerator_id"] for x in manifest["enumerators"]}):
+        mine = [h for h, x in holder.items() if x == e]
+        complete = sum(1 for h in mine if h in done)
+        open_ = sum(1 for h in mine if h not in done and h not in replaced and h not in closed)
+        n_days = len(days.get(e, ()))
+        pace = complete / n_days if n_days else None
+        out[e] = {"households": len(mine), "complete": complete, "open": open_, "days": n_days, "pace": pace,
+                  "need": (open_ - pace * days_left) if pace is not None else None}
+    return out

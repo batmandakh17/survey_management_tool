@@ -4,7 +4,7 @@
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.2.0';
+  RTM.VERSION = '0.3.0';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -42,6 +42,8 @@
     manual: 'Assigned by hand',
     rule: 'Dealt to you by this round’s rule',
     capacity: 'Moved to balance workloads',
+    match: 'Matched to you by the criteria your leader set',
+    mid_round: 'Moved to you during the round, so that the round finishes on time',
     replacement: 'Replacement household',
   };
 
@@ -201,6 +203,7 @@
       const ch = c.call_hours || {};
       if (!Number.isInteger(ch.start) || !Number.isInteger(ch.end) || ch.start < 0 || ch.end > 24 || ch.start >= ch.end) err('call_hours needs whole-hour start and end, start before end.');
       if (!Number.isInteger(c.dial_cap) || c.dial_cap < 1) err('dial_cap (the stopping rule in dials) must be a positive whole number.');
+      if (c.day_list !== undefined && (!Number.isInteger(c.day_list) || c.day_list < 1)) err('day_list (households on each day’s list) must be a positive whole number.');
       if (c.time_zone && !RTM.validTZ(c.time_zone)) warn(`The time zone "${c.time_zone}" is not known to this browser; the device's time zone is used.`);
       (c.holidays || []).forEach(h => { if (!RTM.isDateKey(h.date)) err(`A holiday has an invalid date: ${h.date}`); });
       if (c.ramadan && c.ramadan.dates && !Number.isInteger(c.ramadan.break_fast_hour)) warn('Ramadan dates are given without the hour the fast is broken.');
@@ -222,6 +225,7 @@
         if (plan.first_dial_date && !RTM.isDateKey(plan.first_dial_date)) err(`Household ${h.hhid} has an invalid first-dial date.`);
         if (c && plan.first_dial_date && RTM.isDateKey(c.window_start) && (plan.first_dial_date < c.window_start || plan.first_dial_date > c.window_end)) warn(`Household ${h.hhid}'s first dial is planned outside the window.`);
         if (plan.target_hour !== undefined && (!Number.isInteger(plan.target_hour) || plan.target_hour < 0 || plan.target_hour > 23)) err(`Household ${h.hhid} has an invalid target hour.`);
+        if (h.handover !== undefined && (!h.handover || typeof h.handover !== 'object' || !Number.isInteger(h.handover.dials) || h.handover.dials < 0)) err(`Household ${h.hhid} has an invalid handover record (dials made before the move).`);
         (h.replacements || []).forEach(r => {
           if (!r || !r.hhid) err(`Household ${h.hhid} has a replacement without an ID.`);
           else if (rseen.has(r.hhid)) err(`Replacement ${r.hhid} is listed for two households.`);
@@ -339,7 +343,8 @@
   // ---- the case universe: assigned households plus activated replacements ----
   RTM.householdsOf = (S, eff) => {
     const A = S.assignment, cal = RTM.calendarOf(A);
-    const list = A.households.map(h => Object.assign({}, h, { kind: 'main' }));
+    const carry = S.carry || {};
+    const list = A.households.map(h => Object.assign({}, carry[h.hhid] || {}, h, { kind: 'main' }));
     const repl = new Map();
     A.households.forEach(h => (h.replacements || []).forEach((r, i) => repl.set(r.hhid, { r, main: h, rank: r.rank || i + 1 })));
     for (const a of eff.actions) {
@@ -390,17 +395,20 @@
       else if (has('REMOVE_REQUEST')) state = 'remove_requested';
       else state = ds.length ? 'in_progress' : 'not_started';
       const open = h.kind !== 'removed' && (state === 'in_progress' || state === 'not_started');
+      // a household moved during the round comes with the dials its previous enumerator made: they count toward the cap
+      const prior = h.handover && Number.isInteger(h.handover.dials) ? h.handover : null;
+      const nAll = ds.length + (prior ? prior.dials : 0);
       const flags = {
-        hard_refusal: ds.some(d => d.status === 'REFUSAL_HARD'),
+        hard_refusal: ds.some(d => d.status === 'REFUSAL_HARD') || !!(prior && prior.last_status === 'REFUSAL_HARD'),
         all_dead: slots.length > 0 && slots.every(s => s.dead),
         no_phone: slots.length === 0,
         switch_requested: has('SWITCH_REQUEST'),
         complete_short: !!(cmpAny && !cmp),
-        cap_reached: ds.length >= cal.cap,
+        cap_reached: nAll >= cal.cap,
       };
       const appointment = last && last.appointment_ts && ['APPOINTMENT', 'PARTIAL', 'NOT_AVAILABLE', 'REFUSAL_SOFT', 'OTHER', 'LANGUAGE'].includes(last.status) ? RTM.parseTS(last.appointment_ts) : null;
       const myRepl = (h.replacements || []).map((r, i) => Object.assign({ rank: r.rank || i + 1 }, r, { active: false }));
-      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
+      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
       c.next = RTM.suggest(c, cal, now);
       return c;
     });
@@ -415,7 +423,8 @@
     if (c.flags.hard_refusal) return { kind: 'refusal', text: 'Hard refusal: release it for this round' };
     if (c.flags.no_phone) return { kind: 'dead', text: 'No phone number: add one if you have it, or ask the leader to remove it' };
     if (c.flags.all_dead) return { kind: 'dead', text: 'No working number left: ask the leader to remove it, or activate a replacement' };
-    if (c.n >= cal.cap) return { kind: 'cap', text: `Dial cap of ${cal.cap} reached: release it for this round` };
+    const nAll = Number.isInteger(c.nAll) ? c.nAll : c.n;        // dials this round, those of a previous enumerator included
+    if (nAll >= cal.cap) return { kind: 'cap', text: `Dial cap of ${cal.cap} reached${c.prior && c.prior.dials ? ` (${c.prior.dials} of the dials by ${c.prior.from}, before the move)` : ''}: release it for this round` };
     const tz = (c.h.tz && RTM.validTZ(c.h.tz)) ? c.h.tz : cal.tz;
     const hour = c.h.plan && Number.isInteger(c.h.plan.target_hour) ? c.h.plan.target_hour : null;
     const startHour = cal.hours.start, endHour = cal.hours.end;
@@ -473,7 +482,18 @@
     const rank = c => (c.next.kind === 'callback' ? 0 : c.next.kind === 'overdue' ? 1 : 2);
     due.sort((a, b) => rank(a) - rank(b) || a.next.at - b.next.at);
     later.sort((a, b) => a.next.at - b.next.at);
-    return { decide, due, later, isToday };
+    // the day list (leader setting day_list): when fewer calls are planned for today than the list holds, households
+    // planned for later days are pulled forward, soonest first, so that nobody waits when calls go unanswered
+    const dayList = Number.isInteger(cal.raw.day_list) ? cal.raw.day_list : null;
+    let ahead = [];
+    if (isToday && dayList) {
+      const room = dayList - due.length - later.length;
+      if (room > 0) {
+        ahead = C.list.filter(c => c.open && c.next.at && !['callback'].includes(c.next.kind) && RTM.partsIn(c.next.at, cal.tz).key > todayKey)
+          .sort((a, b) => a.next.at - b.next.at || (a.h.plan && b.h.plan ? (a.h.plan.order || 0) - (b.h.plan.order || 0) : 0)).slice(0, room);
+      }
+    }
+    return { decide, due, later, ahead, dayList, isToday };
   };
 
   // ---- progress counts ----
@@ -535,6 +555,7 @@
       assignment: S.assignment, assignment_fingerprint: S.fingerprint, chain_genesis: S.genesis,
       events: S.events, past: S.past, ui: S.ui || {}, last_export: S.last_export || null,
     };
+    if (S.carry && Object.keys(S.carry).length) o.carry = S.carry;
     o.checksum = RTM.sha256(RTM.canon(o));
     return o;
   };
@@ -551,7 +572,7 @@
     const chain = RTM.verifyChain(o.events || [], o.chain_genesis);
     if (!chain.ok) errors.push(`The call log fails its integrity check at event ${chain.index + 1}: ${chain.reason}.`);
     if (errors.length) return { errors, warnings };
-    const S = { assignment: A, fingerprint: o.assignment_fingerprint, genesis: o.chain_genesis, events: o.events || [],
+    const S = { assignment: A, fingerprint: o.assignment_fingerprint, genesis: o.chain_genesis, events: o.events || [], carry: o.carry || {},
       past: o.past || { files: [], dials: [] }, last_export: o.last_export || null, last_save: { at: o.saved_at, event_count: (o.events || []).length }, ui: o.ui || {} };
     return { errors, warnings, session: S };
   };
@@ -560,12 +581,22 @@
     const A = S.assignment, problems = [];
     if (A2.enumerator_id !== A.enumerator_id) problems.push(`This assignment is for ${A2.enumerator_id}, not ${A.enumerator_id}.`);
     if (A2.round !== A.round || A2.program !== A.program) problems.push(`This assignment is for ${A2.program} round ${A2.round}, not ${A.program} round ${A.round}.`);
+    if (A2.generated_at && A.generated_at && A2.generated_at < A.generated_at) problems.push(`This file is older than the assignment in your session (written ${A2.generated_at.slice(0, 16).replace('T', ' ')}, yours ${A.generated_at.slice(0, 16).replace('T', ' ')}). Open the newest file your leader sent.`);
     if (problems.length) return { problems };
-    const before = new Set(A.households.map(h => h.hhid)), after = new Set(A2.households.map(h => h.hhid));
-    const removed = [...before].filter(x => !after.has(x)), added = [...after].filter(x => !before.has(x));
+    const before = new Map(A.households.map(h => [h.hhid, h])), after = new Set(A2.households.map(h => h.hhid));
+    const removed = [...before.keys()].filter(x => !after.has(x)), added = [...after].filter(x => !before.has(x));
+    // a revised file written during the round may carry only what changed: a household kept from the earlier file keeps
+    // its plan and history, held beside the file so that the file itself stays as the leader wrote it (fingerprint)
+    S.carry = Object.assign({}, S.carry || {});
+    A2.households.forEach(h => {
+      const old = before.get(h.hhid), c = S.carry[h.hhid] || {};
+      if (!old) return;
+      const keep = RTM.clean({ plan: !h.plan ? old.plan || c.plan : undefined, history: !h.history ? old.history || c.history : undefined });
+      if (Object.keys(keep).length) S.carry[h.hhid] = keep; else delete S.carry[h.hhid];
+    });
     S.assignment = A2; S.fingerprint = RTM.fingerprint(A2);
     RTM.append(S, 'session', { what: 'assignment_updated', fingerprint: S.fingerprint, fingerprint_ok: A2.fingerprint ? (A2.fingerprint === S.fingerprint ? 1 : 0) : undefined,
-      file: fileName, households_added: added.length, households_removed: removed.length, added_hhids: added.length ? added : undefined, removed_hhids: removed.length ? removed : undefined });
+      file: fileName, revision: A2.revision, households_added: added.length, households_removed: removed.length, added_hhids: added.length ? added : undefined, removed_hhids: removed.length ? removed : undefined });
     return { problems, added, removed };
   };
 

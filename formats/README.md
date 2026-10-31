@@ -82,9 +82,9 @@ another enumerator's contact information.
 
 | Part | Fields |
 |---|---|
-| Header | `schema`, `program`, `country` (ISO code, picks the bundled holiday table), `round`, `enumerator_id`, `generated_by`, `generated_at`, `rule`, `replacement_policy`, `fingerprint` |
-| `calendar` | `window_start`, `window_end`, `working_weekdays` (1 Monday to 7 Sunday), `call_hours` (`start`, `end`, whole hours), `time_zone` (IANA), `holidays` (`date`, `name`, `estimated`, `working`), `ramadan` (`dates`, `break_fast_hour`), `dial_cap` (the stopping rule, in dials) |
-| Each household | `hhid`, `psu`, `stratum`, `tz` (only where a program spans time zones); `contact` (`name`, `phones` with `slot`, `number`, `label`, `last_status`); `history` (`joined_round`, `last_interview` with `round`, `date`, `hour`; `last3`; `last_enumerator`); `assignment` (`reason`, `previous_enumerator`); `plan` (`first_dial_date`, `target_hour`); `replacements` (`hhid`, `rank`, `contact`, in order of use); `note` |
+| Header | `schema`, `program`, `country` (ISO code, picks the bundled holiday table), `round`, `enumerator_id`, `generated_by`, `generated_at`, `revision` (1 before the round, 2, 3… for files revised during it), `supersedes` (the earlier file's fingerprint, in a revised file), `rule`, `matching` (when the leader set criteria: `criteria`, the columns matched on, and `enumerator`, this enumerator's values), `replacement_policy`, `fingerprint` |
+| `calendar` | `window_start`, `window_end`, `working_weekdays` (1 Monday to 7 Sunday), `call_hours` (`start`, `end`, whole hours), `time_zone` (IANA), `holidays` (`date`, `name`, `estimated`, `working`), `ramadan` (`dates`, `break_fast_hour`), `dial_cap` (the stopping rule, in dials), `day_list` (how many households the Today tab offers at most each day: the calls due, then households pulled forward from later days) |
+| Each household | `hhid`, `psu`, `stratum`, `tz` (only where a program spans time zones); `contact` (`name`, `phones` with `slot`, `number`, `label`, `last_status`); `history` (`joined_round`, `last_interview` with `round`, `date`, `hour`; `last3`; `last_enumerator`); `assignment` (`reason`, `previous_enumerator`, `matched` when the round has criteria); `criteria` (the household's own values, when the round has criteria); `plan` (`first_dial_date`, `target_hour`); `handover` (only for a household moved to this enumerator during the round: `from`, `moved_at`, `dials` made before the move, `last_status`, `last_ts`); `replacements` (`hhid`, `rank`, `contact`, in order of use); `note` |
 
 **Rules** (`rule.name`): `keep_same`, `equal_split`, `share_of_total`, `random`, `manual`. Keeping the
 same enumerator is the handbook's stated default (Section 3.5.3): keep the same enumerator, rotate a
@@ -102,7 +102,23 @@ activated replacement, and `rule` for a household that changes enumerator under 
 default: dealt at random (random, or share of total at random) or placed by a block of the list (equal split,
 or share of total in blocks). The file's `rule` says which. `manual` is a household the leader's list or a move
 by hand placed. `rule` was added in the review loop; files written before it gave `rotation` to a household
-dealt at random, and `manual` to one placed by a block.
+dealt at random, and `manual` to one placed by a block. Two reasons were added on 31 October 2026: `match`, a
+kept household moved because its enumerator did not match the leader's criteria (language, sex, area), and
+`mid_round`, a household moved during the round from an enumerator who would not finish to one with spare
+days; both keep `previous_enumerator`.
+
+**Matching criteria** (`matching`), when the leader set any: `criteria` lists the columns of the household list
+matched on; `enumerator` gives this enumerator's values for each. A household goes only to an enumerator whose
+values include the household's; a household without a value can go to anyone. Each household's own values are in
+its `criteria`, and `assignment.matched` says whether its enumerator matches (false only when the leader moved it
+by hand regardless).
+
+**Revisions.** A file written during the round after households were moved has `revision` 2, 3… and `supersedes`,
+the fingerprint of the file it replaces. The enumerator opens it with "Load updated assignment", which keeps the
+log; a file older than the one in the session is refused. A revised file may omit `plan` and `history` for
+households the enumerator already had: the view keeps them from the earlier file, beside the new one, so that the
+new file's fingerprint still verifies. A household moved in carries `handover`: the previous enumerator's dials,
+which count toward the dial cap.
 
 **Replacement policy.** `active` turns replacements on for the round. `triggers` lists when the enumerator
 may activate the next replacement: `REFUSAL_HARD`, `ALL_NUMBERS_DEAD`, `CAP_REACHED`.
@@ -215,6 +231,7 @@ with the same passphrase. Its call-log exports are not, because they hold no nam
 | `phone_1` … `phone_3` | At least one number; `phone_1_label` … say whose number it is |
 | `contact_name`, `respondent_member`, `language`, `tz` | Optional; `tz` is an IANA name, only where a program spans time zones |
 | `status` | `active` (the default), `removed` (kept in the list, never deleted) or `reserve` (a replacement not yet used) |
+| any other column | Kept with the household. `language` and any other column with few distinct values (for example `respondent_sex`, `dialect`, `region`) can be a matching criterion in step 5: households then go only to enumerators whose values include theirs |
 
 A household listed as a replacement, never activated and without a status is treated as a reserve, so a list
 without a `status` column works too. The list includes the replacements, whose contacts the assignment
@@ -240,6 +257,14 @@ Written with the assignment files. It lists every enumerator of the round with t
 and the fingerprint of their assignment file, the enumerators away, the rule with its seed, the calendar,
 and every household with its enumerator, the reason, the previous enumerator and its unused replacements,
 all as IDs. It holds no names or phone numbers. The merge checks every export against it.
+
+When the leader set matching criteria, `matching` records them with every enumerator's values, and each household
+has `matched`. When households are moved during the round, the leader view writes the manifest's next `revision`
+(with `supersedes`, the fingerprint of the one it replaces): the moved households carry the reason `mid_round` and
+their previous enumerator, `moves` lists every move with the household, from, to, when and by whom, and each
+revised enumerator's roster entry keeps `previous_fingerprints`, so that a log begun from the earlier file still
+belongs to the round. The merge accepts the previous enumerator's dials on a moved household up to the move and
+flags any made after it as a double call (`after_move`), for the leader to keep or leave out.
 
 ## The leader's outputs for the round
 
@@ -306,3 +331,14 @@ read as each category, and a summary of the backtests. It holds coefficients and
   its configuration block, not in a file, so the leader copies them there.
 - **One passphrase per enumerator** when assignment files are protected (D11), made by the tool and shown
   once, so that one enumerator's passphrase never opens another's file.
+
+## Additions made on 31 October 2026, from the supervisor's requests of 28 October, for the author's approval
+
+- **Matching criteria.** `matching` in the assignment file and the manifest; `criteria` and `assignment.matched`
+  for each household; the reason `match`. Any column of the household list can be a criterion.
+- **The day list.** `calendar.day_list`, the leader's number or 1.5 × the planned first dials per enumerator per
+  day. The enumerator's Today tab fills the list with households "ahead of plan".
+- **Moves during the round.** `revision` and `supersedes` in the assignment file and the manifest; `handover` for a
+  moved household; the reason `mid_round`; `moves` and `previous_fingerprints` in the manifest; the merge issue
+  `after_move`. The enumerator's saved session gains `carry`, the plans and history kept from an earlier file.
+- Files written before these additions read as before: every new field is optional.

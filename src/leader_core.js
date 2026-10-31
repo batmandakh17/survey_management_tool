@@ -107,6 +107,8 @@
   };
 
   // ---- household list (A.1) ----
+  const STD_COLS = new Set(['hhid', 'psu', 'stratum', 'contact_name', 'respondent_member', 'language', 'tz', 'status', 'phone', 'phone_label']);
+  L.STD_COLS = STD_COLS;
   L.parseHouseholds = text => {
     const T = L.readTable(text), errors = [], warnings = [];
     const need = ['hhid', 'psu', 'stratum'];
@@ -137,6 +139,9 @@
         language: get(r, 'language'), tz: tz && R.validTZ(tz) ? tz : '', status });
       h.phones = phones;
       h.status_given = !!given;
+      // every other column travels with the household, for the matching criteria (sex, dialect, region…)
+      h.extra = {};
+      T.cols.forEach(c => { const k = norm(c); if (!STD_COLS.has(k) && !/^phone_?\d*(_label)?$/.test(k)) { const v = String(r[c] == null ? '' : r[c]).trim(); if (v) h.extra[k] = v; } });
       if (!h.psu || !h.stratum) warnings.push(`Household ${hhid} has no ${!h.psu ? 'PSU' : 'stratum'}.`);
       H.set(hhid, h);
       counts[status]++;
@@ -367,14 +372,31 @@
     raw.map((x, i) => ({ i, f: x - Math.floor(x) })).sort((a, b) => b.f - a.f || a.i - b.i).forEach(x => { if (left > 0) { q[x.i]++; left--; } });
     return new Map(enums.map((e, i) => [e, q[i]]));
   };
-  L.deal = (items, enums, shares, rnd, exclude) => {
+  // matching criteria: a household goes only to an enumerator whose values for each criterion include the household's
+  // (language, respondent's sex, dialect or region, any column of the household list). A household without a value can
+  // go to anyone. The criteria and each enumerator's values are written into the manifest and the assignment files.
+  L.splitVals = s => String(s == null ? '' : s).toLowerCase().split(/[\s,;/|]+/).map(x => x.trim()).filter(Boolean);
+  L.hhValue = (h, col) => { const k = norm(col); const v = h && h.extra && h.extra[k] !== undefined ? h.extra[k] : (h ? h[k] : ''); return String(v == null ? '' : v).trim().toLowerCase(); };
+  L.eligibleFn = (criteria, team) => {
+    const crit = [...new Set((criteria || []).map(norm).filter(Boolean))];
+    if (!crit.length) return null;
+    const attrs = new Map((team || []).map(t => [t.id, Object.fromEntries(crit.map(c => [c, new Set(L.splitVals((t.attrs || {})[c]))]))]));
+    const f = (h, e) => { const a = attrs.get(e); return !!a && crit.every(c => { const v = L.hhValue(h, c); return !v || a[c].has(v); }); };
+    f.criteria = crit; f.attrs = attrs;
+    f.values = e => Object.fromEntries(crit.map(c => [c, [...(attrs.get(e) || {})[c] || []].sort()]));
+    f.of = h => Object.fromEntries(crit.map(c => [c, L.hhValue(h, c)]).filter(([, v]) => v));
+    return f;
+  };
+  // the enumerators who can take a household: all of them without criteria, else those who match (none: unassignable)
+  L.deal = (items, enums, shares, rnd, exclude, eligible) => {
     const keyed = items.map(h => ({ h, k: rnd() })).sort((a, b) => cmpStr(a.h.stratum || '', b.h.stratum || '') || a.k - b.k).map(x => x.h);
     const N = keyed.length, quota = L.quotas(N, enums, shares), got = new Map(enums.map(e => [e, 0])), out = new Map();
     keyed.forEach((h, i) => {
-      const k = i + 1, ex = exclude && exclude.get(h.hhid);
-      let allowed = enums.filter(e => e !== ex && quota.get(e) > 0);
-      if (!allowed.length) allowed = enums.filter(e => e !== ex);
-      if (!allowed.length) allowed = enums;
+      const k = i + 1, ex = exclude && exclude.get(h.hhid), ok = e => !eligible || eligible(h, e);
+      let allowed = enums.filter(e => e !== ex && ok(e) && quota.get(e) > 0);
+      if (!allowed.length) allowed = enums.filter(e => e !== ex && ok(e));
+      if (!allowed.length) allowed = enums.filter(ok);
+      if (!allowed.length) { out.set(h.hhid, null); return; }
       let best = null, bv = -Infinity;
       for (const e of allowed) { const v = quota.get(e) * k / N - got.get(e); if (v > bv + 1e-12) { bv = v; best = e; } }
       out.set(h.hhid, best); got.set(best, got.get(best) + 1);
@@ -389,29 +411,39 @@
     const team = inp.team.filter(e => e.available);
     const enums = team.map(e => e.id);
     const shares = new Map(team.map(e => [e.id, e.share > 0 ? e.share : 1]));
-    const out = new Map(), notes = [], warnings = [];
-    if (!enums.length) return { out, notes, warnings: ['No enumerator is available.'], errors: ['Mark at least one enumerator as available.'] };
+    const out = new Map(), notes = [], warnings = [], unmatched = [];
+    if (!enums.length) return { out, notes, warnings: ['No enumerator is available.'], errors: ['Mark at least one enumerator as available.'], unmatched };
+    const elig = L.eligibleFn(inp.criteria, team);
+    const byId = new Map(inp.households.map(h => [h.hhid, h]));
     const sumOf = new Map(inp.households.map(h => [h.hhid, L.summaryOf(inp.hist, h.hhid, t, inp.tz)]));
     const before = h => { const s = sumOf.get(h.hhid); return (s.last_interview && s.last_interview.enumerator) || s.previous || null; };
     const isNew = h => { const s = sumOf.get(h.hhid); return s.joined_round === null; };
-    const set = (h, e, reason, prev) => out.set(h.hhid, R.clean({ enumerator_id: e, reason, previous_enumerator: prev && prev !== e ? prev : undefined }));
+    // e === null: no available enumerator matches the household's criteria; the leader assigns it by hand
+    const set = (h, e, reason, prev) => {
+      if (e === null) { out.delete(h.hhid); if (!unmatched.includes(h.hhid)) unmatched.push(h.hhid); return; }
+      out.set(h.hhid, R.clean({ enumerator_id: e, reason, previous_enumerator: prev && prev !== e ? prev : undefined, matched: elig ? elig(h, e) : undefined }));
+    };
     const reasonFor = (h, e, moved) => (isNew(h) ? 'new' : before(h) === e ? 'keep' : moved);
+    const dealTo = (items, sh, excl) => L.deal(items, enums, sh, rnd, excl, elig);
     if (rule.name === 'keep_same') {
-      if (!Number.isFinite(rule.rotation_share) || rule.rotation_share < 0 || rule.rotation_share > 1) return { out, notes, warnings, errors: ['Enter the rotation share for this round (0 to 100%). It has no default: the handbook calls its size a judgment.'] };
-      const fresh = [], away = [], hard = [];
+      if (!Number.isFinite(rule.rotation_share) || rule.rotation_share < 0 || rule.rotation_share > 1) return { out, notes, warnings, errors: ['Enter the rotation share for this round (0 to 100%). It has no default: the handbook calls its size a judgment.'], unmatched };
+      const fresh = [], away = [], hard = [], mis = [];
       const lm = inp.hist.manifests.get(t - 1), lastCap = (lm && lm.calendar && lm.calendar.dial_cap) || inp.cap;
       for (const h of inp.households) {
         const s = sumOf.get(h.hhid), start = before(h);
         if (!start || isNew(h)) { fresh.push(h); continue; }                                          // step 1: new households
         if (!enums.includes(start)) { away.push(h); continue; }                                      // step 2: enumerator away
         if ((!s.interviewed_last && s.in_last && s.dials_last >= lastCap) || s.switch_requested) { hard.push(h); continue; } // step 3 (D5)
+        if (elig && !elig(h, start)) { mis.push(h); continue; }                                       // the criteria: the kept enumerator does not match
         set(h, start, 'keep');                                                                        // step 1: keep
       }
-      L.deal(fresh, enums, shares, rnd).forEach((e, id) => set(inp.households.find(h => h.hhid === id), e, 'new'));
+      dealTo(fresh, shares).forEach((e, id) => set(byId.get(id), e, 'new'));
       const awayPrev = new Map(away.map(h => [h.hhid, before(h)]));
-      L.deal(away, enums, shares, rnd).forEach((e, id) => out.set(id, R.clean({ enumerator_id: e, reason: 'enumerator_unavailable', previous_enumerator: awayPrev.get(id) })));
+      dealTo(away, shares).forEach((e, id) => set(byId.get(id), e, 'enumerator_unavailable', awayPrev.get(id)));
       const hardPrev = new Map(hard.map(h => [h.hhid, before(h)]));
-      L.deal(hard, enums, shares, rnd, hardPrev).forEach((e, id) => out.set(id, R.clean({ enumerator_id: e, reason: 'switch_hard_to_reach', previous_enumerator: hardPrev.get(id) })));
+      dealTo(hard, shares, hardPrev).forEach((e, id) => set(byId.get(id), e, 'switch_hard_to_reach', hardPrev.get(id)));
+      const misPrev = new Map(mis.map(h => [h.hhid, before(h)]));
+      dealTo(mis, shares, misPrev).forEach((e, id) => set(byId.get(id), e, 'match', misPrev.get(id)));
       // step 4: rotation, a share r of each enumerator's kept households, dealt to the others
       const given = new Map(), pool = [], from = new Map();
       for (const e of enums) {
@@ -421,32 +453,41 @@
         L.shuffled(kept, rnd).slice(0, k).forEach(h => { pool.push(h); from.set(h.hhid, e); });
       }
       if (pool.length && enums.length > 1) {
-        L.deal(pool, enums, given, rnd, from).forEach((e, id) => out.set(id, R.clean({ enumerator_id: e, reason: e === from.get(id) ? 'keep' : 'rotation', previous_enumerator: e === from.get(id) ? undefined : from.get(id) })));
+        dealTo(pool, given, from).forEach((e, id) => set(byId.get(id), e, e === from.get(id) ? 'keep' : 'rotation', from.get(id)));
       }
-      notes.push(`Kept ${[...out.values()].filter(x => x.reason === 'keep').length}, new ${fresh.length}, enumerator away ${away.length}, hard to reach ${hard.length}, rotated ${[...out.values()].filter(x => x.reason === 'rotation').length}.`);
-    } else if (rule.name === 'random' || (rule.name === 'share_of_total' && rule.method !== 'blocks')) {
-      L.deal(inp.households, enums, shares, rnd).forEach((e, id) => { const h = inp.households.find(x => x.hhid === id); set(h, e, reasonFor(h, e, 'rule'), before(h)); });
+      notes.push(`Kept ${[...out.values()].filter(x => x.reason === 'keep').length}, new ${fresh.length}, enumerator away ${away.length}, hard to reach ${hard.length}, rotated ${[...out.values()].filter(x => x.reason === 'rotation').length}${elig ? `, moved to match the criteria ${[...out.values()].filter(x => x.reason === 'match').length}` : ''}.`);
+    } else if (rule.name === 'random' || (rule.name === 'share_of_total' && rule.method !== 'blocks') || (elig && (rule.name === 'equal_split' || rule.name === 'share_of_total'))) {
+      const sh = rule.name === 'equal_split' ? new Map(enums.map(e => [e, 1])) : shares;
+      if (elig && rule.name !== 'random') notes.push('With matching criteria, households are dealt to the enumerators who match them; the list is not cut into blocks.');
+      dealTo(inp.households, sh).forEach((e, id) => { const h = byId.get(id); set(h, e, reasonFor(h, e, 'rule'), before(h)); });
     } else if (rule.name === 'equal_split' || rule.name === 'share_of_total') {
       const key = rule.order_by || 'psu';
-      const sorted = inp.households.slice().sort((a, b) => cmpStr(String(a[key] || ''), String(b[key] || '')) || cmpStr(a.hhid, b.hhid));
+      const sorted = inp.households.slice().sort((a, b) => cmpStr(L.hhValue(a, key), L.hhValue(b, key)) || cmpStr(a.hhid, b.hhid));
       const q = rule.name === 'equal_split' ? L.quotas(sorted.length, enums, new Map(enums.map(e => [e, 1]))) : L.quotas(sorted.length, enums, shares);
       let i = 0;
       for (const e of enums) for (let k = 0; k < q.get(e); k++, i++) { const h = sorted[i]; set(h, e, reasonFor(h, e, 'rule'), before(h)); }
       warnings.push('With consecutive blocks, enumerator and area effects cannot be told apart (Section 3.2).');
     } else if (rule.name === 'manual') {
       const m = inp.manual || new Map();
-      const unknown = new Set();
+      const unknown = new Set(), mism = [];
       for (const h of inp.households) {
         const e = m.get(h.hhid);
         if (!e) continue;
         if (!enums.includes(e)) { unknown.add(e); continue; }
         set(h, e, reasonFor(h, e, 'manual'), before(h));
+        if (elig && !elig(h, e)) mism.push(h.hhid);
       }
       const missing = inp.households.filter(h => !out.has(h.hhid)).length;
       if (unknown.size) warnings.push(`Unknown or unavailable enumerator IDs in the manual list: ${[...unknown].join(', ')}.`);
       if (missing) warnings.push(`${R.plural(missing, 'household')} ${missing === 1 ? 'has' : 'have'} no enumerator in the manual list.`);
+      if (mism.length) warnings.push(`${R.plural(mism.length, 'household')} in the manual list ${mism.length === 1 ? 'does' : 'do'} not match ${mism.length === 1 ? 'its' : 'their'} enumerator's values (${elig.criteria.join(', ')}): ${mism.slice(0, 8).join(', ')}${mism.length > 8 ? '…' : ''}. Kept as listed, marked as not matched.`);
     }
-    return { out, notes, warnings, errors: [], summaries: sumOf };
+    if (unmatched.length) {
+      unmatched.sort(cmpStr);
+      const show = id => `${id} (${elig.criteria.map(c => `${c} ${L.hhValue(byId.get(id), c) || '–'}`).join(', ')})`;
+      warnings.push(`${R.plural(unmatched.length, 'household')} ${unmatched.length === 1 ? 'matches' : 'match'} no available enumerator on ${elig.criteria.join(', ')}: ${unmatched.slice(0, 8).map(show).join('; ')}${unmatched.length > 8 ? '…' : ''}. Give an enumerator these values in step 5, or assign them by hand in step 7. No file is written while a household has no enumerator.`);
+    }
+    return { out, notes, warnings, errors: [], summaries: sumOf, unmatched, criteria: elig ? elig.criteria : [] };
   };
 
   // step 5, the load check: each enumerator's households and expected dials, using last round's dials per household
@@ -471,15 +512,16 @@
   // move kept households, chosen at random, from the most to the least loaded enumerator while a load is outside the margin
   L.balance = (inp, out, sums, margin, seed) => {
     const rnd = L.rng((seed || 1) + 7), moves = [], exp = L.expectedDials(inp, sums);
+    const elig = L.eligibleFn(inp.criteria, inp.team.filter(e => e.available)), hh = new Map(inp.households.map(h => [h.hhid, h]));
     for (let guard = 0; guard < 5000; guard++) {
       const ld = L.loads(inp, out, sums).sort((a, b) => b.departure - a.departure);
       const hi = ld[0], lo = ld[ld.length - 1];
       if (!hi || hi.id === lo.id || (hi.departure <= margin && lo.departure >= -margin)) break;
-      // only a move that narrows the gap between the two
-      const cand = [...out.entries()].filter(([id, x]) => x.enumerator_id === hi.id && x.reason === 'keep' && exp(id) < hi.dials - lo.dials).map(([id]) => id).sort();
+      // only a move that narrows the gap between the two, and only to an enumerator who matches the household (criteria)
+      const cand = [...out.entries()].filter(([id, x]) => x.enumerator_id === hi.id && x.reason === 'keep' && exp(id) < hi.dials - lo.dials && (!elig || elig(hh.get(id), lo.id))).map(([id]) => id).sort();
       if (!cand.length) break;
       const id = cand[Math.floor(rnd() * cand.length)];
-      out.set(id, { enumerator_id: lo.id, reason: 'capacity', previous_enumerator: hi.id });
+      out.set(id, R.clean({ enumerator_id: lo.id, reason: 'capacity', previous_enumerator: hi.id, matched: elig ? true : undefined }));
       moves.push({ hhid: id, from: hi.id, to: lo.id });
     }
     return moves;
@@ -533,24 +575,28 @@
     const rule = R.clean(Object.assign({ name: inp.rule.name }, inp.rule.name === 'keep_same' ? { rotation_share: inp.rule.rotation_share, hard_to_reach: 'missed_with_full_cap_or_request', fallback: 'random' } : {},
       inp.rule.order_by && /split|share/.test(inp.rule.name) ? { order_by: inp.rule.order_by } : {}, inp.rule.method ? { method: inp.rule.method } : {}, { seed: inp.rule.seed }));
     const team = inp.team.filter(e => e.available);
+    const elig = L.eligibleFn(inp.criteria, team);
     for (const e of team.map(x => x.id)) {
       const ids = (byEnum.get(e) || []).slice().sort(cmpStr);
       const households = ids.map(id => {
         const h = hh.get(id), s = inp.sums.get(id), x = inp.out.get(id);
         const reps = (inp.replacements.get(id) || []).map((r, i) => ({ hhid: r.hhid, rank: i + 1, contact: contactOf(inp.allHouseholds.get(r.hhid) || { phones: [] }) }));
         const last = s.last_interview ? R.clean({ round: s.last_interview.round, date: s.last_interview.date, hour: s.last_interview.hour }) : undefined;
+        const crit = elig ? elig.of(h) : null;
         return R.clean({
           hhid: id, psu: h.psu, stratum: h.stratum, tz: h.tz,
           contact: contactOf(h, s.slot_last),
           history: R.clean({ joined_round: s.joined_round === null ? inp.round : s.joined_round, last_interview: last, last3: s.last3 || undefined,
             last_enumerator: s.last_interview ? s.last_interview.enumerator : undefined }),
-          assignment: R.clean({ reason: x.reason, previous_enumerator: x.previous_enumerator }),
+          assignment: R.clean({ reason: x.reason, previous_enumerator: x.previous_enumerator, matched: elig ? (x.matched !== undefined ? x.matched : elig(h, e)) : undefined }),
+          criteria: crit && Object.keys(crit).length ? crit : undefined,
           plan: inp.plans.get(id), replacements: reps.length ? reps : undefined,
         });
       });
       const a = R.clean({
         schema: R.SCHEMA.assign, tool_version: R.VERSION, program: inp.program, country: inp.country, round: inp.round, enumerator_id: e,
-        generated_by: inp.leader, generated_at: inp.generated_at, rule, replacement_policy: inp.replacement_policy,
+        generated_by: inp.leader, generated_at: inp.generated_at, revision: 1, rule, replacement_policy: inp.replacement_policy,
+        matching: elig ? { criteria: elig.criteria, enumerator: elig.values(e) } : undefined,
         synthetic: inp.synthetic ? true : undefined, calendar: inp.calendar, households,
       });
       a.fingerprint = R.fingerprint(a);
@@ -558,12 +604,13 @@
     }
     const manifest = R.clean({
       schema: L.SCHEMA.manifest, tool_version: R.VERSION, program: inp.program, country: inp.country, round: inp.round,
-      generated_by: inp.leader, generated_at: inp.generated_at, synthetic: inp.synthetic ? true : undefined, rule, replacement_policy: inp.replacement_policy,
+      generated_by: inp.leader, generated_at: inp.generated_at, revision: 1, synthetic: inp.synthetic ? true : undefined, rule, replacement_policy: inp.replacement_policy,
+      matching: elig ? { criteria: elig.criteria, enumerators: Object.fromEntries(team.map(t => [t.id, elig.values(t.id)])) } : undefined,
       calendar: inp.calendar, away: inp.team.filter(e => !e.available).map(e => e.id),
       enumerators: team.map(t => ({ enumerator_id: t.id, available: true, share: t.share > 0 ? t.share : 1, households: (byEnum.get(t.id) || []).length,
         file: `${t.id}_assignment_R${p2(inp.round)}.json`, fingerprint: files.find(f => f.enumerator_id === t.id).obj.fingerprint })),
       households: [...inp.out.entries()].sort((a, b) => cmpStr(a[0], b[0])).map(([id, x]) => R.clean({
-        hhid: id, enumerator_id: x.enumerator_id, reason: x.reason, previous_enumerator: x.previous_enumerator,
+        hhid: id, enumerator_id: x.enumerator_id, reason: x.reason, previous_enumerator: x.previous_enumerator, matched: x.matched,
         psu: hh.get(id).psu, stratum: hh.get(id).stratum,
         replacements: (inp.replacements.get(id) || []).length ? inp.replacements.get(id).map(r => r.hhid) : undefined })),
     });
@@ -663,6 +710,11 @@
     const assignedTo = new Map(M.households.map(h => [h.hhid, h.enumerator_id]));
     const replOf = new Map();
     M.households.forEach(h => (h.replacements || []).forEach(r => replOf.set(r, h.hhid)));
+    // households moved during the round: the previous holder's dials up to the move were theirs to make
+    const movesOf = new Map();
+    (M.moves || []).forEach(m => { if (!movesOf.has(m.hhid)) movesOf.set(m.hhid, []); movesOf.get(m.hhid).push(m); });
+    const heldBefore = (e, h, ts) => (movesOf.get(h) || []).some(m => m.from === e && Date.parse(ts) <= Date.parse(m.at));
+    const fingerprintsOf = e => (roster.get(e) ? [roster.get(e).fingerprint].concat(roster.get(e).previous_fingerprints || []) : []);
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
     for (const f of imports) {
@@ -728,8 +780,8 @@
           detail: `Integrity check failed at event ${x.f.chain.index + 1} of ${x.f.count}: ${x.f.chain.reason}. The file is imported and marked.` });
         else if (!x.f.lastOk) issue({ key: `lasthash:${x.f.sha}`, type: 'chain_broken', severity: 'action', file: x.f.name, enumerator: e,
           detail: 'The file’s last hash does not match its last event: events may have been removed at the end.' });
-        const fp = roster.get(e) && roster.get(e).fingerprint;
-        if (fp && x.f.genesis && x.f.genesis !== fp) issue({ key: `genesis:${x.f.sha}`, type: 'other_assignment', severity: 'info', file: x.f.name, enumerator: e,
+        const fps = fingerprintsOf(e);
+        if (fps.length && x.f.genesis && !fps.includes(x.f.genesis)) issue({ key: `genesis:${x.f.sha}`, type: 'other_assignment', severity: 'info', file: x.f.name, enumerator: e,
           detail: 'The log did not start from the assignment file this manifest lists for this enumerator.' });
       });
       const lone = cs.filter(c => !c.paired);
@@ -834,6 +886,16 @@
       x.dials.forEach(d => { if (!byHH.has(d.hhid)) byHH.set(d.hhid, []); byHH.get(d.hhid).push(d); });
       for (const [h, ds] of byHH) {
         if (mine(e, h)) continue;
+        const after = ds.filter(d => !heldBefore(e, h, d.ts));
+        if (!after.length) continue;                                   // dials made while the household was theirs, before it was moved
+        const mv = (movesOf.get(h) || []).filter(m => m.from === e).slice(-1)[0];
+        if (mv) {
+          const d = issue({ key: `after_move:${e}:${h}`, type: 'after_move', severity: 'action', enumerator: e, hhid: h,
+            detail: `${e} logged ${R.plural(after.length, 'dial')} on ${h} after it was moved to ${mv.to} on ${mv.at.slice(0, 16).replace('T', ' ')}: a double call. Kept and flagged.`,
+            choices: [{ value: 'accept', label: 'Keep them' }, { value: 'exclude', label: 'Leave them out' }] });
+          if (d === 'exclude') after.forEach(dd => excludedDials.add(dd.event_id));
+          continue;
+        }
         const known = assignedTo.has(h) || replOf.has(h);
         const d = issue({ key: `not_assigned:${e}:${h}`, type: known ? 'not_assigned' : 'unknown_household', severity: 'action', enumerator: e, hhid: h,
           detail: known ? `${e} logged ${R.plural(ds.length, 'dial')} on ${h}, which is assigned to ${assignedTo.get(h) || assignedTo.get(replOf.get(h))}. Kept and flagged.`
@@ -969,6 +1031,136 @@
       strata.get(s).households++; if (c.state === 'complete') strata.get(s).complete++;
     }
     return { list, total: tot, days, strata: [...strata.values()].sort((a, b) => cmpStr(a.stratum, b.stratum)) };
+  };
+
+  // ---- moving waiting households during the round: who will not finish at the current pace ----
+  // Pace = completes per enumerator-day so far (Box 3.0); capacity = pace × working days left; need = open − capacity.
+  // Only enumerators whose export is from today and who have two or more enumerator-days are judged.
+  L.pace = (M, C, P, now) => {
+    const cal = R.calendarOf({ calendar: M.calendar }), today = R.partsIn(now, cal.tz).key;
+    const left = R.workingDaysLeft(cal, today);
+    const rows = P.list.map(r => {
+      const open = r.not_started + r.in_progress, exportDay = r.last_export ? r.last_export.slice(0, 10) : '';
+      const known = r.enumerator_days >= 2 && r.completes_per_day !== null;
+      const row = { enumerator_id: r.enumerator_id, households: r.households, complete: r.complete, open, waiting: r.not_started, in_progress: r.in_progress,
+        pace: r.completes_per_day, enumerator_days: r.enumerator_days, days_left: left, export_at: r.last_export || '', export_day: exportDay, fresh: exportDay === today, known };
+      row.capacity = known ? r.completes_per_day * left : null;
+      row.need = known ? open - row.capacity : null;
+      row.projected = known ? Math.min(r.households, r.complete + Math.floor(row.capacity + 1e-9)) : null;
+      row.why = !r.last_export ? 'no export yet' : !row.fresh ? `last export ${exportDay}, not today` : !known ? 'fewer than two enumerator-days: the pace cannot be judged yet' : '';
+      return row;
+    });
+    return { rows, today, days_left: left };
+  };
+  // which households may move: never dialed; or, if the leader allows, dialed without a booked callback or a hard refusal
+  L.movable = (c, include) => {
+    if (c.replaces) return false;
+    if (c.state === 'not_started') return true;
+    if (include !== 'in_progress' || c.state !== 'in_progress') return false;
+    const last = c.dials[c.dials.length - 1];
+    if (last && last.appointment_ts) return false;
+    return !c.dials.some(d => d.status === 'REFUSAL_HARD');
+  };
+  // one household at a time from the enumerator furthest behind to the one with most spare capacity, latest-planned first,
+  // only to an enumerator who matches the household's criteria, until nobody is more than half a household behind or ahead
+  L.proposeMoves = (pace, C, opts) => {
+    const o = Object.assign({ include: 'not_started', from: null, to: null, eligible: null, hh: null, planOf: null, allowStale: false }, opts || {});
+    const judged = r => r.known && (r.fresh || o.allowStale);
+    const rows = pace.rows.filter(judged);
+    const need = new Map(rows.map(r => [r.enumerator_id, r.need]));
+    const planned = id => (o.planOf && o.planOf(id)) || '';
+    const rank = c => (c.state === 'not_started' ? 0 : 1);          // never dialed households first, then the latest planned
+    const cands = new Map(rows.map(r => [r.enumerator_id, [...C.values()].filter(c => c.enumerator_id === r.enumerator_id && L.movable(c, o.include))
+      .sort((a, b) => rank(a) - rank(b) || cmpStr(planned(b.hhid), planned(a.hhid)) || cmpStr(b.hhid, a.hhid))]));
+    const moves = [];
+    for (let guard = 0; guard < 5000; guard++) {
+      const donors = rows.filter(r => need.get(r.enumerator_id) > 0.5 && (!o.from || o.from.includes(r.enumerator_id))).sort((a, b) => need.get(b.enumerator_id) - need.get(a.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
+      const takers = rows.filter(r => need.get(r.enumerator_id) < -0.5 && (!o.to || o.to.includes(r.enumerator_id))).sort((a, b) => need.get(a.enumerator_id) - need.get(b.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
+      let done = false;
+      for (const d of donors) {
+        const list = cands.get(d.enumerator_id);
+        for (const t of takers) {
+          const i = list.findIndex(c => !o.eligible || !o.hh || !o.hh.get(c.hhid) || o.eligible(o.hh.get(c.hhid), t.enumerator_id));
+          if (i < 0) continue;
+          const c = list.splice(i, 1)[0];
+          moves.push({ hhid: c.hhid, from: d.enumerator_id, to: t.enumerator_id, state: c.state, dials: c.n, planned: planned(c.hhid) });
+          need.set(d.enumerator_id, need.get(d.enumerator_id) - 1); need.set(t.enumerator_id, need.get(t.enumerator_id) + 1);
+          done = true; break;
+        }
+        if (done) break;
+      }
+      if (!done) break;
+    }
+    return { moves, need, judged: rows.map(r => r.enumerator_id), left_out: pace.rows.filter(r => !judged(r)).map(r => ({ id: r.enumerator_id, why: r.why || (!r.fresh ? `last export ${r.export_day}, not today` : 'pace not known') })) };
+  };
+  // the revised files: a new assignment file for each enumerator who gives or receives a household, and the manifest's next
+  // revision. Contacts come from the household list (with the numbers enumerators corrected this round); a moved household
+  // carries the dials made before the move (handover), a first dial on the next working day, and its usual hour.
+  L.reviseFiles = inp => {
+    const M = inp.M, at = inp.at, moved = new Map(inp.moves.map(m => [m.hhid, m]));
+    const affected = new Set(); inp.moves.forEach(m => { affected.add(m.from); affected.add(m.to); });
+    const cal = R.calendarOf({ calendar: M.calendar }), today = R.partsIn(inp.now || R.now(), cal.tz).key;
+    let first = today < cal.start ? cal.start : today, guard = 0;
+    while (!cal.isWorking(first) && first < cal.end && guard++ < 60) first = R.addDaysKey(first, 1);
+    const upd = new Map();                           // hhid -> slot -> the corrected number, from the merged contacts files
+    (inp.updates || []).filter(u => u.digest_ok && u.number).forEach(u => { if (!upd.has(u.hhid)) upd.set(u.hhid, new Map()); upd.get(u.hhid).set(+u.slot, u); });
+    const contactNow = (H, id, slotLast) => {
+      const c = contactOf(H || { phones: [] }, slotLast), m = upd.get(id);
+      if (m) {
+        for (const [slot, u] of m) {
+          const p = c.phones.find(x => x.slot === slot);
+          if (p) { p.number = u.number; if (u.label) p.label = u.label; delete p.last_status; } else c.phones.push(R.clean({ slot, number: u.number, label: u.label }));
+        }
+        c.phones.sort((a, b) => a.slot - b.slot);
+      }
+      return c;
+    };
+    const elig = M.matching ? { criteria: M.matching.criteria } : null;
+    const households = M.households.map(h => (moved.has(h.hhid) ? Object.assign({}, h, { enumerator_id: moved.get(h.hhid).to, reason: 'mid_round', previous_enumerator: h.enumerator_id,
+      matched: M.matching ? (inp.matchedNow ? inp.matchedNow(h.hhid, moved.get(h.hhid).to) : undefined) : undefined }) : h));
+    const files = [];
+    for (const e of [...affected].sort(cmpStr)) {
+      const mine = households.filter(h => h.enumerator_id === e).sort((a, b) => cmpStr(a.hhid, b.hhid));
+      const entries = mine.map(h => {
+        const H = inp.hh.get(h.hhid), c = inp.C.get(h.hhid), s = inp.sumOf ? inp.sumOf(h.hhid) : null, m = moved.get(h.hhid);
+        const reps = (h.replacements || []).map((id, i) => ({ hhid: id, rank: i + 1, contact: contactNow(inp.hh.get(id), id) }));
+        const last = c && c.dials.length ? c.dials[c.dials.length - 1] : null;
+        const li = s && s.last_interview ? R.clean({ round: s.last_interview.round, date: s.last_interview.date, hour: s.last_interview.hour }) : undefined;
+        const pl = inp.plans ? inp.plans.get(h.hhid) : null;
+        const crit = elig && H ? Object.fromEntries(elig.criteria.map(k => [k, L.hhValue(H, k)]).filter(([, v]) => v)) : null;
+        return R.clean({
+          hhid: h.hhid, psu: h.psu, stratum: h.stratum, tz: H && H.tz,
+          contact: contactNow(H, h.hhid, s && s.slot_last),
+          history: s ? R.clean({ joined_round: s.joined_round === null ? M.round : s.joined_round, last_interview: li, last3: s.last3 || undefined, last_enumerator: s.last_interview ? s.last_interview.enumerator : undefined }) : undefined,
+          assignment: R.clean({ reason: h.reason, previous_enumerator: h.previous_enumerator, matched: h.matched }),
+          criteria: crit && Object.keys(crit).length ? crit : undefined,
+          plan: m ? R.clean({ first_dial_date: first, target_hour: pl && Number.isInteger(pl.target_hour) ? pl.target_hour : (li && Number.isInteger(li.hour) ? li.hour : undefined) }) : pl || undefined,
+          handover: m ? R.clean({ from: m.from, moved_at: at, dials: c ? c.n : 0, last_status: last ? last.status : undefined, last_ts: last ? last.ts : undefined }) : undefined,
+          replacements: reps.length ? reps : undefined,
+        });
+      });
+      const old = M.enumerators.find(x => x.enumerator_id === e);
+      const a = R.clean({
+        schema: R.SCHEMA.assign, tool_version: R.VERSION, program: M.program, country: M.country, round: M.round, enumerator_id: e,
+        generated_by: inp.leader, generated_at: at, revision: (M.revision || 1) + 1, supersedes: old ? old.fingerprint : undefined,
+        rule: M.rule, replacement_policy: M.replacement_policy, matching: M.matching ? { criteria: M.matching.criteria, enumerator: (M.matching.enumerators || {})[e] || {} } : undefined,
+        synthetic: M.synthetic ? true : undefined, note: `Revision ${(M.revision || 1) + 1} of this round's assignment: ${inp.moves.filter(x => x.to === e).length} household(s) moved to you, ${inp.moves.filter(x => x.from === e).length} moved from you.`,
+        calendar: M.calendar, households: entries,
+      });
+      a.fingerprint = R.fingerprint(a);
+      files.push({ enumerator_id: e, name: `${e}_assignment_R${p2(M.round)}.json`, obj: a });
+    }
+    const manifest = Object.assign({}, M, {
+      generated_at: at, revision: (M.revision || 1) + 1, supersedes: M.fingerprint,
+      enumerators: M.enumerators.map(x => {
+        const f = files.find(y => y.enumerator_id === x.enumerator_id);
+        return f ? Object.assign({}, x, { households: f.obj.households.length, fingerprint: f.obj.fingerprint, previous_fingerprints: (x.previous_fingerprints || []).concat([x.fingerprint]) }) : x;
+      }),
+      households, moves: (M.moves || []).concat(inp.moves.map(m => ({ hhid: m.hhid, from: m.from, to: m.to, at, by: inp.leader }))),
+    });
+    delete manifest.fingerprint;
+    manifest.fingerprint = R.fingerprint(manifest);
+    return { files, manifest, affected: [...affected].sort(cmpStr) };
   };
 
   // ---- the round's outputs (A.6) ----

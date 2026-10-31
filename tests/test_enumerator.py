@@ -533,6 +533,55 @@ def main():
         check("at phone width (390 px) the page has no sideways scroll", wide, b.js("[document.documentElement.scrollWidth, window.innerWidth]"))
         b.ws.call("Emulation.clearDeviceMetricsOverride")
 
+        # ---------- 20b. the day list, and a household moved during the round (the author's requests of 28 October 2026) ----------
+        if b.js("!!APP.S"):
+            b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        b.js("RTM.setNow('2026-10-27T13:00:00+08:00'); true")
+        b.set_files("#f-assign", [A07]); b.wait("!!APP.S")
+        q = b.js("(() => { const q = RTM.queue(APP.C, RTM.now(), '2026-10-27'); return { dl: q.dayList, due: q.due.length, later: q.later.length, ahead: q.ahead.map(c => [c.hhid, c.next.kind, RTM.partsIn(c.next.at, APP.C.cal.tz).key]) }; })()")
+        check("the assignment carries the leader's day list; today's list is filled up to it with households ahead of plan, none due today and no callbacks",
+              q["dl"] == json.load(open(A07))["calendar"]["day_list"] and len(q["ahead"]) == max(0, q["dl"] - q["due"] - q["later"])
+              and all(k > "2026-10-27" and kind != "callback" for _, kind, k in q["ahead"]) and [k for _, _, k in q["ahead"]] == sorted(k for _, _, k in q["ahead"]), q)
+        check("the Today tab has an 'Ahead of plan' column and explains the day list", "Ahead of plan" in b.js("document.querySelector('.panel').innerText") and f"day list of {q['dl']} households" in b.js("document.querySelector('.panel').innerText"))
+        unitq = b.js("""(() => { const A = JSON.parse(JSON.stringify(APP.S.assignment)); A.households = A.households.slice(0, 6);
+            const days = ['2026-10-27', '2026-10-27', '2026-10-30', '2026-10-28', '2026-11-02', '2026-10-29'];
+            A.households.forEach((h, i) => { h.plan = { first_dial_date: days[i], target_hour: 10 }; }); A.calendar.day_list = 5; delete A.fingerprint;
+            const q = RTM.queue(RTM.cases(RTM.newSession(A), RTM.now()), RTM.now(), '2026-10-27');
+            A.calendar.day_list = 2; const q2 = RTM.queue(RTM.cases(RTM.newSession(A), RTM.now()), RTM.now(), '2026-10-27');
+            delete A.calendar.day_list; const q3 = RTM.queue(RTM.cases(RTM.newSession(A), RTM.now()), RTM.now(), '2026-10-27');
+            return { ahead: q.ahead.map(c => c.h.plan.first_dial_date), due: q.due.length, ahead2: q2.ahead.length, dl3: q3.dayList, ahead3: q3.ahead.length }; })()""")
+        check("the day list pulls households forward from later days, soonest first, only up to the list length; a file without a day list shows none",
+              unitq == {"ahead": ["2026-10-28", "2026-10-29", "2026-10-30"], "due": 2, "ahead2": 0, "dl3": None, "ahead3": 0}, unitq)
+        unith = b.js("""(() => { const A = JSON.parse(JSON.stringify(APP.S.assignment)); const h = A.households[0];
+            h.handover = { from: 'E02', moved_at: '2026-10-27T09:00:00+08:00', dials: 7, last_status: 'NO_ANSWER', last_ts: '2026-10-26T18:00:00+08:00' }; delete A.fingerprint;
+            const c = RTM.cases(RTM.newSession(A), RTM.now()).map.get(h.hhid);
+            h.handover.dials = 8; const c8 = RTM.cases(RTM.newSession(A), RTM.now()).map.get(h.hhid);
+            return { nAll: c.nAll, cap: c.flags.cap_reached, kind: c.next.kind, prior: c.prior.from, kind8: c8.next.kind, text8: c8.next.text }; })()""")
+        check("a household moved mid-round brings the previous enumerator's dials: 7 of a cap of 8 leave one; 8 reach the cap, and the suggestion says whose dials they were",
+              unith["nAll"] == 7 and unith["cap"] is False and unith["kind"] in ("first", "overdue") and unith["prior"] == "E02" and unith["kind8"] == "cap" and "8 of the dials by E02" in unith["text8"], unith)
+        # a revised file that omits the plans of households already held: they are carried beside it, and survive a save
+        U = json.load(open(A07, encoding="utf-8"))
+        U["generated_at"] = "2026-10-27T12:00:00+08:00"; U["revision"] = 2; U["supersedes"] = U["fingerprint"]
+        for h in U["households"]:
+            h.pop("plan", None); h.pop("history", None)
+        U["fingerprint"] = py_fingerprint(U)
+        upd2 = os.path.join(SCRATCH, f"E07_assignment_R05_rev2_{STAMP}.json"); json.dump(U, open(upd2, "w", encoding="utf-8"), ensure_ascii=False)
+        h0 = U["households"][0]["hhid"]
+        plan0 = b.js(f"JSON.stringify(APP.C.map.get('{h0}').h.plan)")
+        b.set_files("#f-update", [upd2]); b.wait("APP.S.events.some(e => e.what === 'assignment_updated')")
+        check("a revised file without plans keeps every household's plan and history from the earlier file, and the file's own fingerprint still verifies",
+              b.js(f"JSON.stringify(APP.C.map.get('{h0}').h.plan)") == plan0 and b.js("APP.S.events.find(e => e.what === 'assignment_updated').fingerprint_ok") == 1 and b.js("RTM.fingerprint(APP.S.assignment) === APP.S.fingerprint"))
+        before = snapshot()
+        b.click('[data-act="save"]')
+        newest = wait_new("E07_project_R05*.json", before)
+        b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        b.set_files("#f-project", [newest]); b.wait("!!APP.S || APP.loadErrors.length")
+        check("the carried plans survive a save and reopen", b.js(f"!!APP.S && APP.loadErrors.length === 0 && JSON.stringify(APP.C.map.get('{h0}').h.plan)") == plan0, b.js("APP.loadErrors"))
+        nev = b.js("APP.S.events.length")
+        b.set_files("#f-update", [A07])
+        b.wait("APP.toasts.some(t => /older than the assignment in your session/.test(t.text))")
+        check("the earlier file, opened again by mistake, is refused as older and nothing is logged", b.js("APP.S.events.length") == nev)
+
         # ---------- 21. every file the browser wrote passes the format checker ----------
         sys.path.insert(0, os.path.join(ROOT, "formats"))
         import check_formats as cf

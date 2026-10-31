@@ -8,11 +8,16 @@ The tool has no server, no shared database and no network connection. The page's
 tells the browser to refuse every request. It reads only files you open, and writes only files you save
 or export. `formats/README.md` defines every file.
 
-Status, 28 October 2026: every step of the build prompt is done. The enumerator view (Step 2) and the leader
+Status, 31 October 2026: every step of the build prompt is done. The enumerator view (Step 2) and the leader
 view (Step 3) were built on 27 October. The same day brought the risk models (Step 4, `models/MODEL_CARD.md`)
-and the validation (Step 5, `VALIDATION.md`). On 28 October came the usability pass (Step 6, `USABILITY.md`),
+and the validation (Step 5). On 28 October came the usability pass (Step 6),
 the note in the handbook's Chapter 5 (Appendix C.1) and the test with a real `rtmtools` export (Step 7). The
-review loop followed. What is still open is in `OPEN_ITEMS.md`.
+review loop followed. On 31 October three requests from the supervisor's review were added: matching criteria
+for the assignment (language, the respondent's sex, a dialect or an area), a day list longer than the day's
+plan so that nobody waits on unanswered calls, and moving waiting households between enumerators during the
+round without double calls. The design document, the list of open items and the validation and usability reports
+are kept by the handbook task team and are not in this repository; `tests/make_validation_report.py` rebuilds the
+validation report from the test results.
 
 All sample files are synthetic: one imaginary program, "L2MN-DEMO", on Mongolia's calendar, with four rounds
 of history and round 5 under way. No real household, name or phone number; phone numbers use the invalid
@@ -29,10 +34,14 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
    rounds 1 to 4. Step 3: `selection.csv`, the sampling tool's draw with its replacements. The team, dial cap
    and call hours are taken from round 4.
 3. **Set the round.** Step 4: the window, 26 October to 20 November 2026; the 10 November holiday appears.
-   Step 5: untick E03, who is away this round. Step 6: keep the default rule and enter a rotation share,
-   for example 10%; it has no default.
+   The day list comes from round 4's manifest (5 households); clear it to see its default once the rule is
+   applied. Step 5: untick E03, who is away this round. To try the matching criteria, tick **language** (two PSUs of the sample speak Kazakh, `kk`) and give
+   E01 the values `mn kk` and the others `mn`; or tick **respondent sex** and give each enumerator `f`, `m` or
+   both. Step 6: keep the default rule and enter a rotation share, for example 10%; it has no default.
 4. **Check before writing.** Step 7 shows each enumerator's households by reason and stratum, and their
-   expected dials against the target. E02 falls short; try "Move kept households at random to balance".
+   expected dials against the target. E02 falls short; try "Move kept households at random to balance". With the
+   language criterion, every `kk` household is with E01, the ones that moved for it have the reason "matched",
+   and the balance never moves one away from E01. Give E01 `mn` only to see the `kk` households wait for you.
 5. **Write the files.** Step 8 writes one assignment file per enumerator, the manifest and the calendar row.
    Tick "Protect each assignment file" to see the passphrases the tool makes for each enumerator.
 6. **Import the round's logs.** Start a new round as in step 1, open the Import tab, open
@@ -43,6 +52,12 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
 7. **Follow progress and the log.** The Progress tab shows each enumerator's households by state and the
    completes over the window. The Call log tab exports the merged call log, `interviews.csv` for the round
    template, and the other round files.
+   - **Move waiting households.** The same tab judges each enumerator's pace against the working days left.
+     The sample's exports are from 6 November, so tick "also judge enumerators whose latest export is from an
+     earlier day", then "Propose moves"; whether anyone is short depends on your computer's date (on 13 November
+     2026 two households would move from E01 to E02). Add a move by hand with any household not yet called,
+     then "Write the updated files": one revised file per enumerator concerned and revision 2 of the manifest.
+     This needs the household list open in the same session (step 1).
 8. **Try the merge questions.** Add the files in `merge_cases/`, one folder at a time: a duplicate, an
    earlier export, a file from another round, a file edited after export, a CSV without its JSON (E02's later
    export that evening, whose JSON did not arrive, used as unverified), and a conflict where E01 logs a
@@ -63,7 +78,9 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
 ## Try the enumerator view
 
 1. **Open an assignment.** Choose "Open my assignment file" and pick `samples/round05/E07_assignment_R05.json`.
-   The round runs from 26 October to 20 November 2026, so the Today tab lists calls due now.
+   The round runs from 26 October to 20 November 2026, so the Today tab lists calls due now. Its fourth column,
+   "Ahead of plan", fills the leader's day list (7 households in this sample) with households planned for later
+   days once fewer than 7 are due or planned today.
 2. **Log a call.** Open a household, press "Start call" by a number, then "End call", choose the result and
    save. Try a booked callback, a number not in service and then "Activate the next replacement", a release
    and its undo, and "Correct or void" on a logged call.
@@ -80,7 +97,7 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
 |---|---|
 | `samples/round05/E07_project_R05.json` | E07's saved session on 27 October at 12:30, to open with "Continue a saved session" |
 | `samples/round05/E07_assignment_R05_protected.json` | The E07 assignment protected with the passphrase `synthetic-E07` |
-| `samples/round05/E01_…`, `E02_assignment_R05.json` | The other enumerators' assignments; opening one as an update to E07's session is refused |
+| `samples/round05/E01_…`, `E02_assignment_R05.json` | The other enumerators' assignments; opening one as an update to E07's session is refused. A revised file the leader view writes after moving households opens as an update to the enumerator's session |
 | `samples/past/E07_2026-10-21.csv` and `.json` | E07's round-4 export, for the performance view |
 | `samples/rtmtools_export/` | A real `rtmsample draw` run with reserves (`selection.csv`, its manifest, and the do-file that made it), for the leader's Step 3 |
 
@@ -90,14 +107,12 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
 |---|---|
 | `rtm_interview_tool.html` | The tool, built from `src/` |
 | `src/` | `core.js` (log, scheduler, files), `enum_view.js` (enumerator view), `leader_core.js` (rules, planning, merge), `leader_stats.js` (analytics), `leader_risk.js` (risk models), `leader_view.js` (leader view), `app.css`, `shell.html`, `holidays_data.js` |
-| `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally), `risk_models.json` and `validation.json` (coefficients and aggregates only), `make_card.py` and `MODEL_CARD.md` |
+| `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally), `risk_models.json` and `validation.json` (coefficients and aggregates only), `coef_significance.py` and `coefficients.json` (each coefficient's household-clustered standard error, z and p), `make_card.py` and `MODEL_CARD.md` |
 | `holidays/make_holidays.py` | Writes the bundled holiday table (Python package `holidays`, 2025–2030) |
 | `formats/` | File definitions, JSON Schemas, and `check_formats.py` |
 | `samples/` | The synthetic program and the scripts that make it |
 | `tests/` | Browser tests of both views, the risk models, the merge batch and the other rules, the format checker and the rtmtools import; reference implementations of the handbook's rules and of the models; the usability walkthrough and its screens |
-| `notes/handbook_metric_spec.md` | How the handbook defines and computes each measure the analytics show, with the places where its text and scripts differ |
-| `PROPOSAL.md`, `OPEN_ITEMS.md` | The approved design and what is still open |
-| `VALIDATION.md`, `USABILITY.md` | What was tested and what the usability pass changed |
+| (not in this repository) | The task team's design document, open items, validation and usability reports, and the notes on how the handbook defines each measure the analytics show |
 
 ## Build and test
 
@@ -110,7 +125,7 @@ python3 tests/test_risk.py                 # the risk models in the browser agai
 python3 tests/test_validation.py           # the merge batch, the other rules, access control, holidays
 python3 tests/test_formats.py              # the format checker on good and damaged files
 python3 tests/test_rtmtools_import.py      # a real rtmtools replacement list through both views
-python3 tests/make_validation_report.py    # writes VALIDATION.md from the results
+python3 tests/make_validation_report.py    # writes VALIDATION.md from the results (the report itself is not kept in the repository)
 python3 tests/usability_walkthrough.py 6   # screens for a usability pass, into tests/screens/usability_r6/
 python3 formats/check_formats.py samples   # check any files or folders
 ```

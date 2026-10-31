@@ -47,7 +47,8 @@
     "working": false
    }
   ],
-  "dial_cap": 8
+  "dial_cap": 8,
+  "day_list": 7
  },
  "households": [
   {
@@ -1828,5 +1829,5 @@
    }
   }
  ],
- "fingerprint": "1e1e1d76a4c9bbc1b8da56f3d61e8331694ac401258c1f24f72e3d57b31f1a7a"
+ "fingerprint": "9995306195b494e3c72e47a99e976b4990086ef75d0974bb09f54a48562699e3"
 }

@@ -72,7 +72,8 @@
     "working": false
    }
   ],
-  "dial_cap": 8
+  "dial_cap": 8,
+  "day_list": 6
  },
  "away": [],
  "enumerators": [
@@ -82,7 +83,7 @@
    "share": 0.25,
    "households": 27,
    "file": "E01_assignment_R01.json",
-   "fingerprint": "2c98d9431cc67c694bdfcf78490e0a94084f1ae1ed605e997ccf23383f71ebd4"
+   "fingerprint": "f257a0d8e8b8de0aff317733d17d5d3542645f3cab296d31bbbbef5d4f4521ee"
   },
   {
    "enumerator_id": "E02",
@@ -90,7 +91,7 @@
    "share": 0.25,
    "households": 27,
    "file": "E02_assignment_R01.json",
-   "fingerprint": "3742721ca3240e1e8c36418a5851ce8562a8fd64431672cbd9590560fdeeb71d"
+   "fingerprint": "bb024da070a351d9d444c1c642645e27e9d6c01704b8b9546cdd7671904fa41b"
   },
   {
    "enumerator_id": "E03",
@@ -98,7 +99,7 @@
    "share": 0.25,
    "households": 27,
    "file": "E03_assignment_R01.json",
-   "fingerprint": "90f329715d802d62282185ba15731a2a66600326b5362ccbe09bf28ebe38a83b"
+   "fingerprint": "d3e72a5192f9ed90530fbaa6bbfeff2cab1be739ce1f30c503ff02d10cb9709e"
   },
   {
    "enumerator_id": "E07",
@@ -106,7 +107,7 @@
    "share": 0.25,
    "households": 27,
    "file": "E07_assignment_R01.json",
-   "fingerprint": "5ebf69ec3e1c1b44ebcccd7ab4ec003a0e6d70410d3e733a7a40d25cd611d54e"
+   "fingerprint": "c0ff24f36e54defaeadf2ffe9507f7c83df1ec9b03f6a61d1df3151d151271f5"
   }
  ],
  "households": [
@@ -975,5 +976,5 @@
    "stratum": "2"
   }
  ],
- "fingerprint": "c24fedd35c01c954ffea400cca7269237eaffd8ce39c5f83b151a7eb6f00dbe7"
+ "fingerprint": "684878ca481fda9bdc402a8121d82c12ec07dd3a60c7986cdcb9bd4608d3f263"
 }

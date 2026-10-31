@@ -28,42 +28,45 @@ The handbook's harmonized case and dial tables of its six programs with dial log
 
 Operational only: no demographic feature. Each is computed from what is known before the round predicted.
 
-| Dropout model | Coefficient | Mean | SD |
-|---|---|---|---|
-| Joined in the round before | +0.282 | 0.07 | 0.25 |
-| Joined two rounds before | +0.131 | 0.05 | 0.21 |
-| Joined three rounds before | +0.074 | 0.04 | 0.20 |
-| In the panel 7 to 12 rounds | -0.060 | 0.17 | 0.38 |
-| In the panel 13 rounds or more | -0.377 | 0.56 | 0.50 |
-| Rounds missed among the three before | +0.203 | 0.05 | 0.31 |
-| Missed the round before | +0.020 | 0.02 | 0.13 |
-| Dials needed last round (log) | +0.264 | 1.24 | 0.60 |
-| Days needed last round | +0.110 | 1.72 | 1.43 |
-| Same enumerator in the last two interviews | -0.092 | 0.79 | 0.41 |
-| Last round's first dial within an hour of the interview before | -0.031 | 0.20 | 0.40 |
-| Last interview at 18:00 or later | +0.019 | 0.20 | 0.40 |
-| Last interview before 12:00 | -0.034 | 0.24 | 0.42 |
-| Length of the last interview (minutes) | +0.010 | 13.08 | 7.83 |
-| A number not working or switched off last round | +0.029 | 0.09 | 0.29 |
-| A refusal last round before the interview | -0.015 | 0.02 | 0.12 |
+| Dropout model | Coefficient | 95% interval | z | p | Mean | SD |
+|---|---|---|---|---|---|---|
+| Joined in the round before | +0.282 | +0.263 to +0.300 | 29.5 | <0.001 | 0.07 | 0.25 |
+| Joined two rounds before | +0.131 | +0.114 to +0.148 | 15.1 | <0.001 | 0.05 | 0.21 |
+| Joined three rounds before | +0.074 | +0.057 to +0.091 | 8.7 | <0.001 | 0.04 | 0.20 |
+| In the panel 7 to 12 rounds | -0.060 | -0.086 to -0.034 | -4.6 | <0.001 | 0.17 | 0.38 |
+| In the panel 13 rounds or more | -0.377 | -0.411 to -0.343 | -21.7 | <0.001 | 0.56 | 0.50 |
+| Rounds missed among the three before | +0.203 | +0.185 to +0.221 | 22.7 | <0.001 | 0.05 | 0.31 |
+| Missed the round before | +0.020 | +0.003 to +0.036 | 2.3 | 0.019 | 0.02 | 0.13 |
+| Dials needed last round (log) | +0.264 | +0.235 to +0.294 | 17.5 | <0.001 | 1.24 | 0.60 |
+| Days needed last round | +0.110 | +0.088 to +0.132 | 9.8 | <0.001 | 1.72 | 1.43 |
+| Same enumerator in the last two interviews | -0.092 | -0.114 to -0.070 | -8.2 | <0.001 | 0.79 | 0.41 |
+| Last round's first dial within an hour of the interview before | -0.031 | -0.057 to -0.006 | -2.4 | 0.016 | 0.20 | 0.40 |
+| Last interview at 18:00 or later | +0.019 | -0.002 to +0.040 | 1.8 | 0.080 | 0.20 | 0.40 |
+| Last interview before 12:00 | -0.034 | -0.057 to -0.012 | -3.0 | 0.003 | 0.24 | 0.42 |
+| Length of the last interview (minutes) | +0.010 | -0.011 to +0.030 | 0.9 | 0.351 | 13.08 | 7.83 |
+| A number not working or switched off last round | +0.029 | +0.005 to +0.053 | 2.3 | 0.020 | 0.09 | 0.29 |
+| A refusal last round before the interview | -0.015 | -0.034 to +0.004 | -1.5 | 0.130 | 0.02 | 0.12 |
 
 
-| Return model | Coefficient | Mean | SD |
-|---|---|---|---|
-| Joined in the round before the miss | -0.408 | 0.32 | 0.47 |
-| Joined two rounds before the miss | -0.223 | 0.11 | 0.31 |
-| Joined three rounds before the miss | -0.077 | 0.18 | 0.38 |
-| In the panel 7 to 12 rounds | -0.027 | 0.05 | 0.22 |
-| In the panel 13 rounds or more | -0.307 | 0.09 | 0.28 |
-| Rounds missed among the three before the last interview | -0.207 | 0.27 | 0.60 |
-| Dialed in the missed round | -0.049 | 0.99 | 0.08 |
-| Dials in the missed round (log) | -0.130 | 2.08 | 0.68 |
-| Days dialed in the missed round | -0.294 | 5.25 | 3.08 |
-| Reached in the missed round, no interview | +0.147 | 0.35 | 0.48 |
-| A refusal in the missed round | -0.100 | 0.10 | 0.30 |
-| A number not working or switched off in the missed round | +0.028 | 0.47 | 0.50 |
-| Dials needed at the last interview (log) | -0.017 | 1.54 | 0.63 |
-| Missed round first dialed by the enumerator of the last interview | +0.026 | 0.61 | 0.49 |
+| Return model | Coefficient | 95% interval | z | p | Mean | SD |
+|---|---|---|---|---|---|---|
+| Joined in the round before the miss | -0.408 | -0.516 to -0.299 | -7.3 | <0.001 | 0.32 | 0.47 |
+| Joined two rounds before the miss | -0.223 | -0.315 to -0.132 | -4.8 | <0.001 | 0.11 | 0.31 |
+| Joined three rounds before the miss | -0.077 | -0.168 to +0.014 | -1.6 | 0.098 | 0.18 | 0.38 |
+| In the panel 7 to 12 rounds | -0.027 | -0.106 to +0.051 | -0.7 | 0.494 | 0.05 | 0.22 |
+| In the panel 13 rounds or more | -0.307 | -0.402 to -0.213 | -6.4 | <0.001 | 0.09 | 0.28 |
+| Rounds missed among the three before the last interview | -0.207 | -0.296 to -0.119 | -4.6 | <0.001 | 0.27 | 0.60 |
+| Dialed in the missed round | -0.049 | -0.144 to +0.046 | -1.0 | 0.315 | 0.99 | 0.08 |
+| Dials in the missed round (log) | -0.130 | -0.307 to +0.047 | -1.4 | 0.150 | 2.08 | 0.68 |
+| Days dialed in the missed round | -0.294 | -0.483 to -0.106 | -3.1 | 0.002 | 5.25 | 3.08 |
+| Reached in the missed round, no interview | +0.147 | +0.070 to +0.223 | 3.7 | <0.001 | 0.35 | 0.48 |
+| A refusal in the missed round | -0.100 | -0.177 to -0.023 | -2.5 | 0.011 | 0.10 | 0.30 |
+| A number not working or switched off in the missed round | +0.028 | -0.082 to +0.138 | 0.5 | 0.621 | 0.47 | 0.50 |
+| Dials needed at the last interview (log) | -0.017 | -0.097 to +0.063 | -0.4 | 0.681 | 1.54 | 0.63 |
+| Missed round first dialed by the enumerator of the last interview | +0.026 | -0.088 to +0.140 | 0.5 | 0.655 | 0.61 | 0.49 |
+
+Significance (`models/coef_significance.py`): standard errors from the sandwich estimator of the same penalised fit, with households as clusters, since a household contributes several household-rounds (240,038 household-rounds from 18,152 households for dropout; 3,080 from 2,550 for return). z is the coefficient over its standard error; p is two-sided. With this many household-rounds, small effects reach significance: the size of a coefficient and the backtests below say more about the lists than p does. Features are correlated (the tenure bands, the missed rounds), so each coefficient is the feature's effect with the others held fixed. 95% intervals that include zero: dropout, last interview at 18:00 or later, length of the last interview (minutes), a refusal last round before the interview; return, joined three rounds before the miss, in the panel 7 to 12 rounds, dialed in the missed round, dials in the missed round (log), a number not working or switched off in the missed round, dials needed at the last interview (log), missed round first dialed by the enumerator of the last interview.
+
 
 Coefficients are per standard deviation, from a ridge-penalised logistic regression with one intercept per program. Rounds since joining is compared with 4 to 6 rounds. A feature a program's codes do not define counts as average for that program. In the tool, the explanation adds up the contributions of related features and describes the household's own values.
 

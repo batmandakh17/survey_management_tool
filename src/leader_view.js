@@ -19,12 +19,13 @@
   const WDN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const LV = window.LEAD = {};
   let st = null, cache = {};
-  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, passphrases: null, busy: '' };
+  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, readyKind: '', passphrases: null, busy: '', moves: null, movesInclude: 'not_started', movesStale: false };
   LV.state = () => st;
   LV.ui = ui;
   LV.unsavedCount = () => (st ? st.unsaved : 0);
   LV.refresh = () => { invalidate(); render(); };
   LV.riskData = () => riskData();
+  LV.merged = () => merged();
   const invalidate = () => { cache = {}; };
   // the assignment and its files follow the settings they were made with: a later change asks for the rule again
   const stale = () => { if (st.plan || ui.ready) ui.stale = true; st.plan = null; ui.ready = null; ui.passphrases = null; };
@@ -47,9 +48,9 @@
     st = {
       schema: L.SCHEMA.leader, leader: o.leader, program: o.program, country: o.country, round: o.round, started_at: R.localISO(R.now()),
       inputs: { households: null, replacements: null, history: [], manual: null }, mapping: {},
-      cal: { window_start: '', window_end: '', working_weekdays: [1, 2, 3, 4, 5, 6], call_hours: { start: 9, end: 21 }, time_zone: TZ_OF[o.country] || '', dial_cap: null },
+      cal: { window_start: '', window_end: '', working_weekdays: [1, 2, 3, 4, 5, 6], call_hours: { start: 9, end: 21 }, time_zone: TZ_OF[o.country] || '', dial_cap: null, day_list: null },
       holidayWorking: [], customHolidays: [], removedHolidays: [], ramadanOn: RAMADAN.has(o.country), breakFast: null,
-      team: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
+      team: [], criteria: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
       spread: 0.5, margin: 0.15, policy: { active: true, triggers: ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'] }, protect: false,
       plan: null, generated: null, manifest: null, imports: [], resolutions: [], events: [], unsaved: 0,
       risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } },
@@ -63,6 +64,9 @@
   function calendar() {
     const c = st.cal;
     const out = { window_start: c.window_start, window_end: c.window_end, working_weekdays: c.working_weekdays.slice().sort(), call_hours: c.call_hours, time_zone: c.time_zone, dial_cap: c.dial_cap };
+    // the day list: the leader's number, else 1.5 × the planned first dials per day once the rule has been applied
+    const dl = Number.isInteger(c.day_list) && c.day_list >= 1 ? c.day_list : (st.plan && st.plan.dayListDefault) || null;
+    if (dl) out.day_list = dl;
     const hol = [];
     if (R.isDateKey(c.window_start) && R.isDateKey(c.window_end)) {
       R.bundledHolidays(st.country).filter(h => h.date >= c.window_start && h.date <= c.window_end && !st.removedHolidays.includes(h.date))
@@ -126,12 +130,17 @@
       if (c.call_hours) st.cal.call_hours = Object.assign({}, c.call_hours);
       if (Array.isArray(c.working_weekdays)) st.cal.working_weekdays = c.working_weekdays.slice();
       if (c.time_zone && !st.cal.time_zone) st.cal.time_zone = c.time_zone;
+      if ((st.cal.day_list === null || st.cal.day_list === undefined) && Number.isInteger(c.day_list)) st.cal.day_list = c.day_list;
     }
     if (!st.team.length && lastR !== null) {
       const ids = new Set();
       if (lm) { (lm.enumerators || []).forEach(e => ids.add(e.enumerator_id)); (lm.away || []).forEach(e => ids.add(e)); }
       (H.dials.get(lastR) || []).forEach(x => { if (x.operator) ids.add(x.operator); });
-      st.team = [...ids].sort().map(id => ({ id, available: true, share: 1 }));
+      // last round's matching criteria and each enumerator's values carry over; the leader can change them
+      const lmm = lm && lm.matching;
+      const attrsOf = id => { const m = lmm && lmm.enumerators && lmm.enumerators[id]; return m ? Object.fromEntries(Object.entries(m).map(([k, v]) => [k, (v || []).join(' ')])) : {}; };
+      st.team = [...ids].sort().map(id => ({ id, available: true, share: 1, attrs: attrsOf(id) }));
+      if (lmm && Array.isArray(lmm.criteria) && !st.criteria.length) st.criteria = lmm.criteria.slice();
     }
     if (lastR !== null) st.suggested = true;
   }
@@ -157,12 +166,17 @@
       if (Math.abs(tot - 100) > 0.5) e.push(`The shares of available enumerators add up to ${nm(tot, 1)}%, not 100% (step 5).`);
     }
     if (!Number.isInteger(+st.rule.seed)) e.push('The seed must be a whole number (step 6).');
+    if (st.criteria.length) {
+      const miss = st.team.filter(t => t.available && st.criteria.some(c => !L.splitVals((t.attrs || {})[c]).length));
+      if (miss.length) e.push(`Enter ${miss.map(t => t.id).join(', ')}'s values for ${st.criteria.join(', ')} (step 5), or untick the criterion.`);
+    }
+    if (st.cal.day_list !== null && st.cal.day_list !== undefined && !(Number.isInteger(st.cal.day_list) && st.cal.day_list >= 1)) e.push('The day list must be a whole number of households, or empty (step 4).');
     return e;
   }
   function inputFor() {
     const d = derived();
-    const team = st.team.map(t => ({ id: t.id, available: t.available, share: st.rule.name === 'share_of_total' ? t.share : (t.share > 0 ? t.share : 1) }));
-    return { round: st.round, households: d.round.mains, team, hist: d.hist, tz: st.cal.time_zone || null, cap: st.cal.dial_cap, rule: Object.assign(ruleObj(), { seed: +st.rule.seed }),
+    const team = st.team.map(t => ({ id: t.id, available: t.available, share: st.rule.name === 'share_of_total' ? t.share : (t.share > 0 ? t.share : 1), attrs: t.attrs || {} }));
+    return { round: st.round, households: d.round.mains, team, criteria: st.criteria.slice(), hist: d.hist, tz: st.cal.time_zone || null, cap: st.cal.dial_cap, rule: Object.assign(ruleObj(), { seed: +st.rule.seed }),
       manual: d.manualMap, calendar: calendar(), spread: st.spread };
   }
   // households in the high dropout tier get an early first dial (Section 3.4 box; proposal D)
@@ -180,9 +194,14 @@
     ui.stale = false;
     inp.highRisk = highRiskSet();
     const P = L.plan(inp, A.out, A.summaries, inp.hist);
-    st.plan = { out: A.out, sums: A.summaries, notes: A.notes, warnings: A.warnings, plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, moves: [], at: R.localISO(R.now()) };
+    st.plan = { out: A.out, sums: A.summaries, notes: A.notes, warnings: A.warnings, plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, moves: [], at: R.localISO(R.now()),
+      unmatched: A.unmatched || [], criteria: A.criteria || [] };
+    // the day list's default: 1.5 × the busiest enumerator's planned first dials per working day of the first part of the window
+    const perEnum = new Map(); for (const x of A.out.values()) perEnum.set(x.enumerator_id, (perEnum.get(x.enumerator_id) || 0) + 1);
+    st.plan.plannedPerDay = Math.max(0, ...perEnum.values()) / Math.max(1, P.firstDays);
+    st.plan.dayListDefault = Math.max(1, Math.ceil(1.5 * st.plan.plannedPerDay));
     st.generated = null; ui.ready = null; ui.passphrases = null;
-    logEv('rule_applied', { rule: st.rule.name, rotation_share: st.rule.rotation_share, seed: +st.rule.seed, households: A.out.size });
+    logEv('rule_applied', { rule: st.rule.name, rotation_share: st.rule.rotation_share, seed: +st.rule.seed, households: A.out.size, criteria: st.criteria.length ? st.criteria : undefined, unmatched: A.unmatched && A.unmatched.length ? A.unmatched.length : undefined });
     render();
   }
   function balance() {
@@ -198,9 +217,13 @@
     render();
   }
   function reassign(hhid, to) {
-    const x = st.plan.out.get(hhid);
-    if (!x || x.enumerator_id === to) return;
-    st.plan.out.set(hhid, { enumerator_id: to, reason: 'manual', previous_enumerator: x.previous_enumerator || x.enumerator_id });
+    const x = st.plan.out.get(hhid), d = derived();
+    if (!to || (x && x.enumerator_id === to)) return;
+    const elig = L.eligibleFn(st.criteria, st.team.filter(t => t.available)), h = d.round.mains.find(y => y.hhid === hhid);
+    const ok = elig && h ? elig(h, to) : undefined;
+    if (elig && h && !ok) toast(`${hhid} does not match ${to}'s values (${elig.criteria.map(c => `${c} ${L.hhValue(h, c) || '–'}`).join(', ')}). Moved anyway, marked as not matched.`, 'warn');
+    st.plan.out.set(hhid, R.clean({ enumerator_id: to, reason: 'manual', previous_enumerator: x ? (x.previous_enumerator || x.enumerator_id) : undefined, matched: ok }));
+    st.plan.unmatched = (st.plan.unmatched || []).filter(id => id !== hhid);
     const inp = inputFor();
     inp.highRisk = highRiskSet();
     st.plan.plans = L.plan(inp, st.plan.out, st.plan.sums, inp.hist).plans;
@@ -211,6 +234,7 @@
   const newPassphrase = () => { const a = new Uint32Array(12); crypto.getRandomValues(a); const s = [...a].map(x => PASS_ALPHA[x % PASS_ALPHA.length]).join(''); return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`; };
   async function writeFiles() {
     const d = derived(), p = st.plan;
+    if (p.unmatched && p.unmatched.length) { ui.errors = [`${R.plural(p.unmatched.length, 'household')} ${p.unmatched.length === 1 ? 'has' : 'have'} no enumerator (step 7): assign ${p.unmatched.length === 1 ? 'it' : 'them'} by hand, or change the criteria or the enumerators' values.`]; return render(); }
     const at = R.localISO(R.now());
     const B = L.buildFiles(Object.assign(inputFor(), {
       program: st.program, country: st.country, leader: st.leader, generated_at: at, replacement_policy: st.policy,
@@ -237,9 +261,72 @@
     files.push({ name: 'calendar.csv', text: R.toCSV([B.calendarRow], ['round', 'start', 'end']), calendar: true });
     st.generated = { at, files: files.map(f => R.clean({ name: f.name, enumerator_id: f.enumerator_id, households: f.n, fingerprint: f.fingerprint, protected: f.protected })) };
     st.manifest = B.manifest;
-    ui.ready = files;
-    logEv('files_written', { files: files.length, manifest_fingerprint: B.manifest.fingerprint, protected: st.protect ? 1 : undefined });
+    ui.ready = files; ui.readyKind = 'prepare'; ui.moves = null;
+    logEv('files_written', { files: files.length, manifest_fingerprint: B.manifest.fingerprint, protected: st.protect ? 1 : undefined, day_list: B.manifest.calendar.day_list });
     invalidate();
+    render();
+  }
+  // ---- moving waiting households between enumerators during the round ----
+  const manifestEligible = M => (M.matching && M.matching.criteria ? L.eligibleFn(M.matching.criteria, M.enumerators.map(e => ({ id: e.enumerator_id,
+    attrs: Object.fromEntries(Object.entries((M.matching.enumerators || {})[e.enumerator_id] || {}).map(([k, v]) => [k, (v || []).join(' ')])) }))) : null);
+  const planDateOf = id => (st.plan && st.plan.plans && st.plan.plans.get(id) ? st.plan.plans.get(id).first_dial_date || '' : '');
+  function proposeMoves() {
+    const g = merged(), M = st.manifest, d = derived();
+    const pace = L.pace(M, g.C, g.P, R.now());
+    const P = L.proposeMoves(pace, g.C, { include: ui.movesInclude, allowStale: ui.movesStale, eligible: manifestEligible(M), hh: d.hh && !d.hh.errors.length ? d.hh.households : null, planOf: planDateOf });
+    ui.moves = { list: P.moves, picked: new Set(P.moves.map((_, i) => i)), left_out: P.left_out, judged: P.judged };
+    logEv('moves_proposed', { moves: P.moves.length, include: ui.movesInclude, earlier_exports: ui.movesStale ? 1 : undefined, judged: P.judged });
+    render();
+  }
+  function addMove() {
+    const g = merged(), M = st.manifest;
+    const hhid = (($('#lmv-hh') || {}).value || '').trim(), to = ($('#lmv-to') || {}).value;
+    const c = g.C.get(hhid);
+    if (!c) return toast(`${hhid || 'That household'} is not in this round's manifest.`, 'warn');
+    if (c.enumerator_id === to) return toast(`${hhid} is already with ${to}.`, 'warn');
+    if (!L.movable(c, 'in_progress')) return toast(`${hhid} cannot move: it is ${L.STATES[c.state] || c.state}${c.state === 'in_progress' ? ' with a booked callback or a hard refusal' : ''}.`, 'warn');
+    if (!ui.moves) ui.moves = { list: [], picked: new Set(), left_out: [], judged: [] };
+    if (ui.moves.list.some(m => m.hhid === hhid)) return toast(`${hhid} is already in the list.`, 'warn');
+    const elig = manifestEligible(M), d = derived(), h = d.hh && !d.hh.errors.length ? d.hh.households.get(hhid) : null;
+    if (elig && h && !elig(h, to)) toast(`${hhid} does not match ${to}'s values (${elig.criteria.map(k => `${k} ${L.hhValue(h, k) || '–'}`).join(', ')}). Added anyway; it will be marked as not matched.`, 'warn');
+    ui.moves.list.push({ hhid, from: c.enumerator_id, to, state: c.state, dials: c.n, planned: planDateOf(hhid), by_hand: true });
+    ui.moves.picked.add(ui.moves.list.length - 1);
+    render();
+  }
+  async function writeMoves() {
+    const g = merged(), M = st.manifest, d = derived(), mv = ui.moves;
+    const moves = mv ? mv.list.filter((_, i) => mv.picked.has(i)) : [];
+    if (!moves.length) return;
+    if (!d.hh || d.hh.errors.length) return toast('Open the household list on the Prepare tab first: the updated files need the contacts.', 'warn');
+    const at = R.localISO(R.now()), tz = M.calendar.time_zone || null;
+    const sumOf = st.plan && st.plan.sums ? id => st.plan.sums.get(id) || L.summaryOf(d.hist, id, M.round, tz) : (d.hist.rounds.length ? id => L.summaryOf(d.hist, id, M.round, tz) : null);
+    const elig = manifestEligible(M);
+    const B = L.reviseFiles({ M, moves, C: g.C, hh: d.hh.households, sumOf, plans: st.plan ? st.plan.plans : null, updates: g.G.updates, leader: st.leader, at, now: R.now(),
+      matchedNow: elig ? (id, e) => { const h = d.hh.households.get(id); return h ? elig(h, e) : undefined; } : null });
+    const files = [];
+    ui.passphrases = null;
+    if (st.protect) {
+      if (!R.canSeal()) return toast('This browser cannot protect files here.', 'warn');
+      ui.busy = 'Protecting the files…'; render();
+      const pass = [];
+      for (const f of B.files) {
+        const pw = newPassphrase();
+        const { env } = await R.seal(f.obj, pw, { contains: R.SCHEMA.assign, program: st.program, round: st.round, enumerator_id: f.enumerator_id });
+        files.push({ name: f.name, text: JSON.stringify(env, null, 1), enumerator_id: f.enumerator_id, n: f.obj.households.length, fingerprint: f.obj.fingerprint, protected: true });
+        pass.push({ enumerator_id: f.enumerator_id, file: f.name, passphrase: pw });
+      }
+      ui.passphrases = pass; ui.busy = '';
+      B.manifest.enumerators.forEach(e => { if (B.affected.includes(e.enumerator_id)) e.protected = true; });
+      delete B.manifest.fingerprint; B.manifest.fingerprint = R.fingerprint(B.manifest);
+    } else B.files.forEach(f => files.push({ name: f.name, text: JSON.stringify(f.obj, null, 1), enumerator_id: f.enumerator_id, n: f.obj.households.length, fingerprint: f.obj.fingerprint }));
+    files.push({ name: `${st.program}_R${p2(st.round)}_manifest.json`, text: JSON.stringify(B.manifest, null, 1), manifest: true });
+    st.manifest = B.manifest;
+    st.generated = { at, revision: B.manifest.revision, files: files.map(f => R.clean({ name: f.name, enumerator_id: f.enumerator_id, households: f.n, fingerprint: f.fingerprint, protected: f.protected })) };
+    ui.ready = files; ui.readyKind = 'moves'; ui.moves = null;
+    logEv('households_moved_mid_round', { moves: moves.length, revision: B.manifest.revision, manifest_fingerprint: B.manifest.fingerprint, affected: B.affected,
+      hhids: moves.map(m => m.hhid).slice(0, 200), to: moves.map(m => m.to).slice(0, 200), protected: st.protect ? 1 : undefined });
+    invalidate();
+    toast(`${R.plural(moves.length, 'household')} moved. ${R.plural(B.files.length, 'updated assignment file')} and revision ${B.manifest.revision} of the manifest are ready.`);
     render();
   }
   async function saveAllToFolder(files) {
@@ -346,7 +433,7 @@
       schema: L.SCHEMA.leader, tool_version: R.VERSION, saved_at: R.localISO(R.now()), saved_by: st.leader,
       program: st.program, country: st.country, round: st.round, started_at: st.started_at, chain_genesis: st.genesis,
       settings: { cal: st.cal, holidayWorking: st.holidayWorking, customHolidays: st.customHolidays, removedHolidays: st.removedHolidays, ramadanOn: st.ramadanOn,
-        breakFast: st.breakFast, team: st.team, rule: st.rule, spread: st.spread, margin: st.margin, policy: st.policy, protect: st.protect, mapping: st.mapping, risk: st.risk },
+        breakFast: st.breakFast, team: st.team, criteria: st.criteria, rule: st.rule, spread: st.spread, margin: st.margin, policy: st.policy, protect: st.protect, mapping: st.mapping, risk: st.risk },
       inputs: st.inputs,
       plan: st.plan ? { out: [...st.plan.out], moves: st.plan.moves, notes: st.plan.notes, warnings: st.plan.warnings, at: st.plan.at } : null,
       generated: st.generated, manifest: st.manifest, imports: st.imports, resolutions: st.resolutions, events: st.events,
@@ -390,6 +477,9 @@
       inputs: o.inputs, plan: null, generated: o.generated, manifest: o.manifest, imports: o.imports || [], resolutions: o.resolutions || [], events: o.events || [], unsaved: 0 };
     Object.assign(st, o.settings);
     st.risk = st.risk || { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } };
+    st.criteria = Array.isArray(st.criteria) ? st.criteria : [];
+    (st.team || []).forEach(t => { t.attrs = t.attrs || {}; });
+    if (st.cal && st.cal.day_list === undefined) st.cal.day_list = null;
     if (o.plan) {
       invalidate();
       const inp = inputFor();
@@ -521,7 +611,7 @@
   };
   const decisionLabel = i => { const c = (i.choices || []).find(x => x.value === i.decision); return c ? c.label : i.decision === 'acknowledged' ? 'Noted' : i.decision; };
   const REASON_WORD = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new',
-    manual: 'by hand', capacity: 'capacity', rule: 'by the round’s rule', replacement: 'replacement' };
+    manual: 'by hand', capacity: 'capacity', match: 'matched', mid_round: 'moved mid-round', rule: 'by the round’s rule', replacement: 'replacement' };
   const list = arr => (arr && arr.length ? `<ul class="msgs">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
   const errList = arr => (arr && arr.length ? `<div class="alert warn">${list(arr)}</div>` : '');
 
@@ -564,7 +654,8 @@
       <div class="checks">Working days: ${wd}</div>
       <div class="row3"><label>Calls from <input type="number" min="0" max="23" data-lset="cal.call_hours.start" data-type="int" value="${c.call_hours.start}"></label><label>until <input type="number" min="1" max="24" data-lset="cal.call_hours.end" data-type="int" value="${c.call_hours.end}"></label>
       <label>Time zone <input data-lset="cal.time_zone" value="${esc(c.time_zone)}" placeholder="Asia/Ulaanbaatar"></label></div>
-      ${days.length ? `<p>${days.length} working days in the window; first dials are spread over the first <input class="tiny" type="number" min="10" max="100" step="5" data-lset="spread" data-type="pct" value="${Math.round(st.spread * 100)}">% of them (Section 3.4: front-load the contact effort).</p>` : ''}
+      ${days.length ? `<p>${days.length} working days in the window; first dials are spread over the first <input class="tiny" type="number" min="10" max="100" step="5" data-lset="spread" data-type="pct" value="${Math.round(st.spread * 100)}">% of them (Section 3.4: front-load the contact effort).</p>
+      <p>Each enumerator's <b>day list</b>: up to <input class="tiny" type="number" min="1" data-lset="cal.day_list" data-type="int" value="${Number.isInteger(c.day_list) ? c.day_list : ''}" placeholder="${st.plan ? st.plan.dayListDefault : 'auto'}"> households a day. ${st.plan ? `The plan gives about ${nm(st.plan.plannedPerDay, 1)} first dials per enumerator per working day; empty means 1.5 × that, ${st.plan.dayListDefault}.` : 'Empty means 1.5 × the planned first dials per day, set when the rule is applied.'} The enumerator sees the calls due, then households pulled forward from later days, so that unanswered calls do not leave anyone waiting.</p>` : ''}
       <h4>Holidays inside the window</h4>${working}
       <div class="row3"><label>Add a day off <input type="date" id="lhol-date"></label><label>Name <input id="lhol-name" placeholder="call center closed"></label><button class="subtle" data-lact="addhol">Add</button></div>
       ${ram.length || st.ramadanOn ? `<h4>Ramadan</h4><label class="inline"><input type="checkbox" data-lset="ramadanOn" data-type="bool" ${st.ramadanOn ? 'checked' : ''}> Observed: no first dial is planned in the hour the fast is broken (Section 3.5.4)</label>
@@ -572,9 +663,23 @@
       </section>`;
     const lastR = d.hist.rounds.length ? d.hist.rounds[d.hist.rounds.length - 1] : null;
     const lastCount = id => (lastR !== null ? [...(d.hist.roster.get(lastR) || new Map()).values()].filter(e => e === id).length : 0);
+    // the columns of the household list a leader can match on: language and any column beyond the standard ones, with few distinct values
+    const critCols = (() => {
+      if (!d.hh || d.hh.errors.length) return [];
+      const cnt = new Map();
+      for (const h of d.hh.households.values()) {
+        if (h.status === 'removed') continue;
+        const vals = Object.assign({}, h.extra || {}); if (h.language) vals.language = h.language;
+        for (const [k, v] of Object.entries(vals)) { if (!cnt.has(k)) cnt.set(k, new Map()); const m = cnt.get(k), lv = String(v).toLowerCase(); m.set(lv, (m.get(lv) || 0) + 1); }
+      }
+      return [...cnt].map(([col, m]) => ({ col, values: [...m.keys()].sort(), n: [...m.values()].reduce((a, b) => a + b, 0) })).filter(x => x.values.length <= 40).sort((a, b) => (a.col < b.col ? -1 : 1));
+    })();
+    const exampleOf = c => { const x = critCols.find(y => y.col === c); return x ? x.values.slice(0, 2).join(' ') : ''; };
     const teamCard = `<section class="lcard"><h3>5 · Team</h3>
-      <table class="grid small"><thead><tr><th>Enumerator</th><th>Available this round</th><th>Share${st.rule.name === 'share_of_total' ? ' (%, adds up to 100)' : ' (relative)'}</th><th class="num">Households last round</th><th></th></tr></thead><tbody>
-      ${st.team.map((t, i) => `<tr><td class="id">${esc(t.id)}</td><td><input type="checkbox" data-lteam="${i}" data-f="available" ${t.available ? 'checked' : ''}></td><td><input class="tiny" type="number" min="0" step="any" data-lteam="${i}" data-f="share" value="${t.share}"></td><td class="num">${lastCount(t.id) || '–'}</td><td><button class="link" data-lact="delenum" data-i="${i}">remove</button></td></tr>`).join('')}
+      ${critCols.length || st.criteria.length ? `<div class="crit"><b>Match households to enumerators by:</b> ${[...new Set(critCols.map(x => x.col).concat(st.criteria))].map(c => { const x = critCols.find(y => y.col === c); return `<label class="inline"><input type="checkbox" data-lcrit="${esc(c)}" ${st.criteria.includes(c) ? 'checked' : ''}> ${esc(c.replace(/_/g, ' '))}${x ? ` <span class="muted small">(${x.values.slice(0, 6).map(esc).join(', ')}${x.values.length > 6 ? ', …' : ''}; ${x.n} households)</span>` : ' <span class="muted small">(not in this household list)</span>'}</label>`; }).join(' ')}
+        <p class="muted small">Language in a multilingual country, the respondent's sex, a dialect or an area: any column of the household list. A household goes only to an enumerator whose values include the household's; a household without a value can go to anyone. Enter each enumerator's values in the table, several separated by spaces or commas. The criteria and the values are written into the manifest and the assignment files, so the program can say how it assigned.</p></div>` : ''}
+      <table class="grid small"><thead><tr><th>Enumerator</th><th>Available this round</th><th>Share${st.rule.name === 'share_of_total' ? ' (%, adds up to 100)' : ' (relative)'}</th>${st.criteria.map(c => `<th>${esc(c.replace(/_/g, ' '))}</th>`).join('')}<th class="num">Households last round</th><th></th></tr></thead><tbody>
+      ${st.team.map((t, i) => `<tr><td class="id">${esc(t.id)}</td><td><input type="checkbox" data-lteam="${i}" data-f="available" ${t.available ? 'checked' : ''}></td><td><input class="tiny" type="number" min="0" step="any" data-lteam="${i}" data-f="share" value="${t.share}"></td>${st.criteria.map(c => `<td><input class="small" data-lattr="${i}" data-c="${esc(c)}" value="${esc((t.attrs || {})[c] || '')}" placeholder="${esc(exampleOf(c) || 'values')}"></td>`).join('')}<td class="num">${lastCount(t.id) || '–'}</td><td><button class="link" data-lact="delenum" data-i="${i}">remove</button></td></tr>`).join('')}
       </tbody></table>
       <div class="row3"><label>Add an enumerator ID <input id="lenum-id" placeholder="E08"></label><button class="subtle" data-lact="addenum">Add</button></div>
       <p class="muted small">An enumerator marked away keeps their history; their households are dealt to the others with reason "enumerator unavailable" (Section 3.5.3's forced change).</p></section>`;
@@ -599,7 +704,7 @@
   function previewCard() {
     const p = st.plan, d = derived(), inp = inputFor();
     const loads = L.loads(inp, p.out, p.sums);
-    const reasons = ['keep', 'rotation', 'switch_hard_to_reach', 'enumerator_unavailable', 'new', 'rule', 'manual', 'capacity'];
+    const reasons = ['keep', 'rotation', 'switch_hard_to_reach', 'enumerator_unavailable', 'new', 'rule', 'manual', 'capacity', 'match'];
     const cnt = {};
     for (const x of p.out.values()) { const k = `${x.enumerator_id}|${x.reason}`; cnt[k] = (cnt[k] || 0) + 1; }
     const enums = st.team.filter(t => t.available).map(t => t.id);
@@ -608,13 +713,17 @@
     const strata = [...new Set(d.round.mains.map(h => h.stratum || '–'))].sort();
     const sc = {};
     for (const [id, x] of p.out) { const k = `${x.enumerator_id}|${hh.get(id).stratum || '–'}`; sc[k] = (sc[k] || 0) + 1; }
-    const R_ = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new', manual: 'by hand', capacity: 'capacity',
+    const R_ = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new', manual: 'by hand', capacity: 'capacity', match: 'matched',
       rule: st.rule.name === 'equal_split' || (st.rule.name === 'share_of_total' && st.rule.method === 'blocks') ? 'by block of the list' : 'dealt at random' };
     const outside = loads.filter(l => Math.abs(l.departure) > st.margin);
     const rows = [...p.out.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
     const filt = ui.hhEnum ? rows.filter(([, x]) => x.enumerator_id === ui.hhEnum) : rows;
+    const unmatched = p.unmatched || [], crit = p.criteria || [];
+    const notMatched = [...p.out.values()].filter(x => x.matched === false).length;
+    const critOf = id => crit.map(c => `${c} ${L.hhValue(hh.get(id), c) || '–'}`).join(', ');
     return `<section class="lcard"><h3>7 · Check the assignment before any file is written</h3>
       ${list(p.notes)}${list(p.warnings)}
+      ${crit.length ? `<p class="small">Matching criteria: <b>${crit.join(', ')}</b>. ${unmatched.length ? `<span class="warn">${R.plural(unmatched.length, 'household')} without an enumerator (below).</span> ` : ''}${notMatched ? `${R.plural(notMatched, 'household')} ${notMatched === 1 ? 'is' : 'are'} with an enumerator who does not match ${notMatched === 1 ? 'it' : 'them'} (moved by hand).` : unmatched.length ? '' : 'Every household is with an enumerator who matches it.'}</p>` : ''}
       <table class="grid small"><thead><tr><th>Enumerator</th>${used.map(r => `<th class="num">${R_[r]}</th>`).join('')}<th class="num">Households</th>${strata.map(s => `<th class="num">stratum ${esc(s)}</th>`).join('')}<th class="num">Expected dials</th><th class="num">Against target</th></tr></thead><tbody>
       ${loads.map(l => `<tr><td class="id">${esc(l.id)}</td>${used.map(r => `<td class="num">${cnt[`${l.id}|${r}`] || ''}</td>`).join('')}<td class="num"><b>${l.households}</b></td>${strata.map(s => `<td class="num">${sc[`${l.id}|${s}`] || ''}</td>`).join('')}<td class="num">${nm(l.dials)}</td><td class="num ${Math.abs(l.departure) > st.margin ? 'warn' : ''}">${l.departure >= 0 ? '+' : ''}${pc(l.departure)}</td></tr>`).join('')}
       </tbody></table>
@@ -622,23 +731,25 @@
       <div class="row3"><label>Margin (%) <input class="tiny" type="number" min="0" max="100" data-lset="margin" data-type="pct" value="${Math.round(st.margin * 100)}"></label>
         ${outside.length ? `<span class="warn">${R.plural(outside.length, 'enumerator')} ${outside.length === 1 ? 'is' : 'are'} outside the margin.</span> <button class="subtle" data-lact="balance">Move kept households at random to balance (reason: capacity)</button>` : '<span class="muted">Every load is within the margin.</span>'}</div>
       ${p.best && p.best.length ? `<p class="muted small">Households without a last interview are planned at the program's best hours from earlier rounds: ${p.best.map(h => p2(h) + ':00').join(', ')} (Section 3.5.1).</p>` : ''}
-      <details><summary>Households (${p.out.size}): move one by hand</summary>
+      <details ${unmatched.length ? 'open' : ''}><summary>Households (${p.out.size}${unmatched.length ? ` + ${unmatched.length} without an enumerator` : ''}): move one by hand</summary>
         <div class="row3"><label>Enumerator <select data-lset="__hhEnum"><option value="">all</option>${enums.map(e => `<option ${ui.hhEnum === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></label></div>
         <table class="grid small"><thead><tr><th>Household</th><th>Stratum</th><th>Enumerator</th><th>Reason</th><th>Before</th><th>First dial</th><th class="num">Replacements</th></tr></thead><tbody>
-        ${filt.slice(0, 400).map(([id, x]) => { const pl = p.plans.get(id) || {}; return `<tr><td class="id">${esc(id)}</td><td>${esc(hh.get(id).stratum || '')}</td><td><select data-lmove="${esc(id)}">${enums.map(e => `<option ${x.enumerator_id === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></td><td>${esc(R_[x.reason] || x.reason)}</td><td>${esc(x.previous_enumerator || '')}</td><td>${esc(pl.first_dial_date || '')} ${Number.isInteger(pl.target_hour) ? p2(pl.target_hour) + ':00' : ''}</td><td class="num">${(d.avail.get(id) || []).length || ''}</td></tr>`; }).join('')}
+        ${unmatched.map(id => `<tr class="unmatched"><td class="id">${esc(id)}</td><td>${esc((hh.get(id) || {}).stratum || '')}</td><td><select data-lmove="${esc(id)}"><option value="">— choose —</option>${enums.map(e => `<option>${esc(e)}</option>`).join('')}</select></td><td class="warn">no enumerator matches (${esc(critOf(id))})</td><td></td><td></td><td class="num">${(d.avail.get(id) || []).length || ''}</td></tr>`).join('')}
+        ${filt.slice(0, 400).map(([id, x]) => { const pl = p.plans.get(id) || {}; return `<tr><td class="id">${esc(id)}</td><td>${esc(hh.get(id).stratum || '')}</td><td><select data-lmove="${esc(id)}">${enums.map(e => `<option ${x.enumerator_id === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></td><td>${esc(R_[x.reason] || x.reason)}${x.matched === false ? ' <span class="tag warn">not matched</span>' : ''}${crit.length ? ` <span class="muted small">${esc(critOf(id))}</span>` : ''}</td><td>${esc(x.previous_enumerator || '')}</td><td>${esc(pl.first_dial_date || '')} ${Number.isInteger(pl.target_hour) ? p2(pl.target_hour) + ':00' : ''}</td><td class="num">${(d.avail.get(id) || []).length || ''}</td></tr>`; }).join('')}
         </tbody></table>${filt.length > 400 ? `<p class="muted">First 400 of ${filt.length} shown.</p>` : ''}</details>
       </section>
       <section class="lcard"><h3>8 · Write the files</h3>
-      <p>One assignment file per enumerator, holding only that enumerator's households and their replacements, a manifest of the round (IDs only, for the merge) and the <code>calendar.csv</code> row for the round template.</p>
+      <p>One assignment file per enumerator, holding only that enumerator's households and their replacements, a manifest of the round (IDs only, for the merge) and the <code>calendar.csv</code> row for the round template. Each file carries the day list of ${calendar().day_list || '–'} households (step 4)${crit.length ? ` and the matching criteria (${crit.join(', ')})` : ''}.</p>
       <label class="inline"><input type="checkbox" data-lset="protect" data-type="bool" ${st.protect ? 'checked' : ''}> Protect each assignment file with its own passphrase. The tool makes the passphrases and shows them once; give each enumerator theirs privately.</label>
       ${ui.busy ? `<p class="alert info">${esc(ui.busy)}</p>` : ''}
       ${outside.length ? `<p class="warn small">${outside.map(l => `${esc(l.id)} ${l.departure >= 0 ? '+' : ''}${pc(l.departure)}`).join(', ')}: outside the ${pc(st.margin)} margin (step 7). The files can still be written as they are.</p>` : ''}
-      <div class="btnrow"><button class="primary" data-lact="write">Write the files</button></div>
-      ${ui.ready ? readyList() : ''}</section>`;
+      ${unmatched.length ? `<p class="alert warn">${R.plural(unmatched.length, 'household')} ${unmatched.length === 1 ? 'has' : 'have'} no enumerator (step 7). No file is written until each household has one.</p>` : ''}
+      <div class="btnrow"><button class="primary" data-lact="write" ${unmatched.length ? 'disabled' : ''}>Write the files</button></div>
+      ${ui.ready && ui.readyKind !== 'moves' ? readyList() : ''}</section>`;
   }
-  function readyList() {
+  function readyList(note) {
     const f = ui.ready;
-    return `<div class="alert info"><b>${f.length} files are ready.</b> Put each assignment file in that enumerator's own folder, never in the common folder. The manifest and calendar row stay with you.</div>
+    return `<div class="alert info"><b>${f.length} files are ready.</b> ${note || 'Put each assignment file in that enumerator\'s own folder, never in the common folder. The manifest and calendar row stay with you.'}</div>
       ${ui.passphrases ? `<div class="alert warn"><b>Passphrases, shown once.</b> Copy them now or download the list; they are not saved anywhere.
         <table class="grid small"><tbody>${ui.passphrases.map(p => `<tr><td class="id">${esc(p.enumerator_id)}</td><td>${esc(p.file)}</td><td><code>${esc(p.passphrase)}</code></td></tr>`).join('')}</tbody></table>
         <button class="subtle" data-lact="dlpass">Download the passphrase list</button></div>` : ''}
@@ -707,6 +818,7 @@
     return `<section class="lcard"><h3>Team</h3><p class="muted small">Households: those assigned, plus any replacement brought in this round (the household it replaces stays in the count, as Replaced). Not reported: households of an enumerator whose export has not arrived, counted apart from completes and misses. Completes per enumerator-day as in Box 3.0, from this round's dials. Columns with nothing to count are left out.</p>
       <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th>${shownCols.map(([, l]) => `<th class="num">${l}</th>`).join('')}<th class="num">Share complete</th><th class="num">Completes per enumerator-day</th></tr></thead>
       <tbody>${P.list.map(row).join('')}${row(P.total)}</tbody></table></div></section>
+      ${movesCard(g)}
       <section class="lcard"><h3>Completes over the window</h3>${chart}
       <table class="grid small"><thead><tr><th>Stratum</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Share</th></tr></thead><tbody>${P.strata.map(s => `<tr><td>${esc(s.stratum)}</td><td class="num">${s.households}</td><td class="num">${s.complete}</td><td class="num">${pc(s.households ? s.complete / s.households : null)}</td></tr>`).join('')}</tbody></table></section>
       <section class="lcard"><h3>Households</h3>
@@ -715,6 +827,33 @@
       <table class="grid small"><thead><tr><th>Household</th><th>Enumerator</th><th>Reason</th><th>State</th><th class="num">Dials</th><th>Last result</th><th>Complete on</th></tr></thead><tbody>
       ${f.slice(0, 500).map(c => { const last = c.dials[c.dials.length - 1]; return `<tr><td class="id">${esc(c.hhid)}${c.replaces ? ` <span class="tag">replaces ${esc(c.replaces)}</span>` : ''}</td><td class="id">${esc(c.enumerator_id)}</td><td>${esc(REASON_WORD[c.reason] || (c.reason || '').replace(/_/g, ' '))}</td><td><span class="st st-${c.state}">${esc(L.STATES[c.state])}</span>${c.short ? ' <span class="tag warn">complete under 3 min</span>' : ''}</td><td class="num">${c.n}</td><td>${last ? esc(sh().statusLabel(last.status)) : ''}</td><td>${c.complete ? esc(c.complete.ts.slice(0, 16).replace('T', ' ')) : ''}</td></tr>`; }).join('')}
       </tbody></table>${f.length > 500 ? `<p class="muted">First 500 of ${f.length}.</p>` : ''}</section>`;
+  }
+
+  // the card on the Progress tab: who is behind, which households may move, and the updated files
+  function movesCard(g) {
+    const M = st.manifest, pace = L.pace(M, g.C, g.P, R.now()), d = derived();
+    const canWrite = !!(d.hh && !d.hh.errors.length);
+    const mv = ui.moves;
+    const picked = mv ? mv.list.filter((_, i) => mv.picked.has(i)) : [];
+    const leftOut = x => (x && x.length ? `Not judged: ${x.map(y => `${esc(y.id)} (${esc(y.why)})`).join('; ')}.` : '');
+    const rows = pace.rows.map(r => `<tr><td class="id">${esc(r.enumerator_id)}</td><td class="num">${r.households}</td><td class="num">${r.complete}</td><td class="num">${r.waiting}</td><td class="num">${r.in_progress}</td><td class="num">${nm(r.pace, 2)}</td><td class="num">${r.known ? nm(r.capacity, 0) : '–'}</td><td class="num ${r.known && r.need > 0.5 ? 'warn' : ''}">${r.known ? (r.need > 0.5 ? `${nm(r.need, 0)} short` : r.need < -0.5 ? `${nm(-r.need, 0)} spare` : 'on time') : '–'}</td><td class="small">${r.why ? `<span class="muted">${esc(r.why)}</span>` : `export ${esc((r.export_at || '').slice(5, 16).replace('T', ' '))}`}</td></tr>`).join('');
+    return `<section class="lcard"><h3>Move waiting households</h3>
+      <p class="muted small">Part-way through the round, households not yet called can move from an enumerator who will not finish to one with spare days, with no household in two files and no double call: each move is recorded in the manifest, the previous enumerator's dials up to the move stay theirs, and any dial they make after it is flagged in the merge. Pace: completes per enumerator-day so far (Box 3.0). Capacity: pace × the ${pace.days_left} working days left from today. Only enumerators whose export is from today, with two or more enumerator-days, are judged.</p>
+      <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Not started</th><th class="num">In progress</th><th class="num">Completes per day</th><th class="num">Can still complete</th><th class="num">At this pace</th><th>Export</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="row3"><label>Which households may move <select data-lset="__movesInclude"><option value="not_started" ${ui.movesInclude === 'not_started' ? 'selected' : ''}>not yet called</option><option value="in_progress" ${ui.movesInclude === 'in_progress' ? 'selected' : ''}>also called, without a booked callback or a hard refusal</option></select></label>
+        <label class="inline"><input type="checkbox" data-lset="__movesStale" data-type="bool" ${ui.movesStale ? 'checked' : ''}> also judge enumerators whose latest export is from an earlier day</label>
+        <button class="subtle" data-lact="propose">Propose moves from the enumerators behind to those with spare days</button></div>
+      ${mv ? (mv.list.length ? `<table class="grid small"><thead><tr><th></th><th>Household</th><th>From</th><th>To</th><th>State</th><th class="num">Dials so far</th><th>First dial was planned</th></tr></thead><tbody>
+        ${mv.list.map((m, i) => `<tr><td><input type="checkbox" data-lmovesel="${i}" ${mv.picked.has(i) ? 'checked' : ''}></td><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc(L.STATES[m.state] || m.state)}${m.by_hand ? ' <span class="tag">by hand</span>' : ''}</td><td class="num">${m.dials}</td><td>${esc(m.planned || '')}</td></tr>`).join('')}</tbody></table>
+        <p class="muted small">Untick a move to leave that household where it is. Latest-planned households move first, so the receiving enumerator's own plan is disturbed least. ${leftOut(mv.left_out)}</p>`
+        : `<p class="muted">Nothing to move: at the current pace every judged enumerator finishes inside the window. ${leftOut(mv.left_out)}</p>`) : ''}
+      <div class="row3"><label>Or move one household <input id="lmv-hh" class="small" placeholder="household ID"></label><label>to <select id="lmv-to">${M.enumerators.map(e => `<option>${esc(e.enumerator_id)}</option>`).join('')}</select></label><button class="subtle" data-lact="addmove">Add to the list</button></div>
+      ${!canWrite ? '<p class="alert info">To write the updated assignment files, open the household list on the Prepare tab (step 1): the files need the contacts. Opening the earlier rounds (step 2) adds each household’s history.</p>' : ''}
+      ${picked.length ? `<div class="btnrow"><button class="primary" data-lact="writemoves" ${canWrite ? '' : 'disabled'}>Write the updated files for ${R.plural(picked.length, 'move')}</button></div>` : ''}
+      ${ui.busy ? `<p class="alert info">${esc(ui.busy)}</p>` : ''}
+      ${ui.ready && ui.readyKind === 'moves' ? readyList('Give each updated assignment file to its enumerator, in their own folder; they open it with “Load updated assignment”, which keeps their log. Their earlier file is superseded. The new manifest replaces the one you had: the merge uses it from now on, and the saved session keeps it.') : ''}
+      ${M.moves && M.moves.length ? `<details><summary>Moves so far this round (${M.moves.length})</summary><table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>When</th><th>By</th></tr></thead><tbody>${M.moves.map(m => `<tr><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc((m.at || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(m.by || '')}</td></tr>`).join('')}</tbody></table></details>` : ''}
+    </section>`;
   }
 
   // ---- Call log ----
@@ -915,6 +1054,9 @@
       case 'apply': applyRule(); break;
       case 'balance': balance(); break;
       case 'write': writeFiles(); break;
+      case 'propose': proposeMoves(); break;
+      case 'addmove': addMove(); break;
+      case 'writemoves': writeMoves(); break;
       case 'saveall': saveAllToFolder(ui.ready); break;
       case 'dlall': downloadAll(ui.ready); break;
       case 'dlone': { const f = ui.ready[+el.dataset.i]; sh().download(f.name, f.text, f.name.endsWith('.csv') ? 'text/csv' : 'application/json'); break; }
@@ -997,13 +1139,20 @@
     if (t.dataset.lteam !== undefined) { const x = st.team[+t.dataset.lteam]; if (t.dataset.f === 'available') x.available = t.checked; else x.share = parseFloat(t.value) || 0; logEv('team_changed', { id: x.id, available: x.available ? 1 : 0, share: x.share }); stale(); return render(); }
     if (t.dataset.lrule !== undefined) { st.rule.name = t.dataset.lrule; stale(); return render(); }
     if (t.dataset.lmove !== undefined) return reassign(t.dataset.lmove, t.value);
+    if (t.dataset.lcrit !== undefined) { const c = t.dataset.lcrit; st.criteria = t.checked ? [...new Set(st.criteria.concat(c))] : st.criteria.filter(x => x !== c); logEv('criteria_changed', { criteria: st.criteria }); stale(); return render(); }
+    if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
+    if (t.dataset.lmovesel !== undefined) { const i = +t.dataset.lmovesel; if (!ui.moves) return; if (t.checked) ui.moves.picked.add(i); else ui.moves.picked.delete(i); return render(); }
     if (t.dataset.lset !== undefined) {
       const path = t.dataset.lset, type = t.dataset.type;
       let v = t.type === 'checkbox' ? t.checked : t.value;
       if (type === 'int') v = t.value === '' ? null : parseInt(t.value, 10);
       if (type === 'pct') v = t.value === '' ? null : parseFloat(t.value) / 100;
+      if (path === '__movesInclude') { ui.movesInclude = v; ui.moves = null; return render(); }
+      if (path === '__movesStale') { ui.movesStale = !!v; ui.moves = null; return render(); }
       if (path.startsWith('__')) { ui[path.slice(2)] = v; return render(); }
       setPath(st, path, v);
+      // the day list changes the files, not the assignment: the files are written again, the rule need not be
+      if (path === 'cal.day_list') { logEv('day_list_set', { day_list: v }); filesStale(); return render(); }
       if (/^cal\.|ramadanOn|breakFast|spread/.test(path)) invalidate();
       if (/^(rule\.|cal\.|spread|ramadanOn|breakFast)/.test(path)) stale();
       else if (/^policy\./.test(path)) filesStale();

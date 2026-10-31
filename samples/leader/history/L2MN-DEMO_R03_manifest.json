@@ -38,7 +38,8 @@
   },
   "time_zone": "Asia/Ulaanbaatar",
   "holidays": [],
-  "dial_cap": 8
+  "dial_cap": 8,
+  "day_list": 6
  },
  "away": [
   "E02"
@@ -50,7 +51,7 @@
    "share": 0.3333,
    "households": 33,
    "file": "E01_assignment_R03.json",
-   "fingerprint": "7aff1a5739fbf98d64fdc8d2e045372dbd6bd2a58a67f78594cdebe20e2e9f5e"
+   "fingerprint": "9b93086d7f0d51f7cd4138575ba828dcc603afde4d2f5f2fa4c3fd013838823b"
   },
   {
    "enumerator_id": "E03",
@@ -58,7 +59,7 @@
    "share": 0.3333,
    "households": 35,
    "file": "E03_assignment_R03.json",
-   "fingerprint": "8477c0405fac90d44108529b4f4890544ebae4e3bf3126e37ab397ea38b30ef1"
+   "fingerprint": "c938703a2523efa011747a6d3f029e5e48371e32d1cbe50372c319803e197a1e"
   },
   {
    "enumerator_id": "E07",
@@ -66,7 +67,7 @@
    "share": 0.3333,
    "households": 37,
    "file": "E07_assignment_R03.json",
-   "fingerprint": "03e6d2f14371514f75f0ae961b0e88f9329de0bb3c580f6b0a05818201a7d1ca"
+   "fingerprint": "ed8ccf5ca52e84124f211ffa59d849aff161a882fa3290fc2e53dcd09645d85b"
   }
  ],
  "households": [
@@ -954,5 +955,5 @@
    "stratum": "2"
   }
  ],
- "fingerprint": "75e05e9c866d8034bd79bd07e7fd5d8a8d523872504677e8264b728d4e1ae65c"
+ "fingerprint": "97adee411608a786a1f10f6042658a6182b90920fb333e135093f3ec830a7fd2"
 }

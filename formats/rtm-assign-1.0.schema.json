@@ -14,6 +14,17 @@
     "enumerator_id": { "$ref": "#/$defs/id" },
     "generated_by": { "$ref": "#/$defs/id", "description": "The leader who generated the file." },
     "generated_at": { "$ref": "#/$defs/instant" },
+    "revision": { "type": "integer", "minimum": 1, "description": "1 for the files written before the round; 2, 3… for revised files written after households were moved during the round." },
+    "supersedes": { "$ref": "#/$defs/hash", "description": "Revised file: the fingerprint of this enumerator's earlier file, which this one replaces." },
+    "matching": {
+      "type": "object",
+      "description": "The leader's matching criteria for the round and this enumerator's values: a household goes only to an enumerator whose values for each criterion include the household's.",
+      "required": ["criteria"],
+      "properties": {
+        "criteria": { "type": "array", "items": { "type": "string" }, "description": "Columns of the household list, for example language, respondent_sex, region." },
+        "enumerator": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } }, "description": "This enumerator's values for each criterion." }
+      }
+    },
     "rule": {
       "type": "object",
       "description": "How the households were assigned. 'keep_same' is the handbook's stated default (Section 3.5.3): keep the same enumerator, rotate a planned share each round, switch the enumerator for a household that becomes hard to reach.",
@@ -78,7 +89,8 @@
             "break_fast_hour": { "type": "integer", "minimum": 0, "maximum": 23 }
           }
         },
-        "dial_cap": { "type": "integer", "minimum": 1, "description": "The program's stopping rule, in dials per household per round." }
+        "dial_cap": { "type": "integer", "minimum": 1, "description": "The program's stopping rule, in dials per household per round." },
+        "day_list": { "type": "integer", "minimum": 1, "description": "The day list: how many households the enumerator's Today tab offers at most each day, the calls due first and then households pulled forward from later days, so that unanswered calls leave nobody waiting. The leader's number, or 1.5 × the planned first dials per day." }
       }
     },
     "phone": {
@@ -117,8 +129,9 @@
         "assignment": {
           "type": "object",
           "properties": {
-            "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "replacement"] },
-            "previous_enumerator": { "type": "string" }
+            "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "match", "mid_round", "replacement"] },
+            "previous_enumerator": { "type": "string" },
+            "matched": { "type": "boolean", "description": "Only when the round has matching criteria: whether this enumerator matches the household. False when the leader moved it by hand regardless." }
           }
         },
         "plan": {
@@ -137,7 +150,17 @@
             "properties": { "hhid": { "$ref": "#/$defs/id" }, "rank": { "type": "integer", "minimum": 1 }, "contact": { "$ref": "#/$defs/contact" } }
           }
         },
-        "note": { "type": "string", "description": "The leader's operational note." }
+        "note": { "type": "string", "description": "The leader's operational note." },
+        "criteria": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Only when the round has matching criteria: the household's value for each, for example language: kk." },
+        "handover": {
+          "type": "object",
+          "description": "Only for a household moved to this enumerator during the round: what the previous enumerator did. Those dials count toward the dial cap.",
+          "required": ["dials"],
+          "properties": {
+            "from": { "$ref": "#/$defs/id" }, "moved_at": { "$ref": "#/$defs/instant" }, "dials": { "type": "integer", "minimum": 0 },
+            "last_status": { "type": "string" }, "last_ts": { "$ref": "#/$defs/instant" }
+          }
+        }
       }
     }
   }

@@ -23,6 +23,7 @@ import csv
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import random
 import shutil
@@ -174,11 +175,17 @@ def bundled_holidays():
 HOLS = bundled_holidays()
 
 
+DAY_LIST = {}      # round -> the day list the leader view would write: 1.5 x the busiest enumerator's first dials per day (set by plan_round)
+
+
 def calendar(r):
     a, b = WINDOWS[r]
     hol = [{"date": d, "name": n, "estimated": bool(e), "working": False} for d, n, e in HOLS if a <= d <= b]
-    return {"window_start": a, "window_end": b, "working_weekdays": WORK, "call_hours": CALL_HOURS, "time_zone": TZNAME,
-            "holidays": hol, "dial_cap": CAP}
+    c = {"window_start": a, "window_end": b, "working_weekdays": WORK, "call_hours": CALL_HOURS, "time_zone": TZNAME,
+         "holidays": hol, "dial_cap": CAP}
+    if r in DAY_LIST:
+        c["day_list"] = DAY_LIST[r]
+    return c
 
 
 def working_days(r):
@@ -335,6 +342,7 @@ def plan_round(t, assigned, hist):
     by_enum = {}
     for h, (e, reason, _) in assigned.items():
         by_enum.setdefault(e, []).append(h)
+    DAY_LIST[t] = max(1, math.ceil(1.5 * max(len(hs) for hs in by_enum.values()) / len(first)))
     for e, hs in by_enum.items():
         def pri(h):
             s = hist.summary(h, t, H[h]["joined"])
@@ -593,18 +601,25 @@ def copy_log(log):
     return c
 
 
+KAZAKH_PSUS = {"0105", "0111"}     # two PSUs where the interview language is Kazakh: the leader's matching criterion (language)
+
+
 def write_household_list(out):
-    """The leader's household list (A.1) as it stands when round 5 is prepared."""
+    """The leader's household list (A.1) as it stands when round 5 is prepared. Two columns beyond the standard ones,
+    language and respondent_sex, let the leader try the matching criteria; they come from a stream of their own, so every
+    other sample stays as it was."""
+    sex_rng = random.Random(SEED + 2026)
     hl = []
     for hid in sorted(H):
         h = H[hid]
-        row = {"hhid": hid, "psu": h["psu"], "stratum": h["stratum"], "contact_name": h["name"], "language": "mn", "status": h["status"]}
+        row = {"hhid": hid, "psu": h["psu"], "stratum": h["stratum"], "contact_name": h["name"], "language": "kk" if h["psu"] in KAZAKH_PSUS else "mn",
+               "respondent_sex": sex_rng.choice(["f", "f", "m"]), "status": h["status"]}
         for p in h["phones"]:
             row[f"phone_{p['slot']}"] = p["number"]
             row[f"phone_{p['slot']}_label"] = p["label"]
         hl.append(row)
     write_csv(os.path.join(out["leader"], "household_list.csv"), hl,
-              ["hhid", "psu", "stratum", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label", "language", "status"])
+              ["hhid", "psu", "stratum", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label", "language", "respondent_sex", "status"])
     print(f"leader/household_list.csv: {len(hl)} households")
 
 

@@ -247,6 +247,11 @@ details.why { margin: 6px 0 4px; }
 details.why summary { cursor: pointer; color: var(--accent); font-size: 13px; }
 details.why p { margin: 6px 0 0; }
 .r3 { white-space: nowrap; margin-right: 4px; }
+/* matching criteria (step 5) and households without an enumerator (step 7) */
+.crit { margin: 0 0 10px; padding: 8px 10px; background: var(--soft); border-radius: 8px; }
+.crit label.inline { margin-right: 10px; }
+input.small { width: 9em; }
+tr.unmatched td { background: var(--warn-bg, #fff4d6); }
 </style>
 </head>
 <body>
@@ -261,7 +266,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.2.0';
+  RTM.VERSION = '0.3.0';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -299,6 +304,8 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     manual: 'Assigned by hand',
     rule: 'Dealt to you by this round’s rule',
     capacity: 'Moved to balance workloads',
+    match: 'Matched to you by the criteria your leader set',
+    mid_round: 'Moved to you during the round, so that the round finishes on time',
     replacement: 'Replacement household',
   };
 
@@ -458,6 +465,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       const ch = c.call_hours || {};
       if (!Number.isInteger(ch.start) || !Number.isInteger(ch.end) || ch.start < 0 || ch.end > 24 || ch.start >= ch.end) err('call_hours needs whole-hour start and end, start before end.');
       if (!Number.isInteger(c.dial_cap) || c.dial_cap < 1) err('dial_cap (the stopping rule in dials) must be a positive whole number.');
+      if (c.day_list !== undefined && (!Number.isInteger(c.day_list) || c.day_list < 1)) err('day_list (households on each day’s list) must be a positive whole number.');
       if (c.time_zone && !RTM.validTZ(c.time_zone)) warn(`The time zone "${c.time_zone}" is not known to this browser; the device's time zone is used.`);
       (c.holidays || []).forEach(h => { if (!RTM.isDateKey(h.date)) err(`A holiday has an invalid date: ${h.date}`); });
       if (c.ramadan && c.ramadan.dates && !Number.isInteger(c.ramadan.break_fast_hour)) warn('Ramadan dates are given without the hour the fast is broken.');
@@ -479,6 +487,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
         if (plan.first_dial_date && !RTM.isDateKey(plan.first_dial_date)) err(`Household ${h.hhid} has an invalid first-dial date.`);
         if (c && plan.first_dial_date && RTM.isDateKey(c.window_start) && (plan.first_dial_date < c.window_start || plan.first_dial_date > c.window_end)) warn(`Household ${h.hhid}'s first dial is planned outside the window.`);
         if (plan.target_hour !== undefined && (!Number.isInteger(plan.target_hour) || plan.target_hour < 0 || plan.target_hour > 23)) err(`Household ${h.hhid} has an invalid target hour.`);
+        if (h.handover !== undefined && (!h.handover || typeof h.handover !== 'object' || !Number.isInteger(h.handover.dials) || h.handover.dials < 0)) err(`Household ${h.hhid} has an invalid handover record (dials made before the move).`);
         (h.replacements || []).forEach(r => {
           if (!r || !r.hhid) err(`Household ${h.hhid} has a replacement without an ID.`);
           else if (rseen.has(r.hhid)) err(`Replacement ${r.hhid} is listed for two households.`);
@@ -596,7 +605,8 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   // ---- the case universe: assigned households plus activated replacements ----
   RTM.householdsOf = (S, eff) => {
     const A = S.assignment, cal = RTM.calendarOf(A);
-    const list = A.households.map(h => Object.assign({}, h, { kind: 'main' }));
+    const carry = S.carry || {};
+    const list = A.households.map(h => Object.assign({}, carry[h.hhid] || {}, h, { kind: 'main' }));
     const repl = new Map();
     A.households.forEach(h => (h.replacements || []).forEach((r, i) => repl.set(r.hhid, { r, main: h, rank: r.rank || i + 1 })));
     for (const a of eff.actions) {
@@ -647,17 +657,20 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       else if (has('REMOVE_REQUEST')) state = 'remove_requested';
       else state = ds.length ? 'in_progress' : 'not_started';
       const open = h.kind !== 'removed' && (state === 'in_progress' || state === 'not_started');
+      // a household moved during the round comes with the dials its previous enumerator made: they count toward the cap
+      const prior = h.handover && Number.isInteger(h.handover.dials) ? h.handover : null;
+      const nAll = ds.length + (prior ? prior.dials : 0);
       const flags = {
-        hard_refusal: ds.some(d => d.status === 'REFUSAL_HARD'),
+        hard_refusal: ds.some(d => d.status === 'REFUSAL_HARD') || !!(prior && prior.last_status === 'REFUSAL_HARD'),
         all_dead: slots.length > 0 && slots.every(s => s.dead),
         no_phone: slots.length === 0,
         switch_requested: has('SWITCH_REQUEST'),
         complete_short: !!(cmpAny && !cmp),
-        cap_reached: ds.length >= cal.cap,
+        cap_reached: nAll >= cal.cap,
       };
       const appointment = last && last.appointment_ts && ['APPOINTMENT', 'PARTIAL', 'NOT_AVAILABLE', 'REFUSAL_SOFT', 'OTHER', 'LANGUAGE'].includes(last.status) ? RTM.parseTS(last.appointment_ts) : null;
       const myRepl = (h.replacements || []).map((r, i) => Object.assign({ rank: r.rank || i + 1 }, r, { active: false }));
-      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
+      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
       c.next = RTM.suggest(c, cal, now);
       return c;
     });
@@ -672,7 +685,8 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     if (c.flags.hard_refusal) return { kind: 'refusal', text: 'Hard refusal: release it for this round' };
     if (c.flags.no_phone) return { kind: 'dead', text: 'No phone number: add one if you have it, or ask the leader to remove it' };
     if (c.flags.all_dead) return { kind: 'dead', text: 'No working number left: ask the leader to remove it, or activate a replacement' };
-    if (c.n >= cal.cap) return { kind: 'cap', text: `Dial cap of ${cal.cap} reached: release it for this round` };
+    const nAll = Number.isInteger(c.nAll) ? c.nAll : c.n;        // dials this round, those of a previous enumerator included
+    if (nAll >= cal.cap) return { kind: 'cap', text: `Dial cap of ${cal.cap} reached${c.prior && c.prior.dials ? ` (${c.prior.dials} of the dials by ${c.prior.from}, before the move)` : ''}: release it for this round` };
     const tz = (c.h.tz && RTM.validTZ(c.h.tz)) ? c.h.tz : cal.tz;
     const hour = c.h.plan && Number.isInteger(c.h.plan.target_hour) ? c.h.plan.target_hour : null;
     const startHour = cal.hours.start, endHour = cal.hours.end;
@@ -730,7 +744,18 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const rank = c => (c.next.kind === 'callback' ? 0 : c.next.kind === 'overdue' ? 1 : 2);
     due.sort((a, b) => rank(a) - rank(b) || a.next.at - b.next.at);
     later.sort((a, b) => a.next.at - b.next.at);
-    return { decide, due, later, isToday };
+    // the day list (leader setting day_list): when fewer calls are planned for today than the list holds, households
+    // planned for later days are pulled forward, soonest first, so that nobody waits when calls go unanswered
+    const dayList = Number.isInteger(cal.raw.day_list) ? cal.raw.day_list : null;
+    let ahead = [];
+    if (isToday && dayList) {
+      const room = dayList - due.length - later.length;
+      if (room > 0) {
+        ahead = C.list.filter(c => c.open && c.next.at && !['callback'].includes(c.next.kind) && RTM.partsIn(c.next.at, cal.tz).key > todayKey)
+          .sort((a, b) => a.next.at - b.next.at || (a.h.plan && b.h.plan ? (a.h.plan.order || 0) - (b.h.plan.order || 0) : 0)).slice(0, room);
+      }
+    }
+    return { decide, due, later, ahead, dayList, isToday };
   };
 
   // ---- progress counts ----
@@ -792,6 +817,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       assignment: S.assignment, assignment_fingerprint: S.fingerprint, chain_genesis: S.genesis,
       events: S.events, past: S.past, ui: S.ui || {}, last_export: S.last_export || null,
     };
+    if (S.carry && Object.keys(S.carry).length) o.carry = S.carry;
     o.checksum = RTM.sha256(RTM.canon(o));
     return o;
   };
@@ -808,7 +834,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const chain = RTM.verifyChain(o.events || [], o.chain_genesis);
     if (!chain.ok) errors.push(`The call log fails its integrity check at event ${chain.index + 1}: ${chain.reason}.`);
     if (errors.length) return { errors, warnings };
-    const S = { assignment: A, fingerprint: o.assignment_fingerprint, genesis: o.chain_genesis, events: o.events || [],
+    const S = { assignment: A, fingerprint: o.assignment_fingerprint, genesis: o.chain_genesis, events: o.events || [], carry: o.carry || {},
       past: o.past || { files: [], dials: [] }, last_export: o.last_export || null, last_save: { at: o.saved_at, event_count: (o.events || []).length }, ui: o.ui || {} };
     return { errors, warnings, session: S };
   };
@@ -817,12 +843,22 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const A = S.assignment, problems = [];
     if (A2.enumerator_id !== A.enumerator_id) problems.push(`This assignment is for ${A2.enumerator_id}, not ${A.enumerator_id}.`);
     if (A2.round !== A.round || A2.program !== A.program) problems.push(`This assignment is for ${A2.program} round ${A2.round}, not ${A.program} round ${A.round}.`);
+    if (A2.generated_at && A.generated_at && A2.generated_at < A.generated_at) problems.push(`This file is older than the assignment in your session (written ${A2.generated_at.slice(0, 16).replace('T', ' ')}, yours ${A.generated_at.slice(0, 16).replace('T', ' ')}). Open the newest file your leader sent.`);
     if (problems.length) return { problems };
-    const before = new Set(A.households.map(h => h.hhid)), after = new Set(A2.households.map(h => h.hhid));
-    const removed = [...before].filter(x => !after.has(x)), added = [...after].filter(x => !before.has(x));
+    const before = new Map(A.households.map(h => [h.hhid, h])), after = new Set(A2.households.map(h => h.hhid));
+    const removed = [...before.keys()].filter(x => !after.has(x)), added = [...after].filter(x => !before.has(x));
+    // a revised file written during the round may carry only what changed: a household kept from the earlier file keeps
+    // its plan and history, held beside the file so that the file itself stays as the leader wrote it (fingerprint)
+    S.carry = Object.assign({}, S.carry || {});
+    A2.households.forEach(h => {
+      const old = before.get(h.hhid), c = S.carry[h.hhid] || {};
+      if (!old) return;
+      const keep = RTM.clean({ plan: !h.plan ? old.plan || c.plan : undefined, history: !h.history ? old.history || c.history : undefined });
+      if (Object.keys(keep).length) S.carry[h.hhid] = keep; else delete S.carry[h.hhid];
+    });
     S.assignment = A2; S.fingerprint = RTM.fingerprint(A2);
     RTM.append(S, 'session', { what: 'assignment_updated', fingerprint: S.fingerprint, fingerprint_ok: A2.fingerprint ? (A2.fingerprint === S.fingerprint ? 1 : 0) : undefined,
-      file: fileName, households_added: added.length, households_removed: removed.length, added_hhids: added.length ? added : undefined, removed_hhids: removed.length ? removed : undefined });
+      file: fileName, revision: A2.revision, households_added: added.length, households_removed: removed.length, added_hhids: added.length ? added : undefined, removed_hhids: removed.length ? removed : undefined });
     return { problems, added, removed };
   };
 
@@ -1029,6 +1065,8 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   };
 
   // ---- household list (A.1) ----
+  const STD_COLS = new Set(['hhid', 'psu', 'stratum', 'contact_name', 'respondent_member', 'language', 'tz', 'status', 'phone', 'phone_label']);
+  L.STD_COLS = STD_COLS;
   L.parseHouseholds = text => {
     const T = L.readTable(text), errors = [], warnings = [];
     const need = ['hhid', 'psu', 'stratum'];
@@ -1059,6 +1097,9 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
         language: get(r, 'language'), tz: tz && R.validTZ(tz) ? tz : '', status });
       h.phones = phones;
       h.status_given = !!given;
+      // every other column travels with the household, for the matching criteria (sex, dialect, region…)
+      h.extra = {};
+      T.cols.forEach(c => { const k = norm(c); if (!STD_COLS.has(k) && !/^phone_?\d*(_label)?$/.test(k)) { const v = String(r[c] == null ? '' : r[c]).trim(); if (v) h.extra[k] = v; } });
       if (!h.psu || !h.stratum) warnings.push(`Household ${hhid} has no ${!h.psu ? 'PSU' : 'stratum'}.`);
       H.set(hhid, h);
       counts[status]++;
@@ -1289,14 +1330,31 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     raw.map((x, i) => ({ i, f: x - Math.floor(x) })).sort((a, b) => b.f - a.f || a.i - b.i).forEach(x => { if (left > 0) { q[x.i]++; left--; } });
     return new Map(enums.map((e, i) => [e, q[i]]));
   };
-  L.deal = (items, enums, shares, rnd, exclude) => {
+  // matching criteria: a household goes only to an enumerator whose values for each criterion include the household's
+  // (language, respondent's sex, dialect or region, any column of the household list). A household without a value can
+  // go to anyone. The criteria and each enumerator's values are written into the manifest and the assignment files.
+  L.splitVals = s => String(s == null ? '' : s).toLowerCase().split(/[\s,;/|]+/).map(x => x.trim()).filter(Boolean);
+  L.hhValue = (h, col) => { const k = norm(col); const v = h && h.extra && h.extra[k] !== undefined ? h.extra[k] : (h ? h[k] : ''); return String(v == null ? '' : v).trim().toLowerCase(); };
+  L.eligibleFn = (criteria, team) => {
+    const crit = [...new Set((criteria || []).map(norm).filter(Boolean))];
+    if (!crit.length) return null;
+    const attrs = new Map((team || []).map(t => [t.id, Object.fromEntries(crit.map(c => [c, new Set(L.splitVals((t.attrs || {})[c]))]))]));
+    const f = (h, e) => { const a = attrs.get(e); return !!a && crit.every(c => { const v = L.hhValue(h, c); return !v || a[c].has(v); }); };
+    f.criteria = crit; f.attrs = attrs;
+    f.values = e => Object.fromEntries(crit.map(c => [c, [...(attrs.get(e) || {})[c] || []].sort()]));
+    f.of = h => Object.fromEntries(crit.map(c => [c, L.hhValue(h, c)]).filter(([, v]) => v));
+    return f;
+  };
+  // the enumerators who can take a household: all of them without criteria, else those who match (none: unassignable)
+  L.deal = (items, enums, shares, rnd, exclude, eligible) => {
     const keyed = items.map(h => ({ h, k: rnd() })).sort((a, b) => cmpStr(a.h.stratum || '', b.h.stratum || '') || a.k - b.k).map(x => x.h);
     const N = keyed.length, quota = L.quotas(N, enums, shares), got = new Map(enums.map(e => [e, 0])), out = new Map();
     keyed.forEach((h, i) => {
-      const k = i + 1, ex = exclude && exclude.get(h.hhid);
-      let allowed = enums.filter(e => e !== ex && quota.get(e) > 0);
-      if (!allowed.length) allowed = enums.filter(e => e !== ex);
-      if (!allowed.length) allowed = enums;
+      const k = i + 1, ex = exclude && exclude.get(h.hhid), ok = e => !eligible || eligible(h, e);
+      let allowed = enums.filter(e => e !== ex && ok(e) && quota.get(e) > 0);
+      if (!allowed.length) allowed = enums.filter(e => e !== ex && ok(e));
+      if (!allowed.length) allowed = enums.filter(ok);
+      if (!allowed.length) { out.set(h.hhid, null); return; }
       let best = null, bv = -Infinity;
       for (const e of allowed) { const v = quota.get(e) * k / N - got.get(e); if (v > bv + 1e-12) { bv = v; best = e; } }
       out.set(h.hhid, best); got.set(best, got.get(best) + 1);
@@ -1311,29 +1369,39 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const team = inp.team.filter(e => e.available);
     const enums = team.map(e => e.id);
     const shares = new Map(team.map(e => [e.id, e.share > 0 ? e.share : 1]));
-    const out = new Map(), notes = [], warnings = [];
-    if (!enums.length) return { out, notes, warnings: ['No enumerator is available.'], errors: ['Mark at least one enumerator as available.'] };
+    const out = new Map(), notes = [], warnings = [], unmatched = [];
+    if (!enums.length) return { out, notes, warnings: ['No enumerator is available.'], errors: ['Mark at least one enumerator as available.'], unmatched };
+    const elig = L.eligibleFn(inp.criteria, team);
+    const byId = new Map(inp.households.map(h => [h.hhid, h]));
     const sumOf = new Map(inp.households.map(h => [h.hhid, L.summaryOf(inp.hist, h.hhid, t, inp.tz)]));
     const before = h => { const s = sumOf.get(h.hhid); return (s.last_interview && s.last_interview.enumerator) || s.previous || null; };
     const isNew = h => { const s = sumOf.get(h.hhid); return s.joined_round === null; };
-    const set = (h, e, reason, prev) => out.set(h.hhid, R.clean({ enumerator_id: e, reason, previous_enumerator: prev && prev !== e ? prev : undefined }));
+    // e === null: no available enumerator matches the household's criteria; the leader assigns it by hand
+    const set = (h, e, reason, prev) => {
+      if (e === null) { out.delete(h.hhid); if (!unmatched.includes(h.hhid)) unmatched.push(h.hhid); return; }
+      out.set(h.hhid, R.clean({ enumerator_id: e, reason, previous_enumerator: prev && prev !== e ? prev : undefined, matched: elig ? elig(h, e) : undefined }));
+    };
     const reasonFor = (h, e, moved) => (isNew(h) ? 'new' : before(h) === e ? 'keep' : moved);
+    const dealTo = (items, sh, excl) => L.deal(items, enums, sh, rnd, excl, elig);
     if (rule.name === 'keep_same') {
-      if (!Number.isFinite(rule.rotation_share) || rule.rotation_share < 0 || rule.rotation_share > 1) return { out, notes, warnings, errors: ['Enter the rotation share for this round (0 to 100%). It has no default: the handbook calls its size a judgment.'] };
-      const fresh = [], away = [], hard = [];
+      if (!Number.isFinite(rule.rotation_share) || rule.rotation_share < 0 || rule.rotation_share > 1) return { out, notes, warnings, errors: ['Enter the rotation share for this round (0 to 100%). It has no default: the handbook calls its size a judgment.'], unmatched };
+      const fresh = [], away = [], hard = [], mis = [];
       const lm = inp.hist.manifests.get(t - 1), lastCap = (lm && lm.calendar && lm.calendar.dial_cap) || inp.cap;
       for (const h of inp.households) {
         const s = sumOf.get(h.hhid), start = before(h);
         if (!start || isNew(h)) { fresh.push(h); continue; }                                          // step 1: new households
         if (!enums.includes(start)) { away.push(h); continue; }                                      // step 2: enumerator away
         if ((!s.interviewed_last && s.in_last && s.dials_last >= lastCap) || s.switch_requested) { hard.push(h); continue; } // step 3 (D5)
+        if (elig && !elig(h, start)) { mis.push(h); continue; }                                       // the criteria: the kept enumerator does not match
         set(h, start, 'keep');                                                                        // step 1: keep
       }
-      L.deal(fresh, enums, shares, rnd).forEach((e, id) => set(inp.households.find(h => h.hhid === id), e, 'new'));
+      dealTo(fresh, shares).forEach((e, id) => set(byId.get(id), e, 'new'));
       const awayPrev = new Map(away.map(h => [h.hhid, before(h)]));
-      L.deal(away, enums, shares, rnd).forEach((e, id) => out.set(id, R.clean({ enumerator_id: e, reason: 'enumerator_unavailable', previous_enumerator: awayPrev.get(id) })));
+      dealTo(away, shares).forEach((e, id) => set(byId.get(id), e, 'enumerator_unavailable', awayPrev.get(id)));
       const hardPrev = new Map(hard.map(h => [h.hhid, before(h)]));
-      L.deal(hard, enums, shares, rnd, hardPrev).forEach((e, id) => out.set(id, R.clean({ enumerator_id: e, reason: 'switch_hard_to_reach', previous_enumerator: hardPrev.get(id) })));
+      dealTo(hard, shares, hardPrev).forEach((e, id) => set(byId.get(id), e, 'switch_hard_to_reach', hardPrev.get(id)));
+      const misPrev = new Map(mis.map(h => [h.hhid, before(h)]));
+      dealTo(mis, shares, misPrev).forEach((e, id) => set(byId.get(id), e, 'match', misPrev.get(id)));
       // step 4: rotation, a share r of each enumerator's kept households, dealt to the others
       const given = new Map(), pool = [], from = new Map();
       for (const e of enums) {
@@ -1343,32 +1411,41 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
         L.shuffled(kept, rnd).slice(0, k).forEach(h => { pool.push(h); from.set(h.hhid, e); });
       }
       if (pool.length && enums.length > 1) {
-        L.deal(pool, enums, given, rnd, from).forEach((e, id) => out.set(id, R.clean({ enumerator_id: e, reason: e === from.get(id) ? 'keep' : 'rotation', previous_enumerator: e === from.get(id) ? undefined : from.get(id) })));
+        dealTo(pool, given, from).forEach((e, id) => set(byId.get(id), e, e === from.get(id) ? 'keep' : 'rotation', from.get(id)));
       }
-      notes.push(`Kept ${[...out.values()].filter(x => x.reason === 'keep').length}, new ${fresh.length}, enumerator away ${away.length}, hard to reach ${hard.length}, rotated ${[...out.values()].filter(x => x.reason === 'rotation').length}.`);
-    } else if (rule.name === 'random' || (rule.name === 'share_of_total' && rule.method !== 'blocks')) {
-      L.deal(inp.households, enums, shares, rnd).forEach((e, id) => { const h = inp.households.find(x => x.hhid === id); set(h, e, reasonFor(h, e, 'rule'), before(h)); });
+      notes.push(`Kept ${[...out.values()].filter(x => x.reason === 'keep').length}, new ${fresh.length}, enumerator away ${away.length}, hard to reach ${hard.length}, rotated ${[...out.values()].filter(x => x.reason === 'rotation').length}${elig ? `, moved to match the criteria ${[...out.values()].filter(x => x.reason === 'match').length}` : ''}.`);
+    } else if (rule.name === 'random' || (rule.name === 'share_of_total' && rule.method !== 'blocks') || (elig && (rule.name === 'equal_split' || rule.name === 'share_of_total'))) {
+      const sh = rule.name === 'equal_split' ? new Map(enums.map(e => [e, 1])) : shares;
+      if (elig && rule.name !== 'random') notes.push('With matching criteria, households are dealt to the enumerators who match them; the list is not cut into blocks.');
+      dealTo(inp.households, sh).forEach((e, id) => { const h = byId.get(id); set(h, e, reasonFor(h, e, 'rule'), before(h)); });
     } else if (rule.name === 'equal_split' || rule.name === 'share_of_total') {
       const key = rule.order_by || 'psu';
-      const sorted = inp.households.slice().sort((a, b) => cmpStr(String(a[key] || ''), String(b[key] || '')) || cmpStr(a.hhid, b.hhid));
+      const sorted = inp.households.slice().sort((a, b) => cmpStr(L.hhValue(a, key), L.hhValue(b, key)) || cmpStr(a.hhid, b.hhid));
       const q = rule.name === 'equal_split' ? L.quotas(sorted.length, enums, new Map(enums.map(e => [e, 1]))) : L.quotas(sorted.length, enums, shares);
       let i = 0;
       for (const e of enums) for (let k = 0; k < q.get(e); k++, i++) { const h = sorted[i]; set(h, e, reasonFor(h, e, 'rule'), before(h)); }
       warnings.push('With consecutive blocks, enumerator and area effects cannot be told apart (Section 3.2).');
     } else if (rule.name === 'manual') {
       const m = inp.manual || new Map();
-      const unknown = new Set();
+      const unknown = new Set(), mism = [];
       for (const h of inp.households) {
         const e = m.get(h.hhid);
         if (!e) continue;
         if (!enums.includes(e)) { unknown.add(e); continue; }
         set(h, e, reasonFor(h, e, 'manual'), before(h));
+        if (elig && !elig(h, e)) mism.push(h.hhid);
       }
       const missing = inp.households.filter(h => !out.has(h.hhid)).length;
       if (unknown.size) warnings.push(`Unknown or unavailable enumerator IDs in the manual list: ${[...unknown].join(', ')}.`);
       if (missing) warnings.push(`${R.plural(missing, 'household')} ${missing === 1 ? 'has' : 'have'} no enumerator in the manual list.`);
+      if (mism.length) warnings.push(`${R.plural(mism.length, 'household')} in the manual list ${mism.length === 1 ? 'does' : 'do'} not match ${mism.length === 1 ? 'its' : 'their'} enumerator's values (${elig.criteria.join(', ')}): ${mism.slice(0, 8).join(', ')}${mism.length > 8 ? '…' : ''}. Kept as listed, marked as not matched.`);
     }
-    return { out, notes, warnings, errors: [], summaries: sumOf };
+    if (unmatched.length) {
+      unmatched.sort(cmpStr);
+      const show = id => `${id} (${elig.criteria.map(c => `${c} ${L.hhValue(byId.get(id), c) || '–'}`).join(', ')})`;
+      warnings.push(`${R.plural(unmatched.length, 'household')} ${unmatched.length === 1 ? 'matches' : 'match'} no available enumerator on ${elig.criteria.join(', ')}: ${unmatched.slice(0, 8).map(show).join('; ')}${unmatched.length > 8 ? '…' : ''}. Give an enumerator these values in step 5, or assign them by hand in step 7. No file is written while a household has no enumerator.`);
+    }
+    return { out, notes, warnings, errors: [], summaries: sumOf, unmatched, criteria: elig ? elig.criteria : [] };
   };
 
   // step 5, the load check: each enumerator's households and expected dials, using last round's dials per household
@@ -1393,15 +1470,16 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   // move kept households, chosen at random, from the most to the least loaded enumerator while a load is outside the margin
   L.balance = (inp, out, sums, margin, seed) => {
     const rnd = L.rng((seed || 1) + 7), moves = [], exp = L.expectedDials(inp, sums);
+    const elig = L.eligibleFn(inp.criteria, inp.team.filter(e => e.available)), hh = new Map(inp.households.map(h => [h.hhid, h]));
     for (let guard = 0; guard < 5000; guard++) {
       const ld = L.loads(inp, out, sums).sort((a, b) => b.departure - a.departure);
       const hi = ld[0], lo = ld[ld.length - 1];
       if (!hi || hi.id === lo.id || (hi.departure <= margin && lo.departure >= -margin)) break;
-      // only a move that narrows the gap between the two
-      const cand = [...out.entries()].filter(([id, x]) => x.enumerator_id === hi.id && x.reason === 'keep' && exp(id) < hi.dials - lo.dials).map(([id]) => id).sort();
+      // only a move that narrows the gap between the two, and only to an enumerator who matches the household (criteria)
+      const cand = [...out.entries()].filter(([id, x]) => x.enumerator_id === hi.id && x.reason === 'keep' && exp(id) < hi.dials - lo.dials && (!elig || elig(hh.get(id), lo.id))).map(([id]) => id).sort();
       if (!cand.length) break;
       const id = cand[Math.floor(rnd() * cand.length)];
-      out.set(id, { enumerator_id: lo.id, reason: 'capacity', previous_enumerator: hi.id });
+      out.set(id, R.clean({ enumerator_id: lo.id, reason: 'capacity', previous_enumerator: hi.id, matched: elig ? true : undefined }));
       moves.push({ hhid: id, from: hi.id, to: lo.id });
     }
     return moves;
@@ -1455,24 +1533,28 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const rule = R.clean(Object.assign({ name: inp.rule.name }, inp.rule.name === 'keep_same' ? { rotation_share: inp.rule.rotation_share, hard_to_reach: 'missed_with_full_cap_or_request', fallback: 'random' } : {},
       inp.rule.order_by && /split|share/.test(inp.rule.name) ? { order_by: inp.rule.order_by } : {}, inp.rule.method ? { method: inp.rule.method } : {}, { seed: inp.rule.seed }));
     const team = inp.team.filter(e => e.available);
+    const elig = L.eligibleFn(inp.criteria, team);
     for (const e of team.map(x => x.id)) {
       const ids = (byEnum.get(e) || []).slice().sort(cmpStr);
       const households = ids.map(id => {
         const h = hh.get(id), s = inp.sums.get(id), x = inp.out.get(id);
         const reps = (inp.replacements.get(id) || []).map((r, i) => ({ hhid: r.hhid, rank: i + 1, contact: contactOf(inp.allHouseholds.get(r.hhid) || { phones: [] }) }));
         const last = s.last_interview ? R.clean({ round: s.last_interview.round, date: s.last_interview.date, hour: s.last_interview.hour }) : undefined;
+        const crit = elig ? elig.of(h) : null;
         return R.clean({
           hhid: id, psu: h.psu, stratum: h.stratum, tz: h.tz,
           contact: contactOf(h, s.slot_last),
           history: R.clean({ joined_round: s.joined_round === null ? inp.round : s.joined_round, last_interview: last, last3: s.last3 || undefined,
             last_enumerator: s.last_interview ? s.last_interview.enumerator : undefined }),
-          assignment: R.clean({ reason: x.reason, previous_enumerator: x.previous_enumerator }),
+          assignment: R.clean({ reason: x.reason, previous_enumerator: x.previous_enumerator, matched: elig ? (x.matched !== undefined ? x.matched : elig(h, e)) : undefined }),
+          criteria: crit && Object.keys(crit).length ? crit : undefined,
           plan: inp.plans.get(id), replacements: reps.length ? reps : undefined,
         });
       });
       const a = R.clean({
         schema: R.SCHEMA.assign, tool_version: R.VERSION, program: inp.program, country: inp.country, round: inp.round, enumerator_id: e,
-        generated_by: inp.leader, generated_at: inp.generated_at, rule, replacement_policy: inp.replacement_policy,
+        generated_by: inp.leader, generated_at: inp.generated_at, revision: 1, rule, replacement_policy: inp.replacement_policy,
+        matching: elig ? { criteria: elig.criteria, enumerator: elig.values(e) } : undefined,
         synthetic: inp.synthetic ? true : undefined, calendar: inp.calendar, households,
       });
       a.fingerprint = R.fingerprint(a);
@@ -1480,12 +1562,13 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     }
     const manifest = R.clean({
       schema: L.SCHEMA.manifest, tool_version: R.VERSION, program: inp.program, country: inp.country, round: inp.round,
-      generated_by: inp.leader, generated_at: inp.generated_at, synthetic: inp.synthetic ? true : undefined, rule, replacement_policy: inp.replacement_policy,
+      generated_by: inp.leader, generated_at: inp.generated_at, revision: 1, synthetic: inp.synthetic ? true : undefined, rule, replacement_policy: inp.replacement_policy,
+      matching: elig ? { criteria: elig.criteria, enumerators: Object.fromEntries(team.map(t => [t.id, elig.values(t.id)])) } : undefined,
       calendar: inp.calendar, away: inp.team.filter(e => !e.available).map(e => e.id),
       enumerators: team.map(t => ({ enumerator_id: t.id, available: true, share: t.share > 0 ? t.share : 1, households: (byEnum.get(t.id) || []).length,
         file: `${t.id}_assignment_R${p2(inp.round)}.json`, fingerprint: files.find(f => f.enumerator_id === t.id).obj.fingerprint })),
       households: [...inp.out.entries()].sort((a, b) => cmpStr(a[0], b[0])).map(([id, x]) => R.clean({
-        hhid: id, enumerator_id: x.enumerator_id, reason: x.reason, previous_enumerator: x.previous_enumerator,
+        hhid: id, enumerator_id: x.enumerator_id, reason: x.reason, previous_enumerator: x.previous_enumerator, matched: x.matched,
         psu: hh.get(id).psu, stratum: hh.get(id).stratum,
         replacements: (inp.replacements.get(id) || []).length ? inp.replacements.get(id).map(r => r.hhid) : undefined })),
     });
@@ -1585,6 +1668,11 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const assignedTo = new Map(M.households.map(h => [h.hhid, h.enumerator_id]));
     const replOf = new Map();
     M.households.forEach(h => (h.replacements || []).forEach(r => replOf.set(r, h.hhid)));
+    // households moved during the round: the previous holder's dials up to the move were theirs to make
+    const movesOf = new Map();
+    (M.moves || []).forEach(m => { if (!movesOf.has(m.hhid)) movesOf.set(m.hhid, []); movesOf.get(m.hhid).push(m); });
+    const heldBefore = (e, h, ts) => (movesOf.get(h) || []).some(m => m.from === e && Date.parse(ts) <= Date.parse(m.at));
+    const fingerprintsOf = e => (roster.get(e) ? [roster.get(e).fingerprint].concat(roster.get(e).previous_fingerprints || []) : []);
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
     for (const f of imports) {
@@ -1650,8 +1738,8 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
           detail: `Integrity check failed at event ${x.f.chain.index + 1} of ${x.f.count}: ${x.f.chain.reason}. The file is imported and marked.` });
         else if (!x.f.lastOk) issue({ key: `lasthash:${x.f.sha}`, type: 'chain_broken', severity: 'action', file: x.f.name, enumerator: e,
           detail: 'The file’s last hash does not match its last event: events may have been removed at the end.' });
-        const fp = roster.get(e) && roster.get(e).fingerprint;
-        if (fp && x.f.genesis && x.f.genesis !== fp) issue({ key: `genesis:${x.f.sha}`, type: 'other_assignment', severity: 'info', file: x.f.name, enumerator: e,
+        const fps = fingerprintsOf(e);
+        if (fps.length && x.f.genesis && !fps.includes(x.f.genesis)) issue({ key: `genesis:${x.f.sha}`, type: 'other_assignment', severity: 'info', file: x.f.name, enumerator: e,
           detail: 'The log did not start from the assignment file this manifest lists for this enumerator.' });
       });
       const lone = cs.filter(c => !c.paired);
@@ -1756,6 +1844,16 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       x.dials.forEach(d => { if (!byHH.has(d.hhid)) byHH.set(d.hhid, []); byHH.get(d.hhid).push(d); });
       for (const [h, ds] of byHH) {
         if (mine(e, h)) continue;
+        const after = ds.filter(d => !heldBefore(e, h, d.ts));
+        if (!after.length) continue;                                   // dials made while the household was theirs, before it was moved
+        const mv = (movesOf.get(h) || []).filter(m => m.from === e).slice(-1)[0];
+        if (mv) {
+          const d = issue({ key: `after_move:${e}:${h}`, type: 'after_move', severity: 'action', enumerator: e, hhid: h,
+            detail: `${e} logged ${R.plural(after.length, 'dial')} on ${h} after it was moved to ${mv.to} on ${mv.at.slice(0, 16).replace('T', ' ')}: a double call. Kept and flagged.`,
+            choices: [{ value: 'accept', label: 'Keep them' }, { value: 'exclude', label: 'Leave them out' }] });
+          if (d === 'exclude') after.forEach(dd => excludedDials.add(dd.event_id));
+          continue;
+        }
         const known = assignedTo.has(h) || replOf.has(h);
         const d = issue({ key: `not_assigned:${e}:${h}`, type: known ? 'not_assigned' : 'unknown_household', severity: 'action', enumerator: e, hhid: h,
           detail: known ? `${e} logged ${R.plural(ds.length, 'dial')} on ${h}, which is assigned to ${assignedTo.get(h) || assignedTo.get(replOf.get(h))}. Kept and flagged.`
@@ -1891,6 +1989,136 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       strata.get(s).households++; if (c.state === 'complete') strata.get(s).complete++;
     }
     return { list, total: tot, days, strata: [...strata.values()].sort((a, b) => cmpStr(a.stratum, b.stratum)) };
+  };
+
+  // ---- moving waiting households during the round: who will not finish at the current pace ----
+  // Pace = completes per enumerator-day so far (Box 3.0); capacity = pace × working days left; need = open − capacity.
+  // Only enumerators whose export is from today and who have two or more enumerator-days are judged.
+  L.pace = (M, C, P, now) => {
+    const cal = R.calendarOf({ calendar: M.calendar }), today = R.partsIn(now, cal.tz).key;
+    const left = R.workingDaysLeft(cal, today);
+    const rows = P.list.map(r => {
+      const open = r.not_started + r.in_progress, exportDay = r.last_export ? r.last_export.slice(0, 10) : '';
+      const known = r.enumerator_days >= 2 && r.completes_per_day !== null;
+      const row = { enumerator_id: r.enumerator_id, households: r.households, complete: r.complete, open, waiting: r.not_started, in_progress: r.in_progress,
+        pace: r.completes_per_day, enumerator_days: r.enumerator_days, days_left: left, export_at: r.last_export || '', export_day: exportDay, fresh: exportDay === today, known };
+      row.capacity = known ? r.completes_per_day * left : null;
+      row.need = known ? open - row.capacity : null;
+      row.projected = known ? Math.min(r.households, r.complete + Math.floor(row.capacity + 1e-9)) : null;
+      row.why = !r.last_export ? 'no export yet' : !row.fresh ? `last export ${exportDay}, not today` : !known ? 'fewer than two enumerator-days: the pace cannot be judged yet' : '';
+      return row;
+    });
+    return { rows, today, days_left: left };
+  };
+  // which households may move: never dialed; or, if the leader allows, dialed without a booked callback or a hard refusal
+  L.movable = (c, include) => {
+    if (c.replaces) return false;
+    if (c.state === 'not_started') return true;
+    if (include !== 'in_progress' || c.state !== 'in_progress') return false;
+    const last = c.dials[c.dials.length - 1];
+    if (last && last.appointment_ts) return false;
+    return !c.dials.some(d => d.status === 'REFUSAL_HARD');
+  };
+  // one household at a time from the enumerator furthest behind to the one with most spare capacity, latest-planned first,
+  // only to an enumerator who matches the household's criteria, until nobody is more than half a household behind or ahead
+  L.proposeMoves = (pace, C, opts) => {
+    const o = Object.assign({ include: 'not_started', from: null, to: null, eligible: null, hh: null, planOf: null, allowStale: false }, opts || {});
+    const judged = r => r.known && (r.fresh || o.allowStale);
+    const rows = pace.rows.filter(judged);
+    const need = new Map(rows.map(r => [r.enumerator_id, r.need]));
+    const planned = id => (o.planOf && o.planOf(id)) || '';
+    const rank = c => (c.state === 'not_started' ? 0 : 1);          // never dialed households first, then the latest planned
+    const cands = new Map(rows.map(r => [r.enumerator_id, [...C.values()].filter(c => c.enumerator_id === r.enumerator_id && L.movable(c, o.include))
+      .sort((a, b) => rank(a) - rank(b) || cmpStr(planned(b.hhid), planned(a.hhid)) || cmpStr(b.hhid, a.hhid))]));
+    const moves = [];
+    for (let guard = 0; guard < 5000; guard++) {
+      const donors = rows.filter(r => need.get(r.enumerator_id) > 0.5 && (!o.from || o.from.includes(r.enumerator_id))).sort((a, b) => need.get(b.enumerator_id) - need.get(a.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
+      const takers = rows.filter(r => need.get(r.enumerator_id) < -0.5 && (!o.to || o.to.includes(r.enumerator_id))).sort((a, b) => need.get(a.enumerator_id) - need.get(b.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
+      let done = false;
+      for (const d of donors) {
+        const list = cands.get(d.enumerator_id);
+        for (const t of takers) {
+          const i = list.findIndex(c => !o.eligible || !o.hh || !o.hh.get(c.hhid) || o.eligible(o.hh.get(c.hhid), t.enumerator_id));
+          if (i < 0) continue;
+          const c = list.splice(i, 1)[0];
+          moves.push({ hhid: c.hhid, from: d.enumerator_id, to: t.enumerator_id, state: c.state, dials: c.n, planned: planned(c.hhid) });
+          need.set(d.enumerator_id, need.get(d.enumerator_id) - 1); need.set(t.enumerator_id, need.get(t.enumerator_id) + 1);
+          done = true; break;
+        }
+        if (done) break;
+      }
+      if (!done) break;
+    }
+    return { moves, need, judged: rows.map(r => r.enumerator_id), left_out: pace.rows.filter(r => !judged(r)).map(r => ({ id: r.enumerator_id, why: r.why || (!r.fresh ? `last export ${r.export_day}, not today` : 'pace not known') })) };
+  };
+  // the revised files: a new assignment file for each enumerator who gives or receives a household, and the manifest's next
+  // revision. Contacts come from the household list (with the numbers enumerators corrected this round); a moved household
+  // carries the dials made before the move (handover), a first dial on the next working day, and its usual hour.
+  L.reviseFiles = inp => {
+    const M = inp.M, at = inp.at, moved = new Map(inp.moves.map(m => [m.hhid, m]));
+    const affected = new Set(); inp.moves.forEach(m => { affected.add(m.from); affected.add(m.to); });
+    const cal = R.calendarOf({ calendar: M.calendar }), today = R.partsIn(inp.now || R.now(), cal.tz).key;
+    let first = today < cal.start ? cal.start : today, guard = 0;
+    while (!cal.isWorking(first) && first < cal.end && guard++ < 60) first = R.addDaysKey(first, 1);
+    const upd = new Map();                           // hhid -> slot -> the corrected number, from the merged contacts files
+    (inp.updates || []).filter(u => u.digest_ok && u.number).forEach(u => { if (!upd.has(u.hhid)) upd.set(u.hhid, new Map()); upd.get(u.hhid).set(+u.slot, u); });
+    const contactNow = (H, id, slotLast) => {
+      const c = contactOf(H || { phones: [] }, slotLast), m = upd.get(id);
+      if (m) {
+        for (const [slot, u] of m) {
+          const p = c.phones.find(x => x.slot === slot);
+          if (p) { p.number = u.number; if (u.label) p.label = u.label; delete p.last_status; } else c.phones.push(R.clean({ slot, number: u.number, label: u.label }));
+        }
+        c.phones.sort((a, b) => a.slot - b.slot);
+      }
+      return c;
+    };
+    const elig = M.matching ? { criteria: M.matching.criteria } : null;
+    const households = M.households.map(h => (moved.has(h.hhid) ? Object.assign({}, h, { enumerator_id: moved.get(h.hhid).to, reason: 'mid_round', previous_enumerator: h.enumerator_id,
+      matched: M.matching ? (inp.matchedNow ? inp.matchedNow(h.hhid, moved.get(h.hhid).to) : undefined) : undefined }) : h));
+    const files = [];
+    for (const e of [...affected].sort(cmpStr)) {
+      const mine = households.filter(h => h.enumerator_id === e).sort((a, b) => cmpStr(a.hhid, b.hhid));
+      const entries = mine.map(h => {
+        const H = inp.hh.get(h.hhid), c = inp.C.get(h.hhid), s = inp.sumOf ? inp.sumOf(h.hhid) : null, m = moved.get(h.hhid);
+        const reps = (h.replacements || []).map((id, i) => ({ hhid: id, rank: i + 1, contact: contactNow(inp.hh.get(id), id) }));
+        const last = c && c.dials.length ? c.dials[c.dials.length - 1] : null;
+        const li = s && s.last_interview ? R.clean({ round: s.last_interview.round, date: s.last_interview.date, hour: s.last_interview.hour }) : undefined;
+        const pl = inp.plans ? inp.plans.get(h.hhid) : null;
+        const crit = elig && H ? Object.fromEntries(elig.criteria.map(k => [k, L.hhValue(H, k)]).filter(([, v]) => v)) : null;
+        return R.clean({
+          hhid: h.hhid, psu: h.psu, stratum: h.stratum, tz: H && H.tz,
+          contact: contactNow(H, h.hhid, s && s.slot_last),
+          history: s ? R.clean({ joined_round: s.joined_round === null ? M.round : s.joined_round, last_interview: li, last3: s.last3 || undefined, last_enumerator: s.last_interview ? s.last_interview.enumerator : undefined }) : undefined,
+          assignment: R.clean({ reason: h.reason, previous_enumerator: h.previous_enumerator, matched: h.matched }),
+          criteria: crit && Object.keys(crit).length ? crit : undefined,
+          plan: m ? R.clean({ first_dial_date: first, target_hour: pl && Number.isInteger(pl.target_hour) ? pl.target_hour : (li && Number.isInteger(li.hour) ? li.hour : undefined) }) : pl || undefined,
+          handover: m ? R.clean({ from: m.from, moved_at: at, dials: c ? c.n : 0, last_status: last ? last.status : undefined, last_ts: last ? last.ts : undefined }) : undefined,
+          replacements: reps.length ? reps : undefined,
+        });
+      });
+      const old = M.enumerators.find(x => x.enumerator_id === e);
+      const a = R.clean({
+        schema: R.SCHEMA.assign, tool_version: R.VERSION, program: M.program, country: M.country, round: M.round, enumerator_id: e,
+        generated_by: inp.leader, generated_at: at, revision: (M.revision || 1) + 1, supersedes: old ? old.fingerprint : undefined,
+        rule: M.rule, replacement_policy: M.replacement_policy, matching: M.matching ? { criteria: M.matching.criteria, enumerator: (M.matching.enumerators || {})[e] || {} } : undefined,
+        synthetic: M.synthetic ? true : undefined, note: `Revision ${(M.revision || 1) + 1} of this round's assignment: ${inp.moves.filter(x => x.to === e).length} household(s) moved to you, ${inp.moves.filter(x => x.from === e).length} moved from you.`,
+        calendar: M.calendar, households: entries,
+      });
+      a.fingerprint = R.fingerprint(a);
+      files.push({ enumerator_id: e, name: `${e}_assignment_R${p2(M.round)}.json`, obj: a });
+    }
+    const manifest = Object.assign({}, M, {
+      generated_at: at, revision: (M.revision || 1) + 1, supersedes: M.fingerprint,
+      enumerators: M.enumerators.map(x => {
+        const f = files.find(y => y.enumerator_id === x.enumerator_id);
+        return f ? Object.assign({}, x, { households: f.obj.households.length, fingerprint: f.obj.fingerprint, previous_fingerprints: (x.previous_fingerprints || []).concat([x.fingerprint]) }) : x;
+      }),
+      households, moves: (M.moves || []).concat(inp.moves.map(m => ({ hhid: m.hhid, from: m.from, to: m.to, at, by: inp.leader }))),
+    });
+    delete manifest.fingerprint;
+    manifest.fingerprint = R.fingerprint(manifest);
+    return { files, manifest, affected: [...affected].sort(cmpStr) };
   };
 
   // ---- the round's outputs (A.6) ----
@@ -2247,7 +2475,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
 </script>
 <script>// Generated by build.py from models/risk_models.json and models/MODEL_CARD.md; do not edit by hand.
 window.RTM_RISK = {"schema":"rtm-riskmodels-1.0","trained_at":"2026-10-27T18:14:11","trained_on":{"L2CU":{"rounds":79,"first_round":2,"last_round":82,"cases":125670,"completed":119584,"available":{"number":true,"refusal":false,"contact":true,"length":true,"hour":true}},"L2T":{"rounds":15,"first_round":1,"last_round":17,"cases":35679,"completed":29639,"available":{"number":false,"refusal":false,"contact":false,"length":true,"hour":true}},"L2KGZ":{"rounds":30,"first_round":1,"last_round":42,"cases":50948,"completed":44157,"available":{"number":false,"refusal":false,"contact":false,"length":true,"hour":true}},"L2Kaz":{"rounds":32,"first_round":1,"last_round":33,"cases":58272,"completed":47897,"available":{"number":true,"refusal":true,"contact":true,"length":true,"hour":true}},"L2PHL":{"rounds":9,"first_round":2,"last_round":10,"cases":22055,"completed":10457,"available":{"number":true,"refusal":true,"contact":true,"length":true,"hour":true}},"L2Indo":{"rounds":15,"first_round":1,"last_round":28,"cases":68962,"completed":20722,"available":{"number":true,"refusal":true,"contact":true,"length":false,"hour":true}}},"lambda":1.0,"tiers":{"high":0.15,"medium":0.35,"dropout":["high","medium","low"],"return":["high","low"],"overlaps":{"dropout":[],"return":[{"table":"rolling_origin/PHL/other_recalibrated","tiers":["medium","low"],"rates":[0.6047,0.5697],"intervals":[[0.548,0.6587],[0.5221,0.6161]]}]}},"tool_codes":{"number":["DEAD_NUMBER","WRONG_NUMBER","SWITCHED_OFF"],"refusal":["REFUSAL_SOFT","REFUSAL_HARD"],"contact":["APPOINTMENT","PARTIAL","NOT_AVAILABLE","LANGUAGE","OTHER"]},"tenure_bins":[[1,1,"k1"],[2,2,"k2"],[3,3,"k3"],[4,6,"k4_6"],[7,12,"k7_12"],[13,1000000,"k13p"]],"tenure_reference":"k4_6","dropout":{"features":[{"key":"k1","label":"Joined in the round before","group":"tenure","mean":0.06586457144285487,"sd":0.24804521698977375,"coef":0.2818011169430897},{"key":"k2","label":"Joined two rounds before","group":"tenure","mean":0.04684258325765087,"sd":0.21130157512759087,"coef":0.13068472159828443},{"key":"k3","label":"Joined three rounds before","group":"tenure","mean":0.04331814129429507,"sd":0.20357229656587006,"coef":0.07397630724347522},{"key":"k7_12","label":"In the panel 7 to 12 rounds","group":"tenure","mean":0.17241436772511018,"sd":0.3777401931580232,"coef":-0.060151844316370065},{"key":"k13p","label":"In the panel 13 rounds or more","group":"tenure","mean":0.5622984694090103,"sd":0.4961037197091901,"coef":-0.3765938688189143},{"key":"missed_prev","label":"Rounds missed among the three before","group":"history","mean":0.05308742782392788,"sd":0.30796984958600276,"coef":0.20296941113941183},{"key":"missed_t1","label":"Missed the round before","group":"history","mean":0.016309917596380574,"sd":0.12666453404319555,"coef":0.01966210794061109},{"key":"dials_needed","label":"Dials needed last round (log)","group":"effort","mean":1.2403095713557184,"sd":0.5980510429047139,"coef":0.26446872224793716},{"key":"days_needed","label":"Days needed last round","group":"effort","mean":1.7248727284846566,"sd":1.4264845998203959,"coef":0.1103553762462799},{"key":"same_enum","label":"Same enumerator in the last two interviews","group":"continuity","mean":0.789679134137095,"sd":0.4075365005071116,"coef":-0.09222216062247454},{"key":"first_within_hour","label":"Last round's first dial within an hour of the interview before","group":"timing","mean":0.20446345995217424,"sd":0.4033090049782671,"coef":-0.03133364323994908},{"key":"hour_evening","label":"Last interview at 18:00 or later","group":"timing","mean":0.20126409819468113,"sd":0.40094496002888336,"coef":0.018612153440111526},{"key":"hour_morning","label":"Last interview before 12:00","group":"timing","mean":0.23636219704765993,"sd":0.4248471594049596,"coef":-0.03421740012515254},{"key":"interview_min","label":"Length of the last interview (minutes)","group":"effort","mean":13.07666371181735,"sd":7.830221289932905,"coef":0.009620729708773701},{"key":"number_problem","label":"A number not working or switched off last round","group":"numbers","mean":0.09453314247963003,"sd":0.29256901314485784,"coef":0.028969715794154395},{"key":"refusal","label":"A refusal last round before the interview","group":"refusal","mean":0.015098968666232527,"sd":0.12194666789809658,"coef":-0.014647762538704524}],"mean_intercept":-3.7826564365421307,"intercepts":{"L2Indo":-2.393286123112898,"L2Kaz":-2.921214449597489,"L2KGZ":-3.923593385614255,"L2PHL":-2.6475239294612574,"L2T":-3.3128612319645017,"L2CU":-4.415344955030572},"n":{"L2Indo":12164,"L2Kaz":44489,"L2KGZ":33011,"L2PHL":9378,"L2T":25387,"L2CU":115609},"loss_rate":0.0498,"groups":[{"key":"tenure","label":"Rounds since joining","features":["k1","k2","k3","k7_12","k13p"]},{"key":"history","label":"Rounds missed before the last interview","features":["missed_prev","missed_t1"]},{"key":"effort","label":"Effort the last interview needed","features":["dials_needed","days_needed"]},{"key":"continuity","label":"Enumerator of the last two interviews","features":["same_enum"]},{"key":"timing","label":"Time of the last interview","features":["first_within_hour","hour_evening","hour_morning"]},{"key":"length","label":"Length of the last interview","features":["interview_min"]},{"key":"numbers","label":"Numbers not working last round","features":["number_problem"]},{"key":"refusal","label":"A refusal last round","features":["refusal"]}]},"return":{"features":[{"key":"k1","label":"Joined in the round before the miss","group":"tenure","mean":0.3224025974025974,"sd":0.4673961516643628,"coef":-0.4075392635596597},{"key":"k2","label":"Joined two rounds before the miss","group":"tenure","mean":0.10941558441558441,"sd":0.31215991783472224,"coef":-0.2231256326285937},{"key":"k3","label":"Joined three rounds before the miss","group":"tenure","mean":0.18051948051948052,"sd":0.38461954925933933,"coef":-0.07675055334836259},{"key":"k7_12","label":"In the panel 7 to 12 rounds","group":"tenure","mean":0.05,"sd":0.2179449471770336,"coef":-0.027485257854207076},{"key":"k13p","label":"In the panel 13 rounds or more","group":"tenure","mean":0.08896103896103896,"sd":0.28468749973964697,"coef":-0.30734241702123477},{"key":"missed_prev","label":"Rounds missed among the three before the last interview","group":"history","mean":0.26785714285714285,"sd":0.6008700015915389,"coef":-0.20748885345519885},{"key":"dialled_miss","label":"Dialed in the missed round","group":"effort","mean":0.9928571428571429,"sd":0.08421304373251141,"coef":-0.04889997560263915},{"key":"dials_miss","label":"Dials in the missed round (log)","group":"effort","mean":2.078430870958658,"sd":0.6780570154573462,"coef":-0.13017613006049847},{"key":"days_miss","label":"Days dialed in the missed round","group":"effort","mean":5.252597402597402,"sd":3.084917184094336,"coef":-0.29445260672769774},{"key":"contact_miss","label":"Reached in the missed round, no interview","group":"contact","mean":0.35324675324675325,"sd":0.4779785398607145,"coef":0.14650825577782078},{"key":"refusal_miss","label":"A refusal in the missed round","group":"refusal","mean":0.09707792207792208,"sd":0.296063842984845,"coef":-0.10015328803118759},{"key":"number_problem_miss","label":"A number not working or switched off in the missed round","group":"numbers","mean":0.47435064935064936,"sd":0.4993416774226509,"coef":0.027789210927359018},{"key":"dials_needed","label":"Dials needed at the last interview (log)","group":"effort","mean":1.5440334169915773,"sd":0.6330514228032571,"coef":-0.01678067268002166},{"key":"same_enum_miss","label":"Missed round first dialed by the enumerator of the last interview","group":"continuity","mean":0.6146103896103896,"sd":0.48668722871404246,"coef":0.025968027681738254}],"mean_intercept":-0.15430932253941118,"intercepts":{"L2Indo":-0.9124973171808133,"L2PHL":0.74958027961315},"n":{"L2Indo":1675,"L2PHL":1405},"return_rate":0.4656,"groups":[{"key":"tenure","label":"Rounds since joining","features":["k1","k2","k3","k7_12","k13p"]},{"key":"history","label":"Rounds missed before the last interview","features":["missed_prev"]},{"key":"miss_effort","label":"Effort in the missed round","features":["dialled_miss","dials_miss","days_miss"]},{"key":"contact","label":"Reached in the missed round","features":["contact_miss"]},{"key":"refusal","label":"A refusal in the missed round","features":["refusal_miss"]},{"key":"numbers","label":"Numbers not working in the missed round","features":["number_problem_miss"]},{"key":"effort","label":"Effort the last interview needed","features":["dials_needed"]},{"key":"continuity","label":"Missed round first dialed by the enumerator of the last interview","features":["same_enum_miss"]}]},"codes":{"L2CU":{"number":["Non-working number","Out of Service Area","Wrong number"],"refusal":null,"contact":["Hangup","Interrapted survey","No time"]},"L2T":{"number":null,"refusal":null,"contact":null},"L2KGZ":{"number":null,"refusal":null,"contact":null},"L2Kaz":{"number":["Business, government office, other organization","Disconnected number"],"refusal":["Soft Refusal, Respondent"],"contact":["Call again","Definite Appointment - Respondent","Not available","Other, Referred to Supervisor (Eligible)"]},"L2PHL":{"number":["Don't know the household","Number does not exist / Not ringing","Phone off / Not in service"],"refusal":["Refused"],"contact":["Not yet started (scheduled call)","Partially complete (no more call)","Partially complete (scheduled call)"]},"L2Indo":{"number":["Failed (no dial tone/silent, voice mail, wrong number)","NOMER TIDAK AKTIF /TIDAK ADA WA","Not match with data base"],"refusal":["Refused to participate"],"contact":["ON APPOINTMENT","On Appointment","Partially Completed Interviews","Partially complete interviews"]}},"validation_summary":{"dropout_leave_one_program_out":{"L2CU":{"n":115609,"events":1158,"rate":0.01,"auc":0.7211,"brier":0.0107,"brier_null":0.0099,"capture_high":0.4093,"tiers":{"high":{"rate":0.0274,"lo":0.0251,"hi":0.0299,"n":17309},"medium":{"rate":0.0101,"lo":0.0092,"hi":0.0111,"n":40475},"low":{"rate":0.0048,"lo":0.0042,"hi":0.0054,"n":57825}},"auc_tenure_only":0.6376,"auc_dials_rule":0.6025,"auc_trees":0.7197,"capture_tenure_only":0.291},"L2T":{"n":25387,"events":1724,"rate":0.0679,"auc":0.7501,"brier":0.0607,"brier_null":0.0633,"capture_high":0.42,"tiers":{"high":{"rate":0.1904,"lo":0.1783,"hi":0.2032,"n":3802},"medium":{"rate":0.0616,"lo":0.0568,"hi":0.0668,"n":8889},"low":{"rate":0.0356,"lo":0.0325,"hi":0.039,"n":12696}},"auc_tenure_only":0.6734,"auc_dials_rule":0.5764,"auc_trees":0.7408,"capture_tenure_only":0.3121},"L2KGZ":{"n":33011,"events":996,"rate":0.0302,"auc":0.7182,"brier":0.0285,"brier_null":0.0293,"capture_high":0.4448,"tiers":{"high":{"rate":0.0895,"lo":0.0819,"hi":0.0978,"n":4947},"medium":{"rate":0.0303,"lo":0.0273,"hi":0.0336,"n":11552},"low":{"rate":0.0123,"lo":0.0107,"hi":0.0141,"n":16512}},"auc_tenure_only":0.6287,"auc_dials_rule":0.6103,"auc_trees":0.7102,"capture_tenure_only":0.2992},"L2Kaz":{"n":44489,"events":4065,"rate":0.0914,"auc":0.7451,"brier":0.0813,"brier_null":0.083,"capture_high":0.3503,"tiers":{"high":{"rate":0.2136,"lo":0.2039,"hi":0.2236,"n":6667},"medium":{"rate":0.1001,"lo":0.0955,"hi":0.1049,"n":15572},"low":{"rate":0.0486,"lo":0.0459,"hi":0.0515,"n":22250}},"auc_tenure_only":0.702,"auc_dials_rule":0.5893,"auc_trees":0.7064,"capture_tenure_only":0.2367},"L2PHL":{"n":9378,"events":2148,"rate":0.229,"auc":0.7175,"brier":0.1795,"brier_null":0.1766,"capture_high":0.2896,"tiers":{"high":{"rate":0.4437,"lo":0.4178,"hi":0.4698,"n":1402},"medium":{"rate":0.3091,"lo":0.2935,"hi":0.3251,"n":3284},"low":{"rate":0.1089,"lo":0.1003,"hi":0.1181,"n":4692}},"auc_tenure_only":0.5907,"auc_dials_rule":0.5789,"auc_trees":0.6514,"capture_tenure_only":0.2593},"L2Indo":{"n":12164,"events":1867,"rate":0.1535,"auc":0.6863,"brier":0.1373,"brier_null":0.1299,"capture_high":0.3064,"tiers":{"high":{"rate":0.3141,"lo":0.2932,"hi":0.3358,"n":1821},"medium":{"rate":0.182,"lo":0.1707,"hi":0.1938,"n":4259},"low":{"rate":0.0855,"lo":0.0787,"hi":0.0928,"n":6084}},"auc_tenure_only":0.6022,"auc_dials_rule":0.5682,"auc_trees":0.6517,"capture_tenure_only":0.2057}},"dropout_rolling_origin":{"L2CU":{"steps":75,"auc_own":0.7353,"auc_pooled_recalibrated":0.7368,"brier_own":0.0095,"brier_pooled_recalibrated":0.0095,"brier_pooled_as_is":0.0099,"capture_high_recalibrated":0.4158},"L2T":{"steps":11,"auc_own":0.7322,"auc_pooled_recalibrated":0.7393,"brier_own":0.0521,"brier_pooled_recalibrated":0.0515,"brier_pooled_as_is":0.0524,"capture_high_recalibrated":0.4872},"L2KGZ":{"steps":20,"auc_own":0.7219,"auc_pooled_recalibrated":0.7116,"brier_own":0.0262,"brier_pooled_recalibrated":0.0262,"brier_pooled_as_is":0.0261,"capture_high_recalibrated":0.4607},"L2Kaz":{"steps":28,"auc_own":0.7471,"auc_pooled_recalibrated":0.7419,"brier_own":0.0733,"brier_pooled_recalibrated":0.0734,"brier_pooled_as_is":0.077,"capture_high_recalibrated":0.3692},"L2PHL":{"steps":6,"auc_own":0.7166,"auc_pooled_recalibrated":0.7317,"brier_own":0.1597,"brier_pooled_recalibrated":0.1568,"brier_pooled_as_is":0.1761,"capture_high_recalibrated":0.3037},"L2Indo":{"steps":7,"auc_own":0.6791,"auc_pooled_recalibrated":0.6746,"brier_own":0.1123,"brier_pooled_recalibrated":0.1126,"brier_pooled_as_is":0.12,"capture_high_recalibrated":0.3407}},"return_other_program":{"L2PHL":{"n":1405,"events":830,"rate":0.5907,"auc":0.6086,"brier":0.3916,"brier_null":0.2418,"tiers":{"high":{"rate":0.7452,"lo":0.6819,"hi":0.7996,"n":208},"medium":{"rate":0.6187,"lo":0.575,"hi":0.6605,"n":493},"low":{"rate":0.5256,"lo":0.4886,"hi":0.5622,"n":704}},"auc_tenure_only":0.5506},"L2Indo":{"n":1675,"events":604,"rate":0.3606,"auc":0.6043,"brier":0.3738,"brier_null":0.2306,"tiers":{"high":{"rate":0.5223,"lo":0.4601,"hi":0.5837,"n":247},"medium":{"rate":0.4133,"lo":0.3742,"hi":0.4535,"n":588},"low":{"rate":0.2762,"lo":0.247,"hi":0.3074,"n":840}},"auc_tenure_only":0.574}},"return_rolling_origin":{"L2PHL":{"steps":3,"auc_own":0.5557,"brier_own":0.2442,"auc_other_recalibrated":0.5892,"brier_other_recalibrated":0.2326,"brier_null":0.2376},"L2Indo":{"steps":6,"auc_own":0.5778,"brier_own":0.2313,"auc_other_recalibrated":0.6234,"brier_other_recalibrated":0.2254,"brier_null":0.2272}}}};
-window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWritten by `models/make_card.py` from the backtests of `models/train_risk.py` (trained 2026-10-27). Every number below comes from those files. The tool shows this card beside every risk list.\n\n## What the models predict\n\n| Model | For | Predicts | Handbook measure | What the leader does with it |\n|---|---|---|---|---|\n| Dropout risk | a household interviewed in the last round | not interviewed in this round | loss, the complement of continuation (Box 2.0, Section 3.4.3) | give it an early first dial at its usual hour, keep its enumerator, check its numbers, collect another number |\n| Return likelihood | a household interviewed two rounds ago and missed last round | interviewed again within the next three rounds | returns (Sections 3.3.5 and 3.4.3) | order the redials; never drop a household, which the handbook rules out (3.3.5) |\n\nInterviewed means a completed call-log case, as the handbook's build script defines it. A tier is never a prediction about one household: it says how similar households fared.\n\n## Training data\n\n| Program | Rounds used | Round numbers | Cases | Dropout pairs | Return pairs | Number codes | Refusal codes | Call length |\n|---|---|---|---|---|---|---|---|---|\n| L2CU | 79 | 2\u201382 | 125,670 | 115,609 | \u2013 | yes | no | yes |\n| L2T | 15 | 1\u201317 | 35,679 | 25,387 | \u2013 | no | no | yes |\n| L2KGZ | 30 | 1\u201342 | 50,948 | 33,011 | \u2013 | no | no | yes |\n| L2Kaz | 32 | 1\u201333 | 58,272 | 44,489 | \u2013 | yes | yes | yes |\n| L2PHL | 9 | 2\u201310 | 22,055 | 9,378 | 1,405 | yes | yes | yes |\n| L2Indo | 15 | 1\u201328 | 68,962 | 12,164 | 1,675 | yes | yes | no |\n\nThe handbook's harmonized case and dial tables of its six programs with dial logs, kept locally and never published. Loss rate over all dropout pairs: 5.0%; return rate over all return pairs: 46.6%. The return model uses L2PHL and L2Indo only, because they redial almost every missed household; elsewhere the households redialed are chosen, and a model would learn the team's choice rather than the household's chance (3.3.5). Training writes only coefficients and the aggregates below, with no household ID and with cells under 10 suppressed.\n\n## Features\n\nOperational only: no demographic feature. Each is computed from what is known before the round predicted.\n\n| Dropout model | Coefficient | Mean | SD |\n|---|---|---|---|\n| Joined in the round before | +0.282 | 0.07 | 0.25 |\n| Joined two rounds before | +0.131 | 0.05 | 0.21 |\n| Joined three rounds before | +0.074 | 0.04 | 0.20 |\n| In the panel 7 to 12 rounds | -0.060 | 0.17 | 0.38 |\n| In the panel 13 rounds or more | -0.377 | 0.56 | 0.50 |\n| Rounds missed among the three before | +0.203 | 0.05 | 0.31 |\n| Missed the round before | +0.020 | 0.02 | 0.13 |\n| Dials needed last round (log) | +0.264 | 1.24 | 0.60 |\n| Days needed last round | +0.110 | 1.72 | 1.43 |\n| Same enumerator in the last two interviews | -0.092 | 0.79 | 0.41 |\n| Last round's first dial within an hour of the interview before | -0.031 | 0.20 | 0.40 |\n| Last interview at 18:00 or later | +0.019 | 0.20 | 0.40 |\n| Last interview before 12:00 | -0.034 | 0.24 | 0.42 |\n| Length of the last interview (minutes) | +0.010 | 13.08 | 7.83 |\n| A number not working or switched off last round | +0.029 | 0.09 | 0.29 |\n| A refusal last round before the interview | -0.015 | 0.02 | 0.12 |\n\n\n| Return model | Coefficient | Mean | SD |\n|---|---|---|---|\n| Joined in the round before the miss | -0.408 | 0.32 | 0.47 |\n| Joined two rounds before the miss | -0.223 | 0.11 | 0.31 |\n| Joined three rounds before the miss | -0.077 | 0.18 | 0.38 |\n| In the panel 7 to 12 rounds | -0.027 | 0.05 | 0.22 |\n| In the panel 13 rounds or more | -0.307 | 0.09 | 0.28 |\n| Rounds missed among the three before the last interview | -0.207 | 0.27 | 0.60 |\n| Dialed in the missed round | -0.049 | 0.99 | 0.08 |\n| Dials in the missed round (log) | -0.130 | 2.08 | 0.68 |\n| Days dialed in the missed round | -0.294 | 5.25 | 3.08 |\n| Reached in the missed round, no interview | +0.147 | 0.35 | 0.48 |\n| A refusal in the missed round | -0.100 | 0.10 | 0.30 |\n| A number not working or switched off in the missed round | +0.028 | 0.47 | 0.50 |\n| Dials needed at the last interview (log) | -0.017 | 1.54 | 0.63 |\n| Missed round first dialed by the enumerator of the last interview | +0.026 | 0.61 | 0.49 |\n\nCoefficients are per standard deviation, from a ridge-penalised logistic regression with one intercept per program. Rounds since joining is compared with 4 to 6 rounds. A feature a program's codes do not define counts as average for that program. In the tool, the explanation adds up the contributions of related features and describes the household's own values.\n\n**Left out on purpose:** household size, the respondent's sex and age, education, region, urban or rural, language, and every survey answer. Region and urban or rural are sampling variables, but they would steer effort by place; survey answers would steer it by welfare. The leader view shows how each tier divides by stratum, so that any concentration in one area is visible.\n\n**Not in the training tables:** the number of phone numbers and whether another number was used. The tool records both, so a program can add them once its own data allow a refit.\n\n## How well they work, on data they were not trained on\n\n### Dropout risk, each program left out in turn\n\nTrained on five programs, tested on the sixth with the average intercept: the honest test for a new program such as Mongolia.\n\n| Program left out | Household-rounds | Loss rate | AUC | AUC, tenure only | AUC, dials rule | AUC, boosted trees | Brier / no model | Losses in the high tier | \u2026 tenure only |\n|---|---|---|---|---|---|---|---|---|---|\n| L2CU | 115,609 | 1.0% | 0.72 | 0.64 | 0.60 | 0.72 | 0.0107 / 0.0099 | 41% | 29% |\n| L2T | 25,387 | 6.8% | 0.75 | 0.67 | 0.58 | 0.74 | 0.0607 / 0.0633 | 42% | 31% |\n| L2KGZ | 33,011 | 3.0% | 0.72 | 0.63 | 0.61 | 0.71 | 0.0285 / 0.0293 | 44% | 30% |\n| L2Kaz | 44,489 | 9.1% | 0.75 | 0.70 | 0.59 | 0.71 | 0.0813 / 0.0830 | 35% | 24% |\n| L2PHL | 9,378 | 22.9% | 0.72 | 0.59 | 0.58 | 0.65 | 0.1795 / 0.1766 | 29% | 26% |\n| L2Indo | 12,164 | 15.3% | 0.69 | 0.60 | 0.57 | 0.65 | 0.1373 / 0.1299 | 31% | 21% |\n\nAUC is the chance that a lost household scores above a kept one (0.5 is no better than chance). The high tier is the top 15% of each round's households. The two baselines: the loss rate by rounds since joining alone (the handbook's hazard curve), and the rule \"needed more dials than three households in four last round\". The boosted trees are a check on the model's form. They ranked households no better than the logistic model in any program (AUC); their chances were somewhat closer to what happened in L2CU, L2Kaz, L2PHL, L2Indo (Brier), which bears on calibration, and the tool recalibrates chances on the program's own rounds before showing any. The logistic model, whose explanations are clearer, is the one used.\n\n### Dropout risk, with the program's own past rounds\n\nRolling origin: at each round, only the rounds whose outcomes were already known are used. \"Recalibrated\" here is the model trained on the other five programs, with its intercept and slope refitted on the program's own past rounds once two rounds have outcomes. The tool does the same for a new program with the model trained on all six.\n\n| Program | Rounds tested | AUC, own rounds only | AUC, recalibrated | Brier, recalibrated / as is | Losses in the high tier | High tier: loss rate (95% CI) | Medium tier | Low tier |\n|---|---|---|---|---|---|---|---|---|\n| L2CU | 75 | 0.74 | 0.74 | 0.0095 / 0.0099 | 42% | 2.7% (2.5%\u20132.9%) | 1.0% (0.9%\u20131.1%) | 0.4% (0.4%\u20130.5%) |\n| L2T | 11 | 0.73 | 0.74 | 0.0515 / 0.0524 | 49% | 18.8% (17.5%\u201320.2%) | 5.2% (4.8%\u20135.7%) | 2.3% (2.0%\u20132.6%) |\n| L2KGZ | 20 | 0.72 | 0.71 | 0.0262 / 0.0261 | 46% | 8.5% (7.7%\u20139.3%) | 2.7% (2.4%\u20133.0%) | 1.1% (0.9%\u20131.3%) |\n| L2Kaz | 28 | 0.75 | 0.74 | 0.0734 / 0.0770 | 37% | 21.2% (20.2%\u201322.2%) | 9.2% (8.8%\u20139.7%) | 4.4% (4.1%\u20134.7%) |\n| L2PHL | 6 | 0.72 | 0.73 | 0.1568 / 0.1761 | 30% | 46.0% (43.0%\u201349.0%) | 31.1% (29.3%\u201333.0%) | 9.7% (8.8%\u201310.7%) |\n| L2Indo | 7 | 0.68 | 0.67 | 0.1126 / 0.1200 | 34% | 30.2% (27.8%\u201332.6%) | 15.2% (14.0%\u201316.5%) | 6.8% (6.1%\u20137.6%) |\n\n### Return likelihood\n\n| Program tested | Household-rounds | Return rate | AUC, trained on the other | AUC, tenure only | Brier / no model | AUC, recalibrated on own rounds | Brier recalibrated / no model | High tier: return rate, trained on the other | Low tier (all but the high tier), trained on the other |\n|---|---|---|---|---|---|---|---|---|---|\n| L2PHL | 1,405 | 59.1% | 0.61 | 0.55 | 0.3916 / 0.2418 | 0.59 | 0.2326 / 0.2376 | 74.5% (68.2%\u201380.0%) | 56.4% (53.6%\u201359.2%) |\n| L2Indo | 1,675 | 36.1% | 0.60 | 0.57 | 0.3738 / 0.2306 | 0.62 | 0.2254 / 0.2272 | 52.2% (46.0%\u201358.4%) | 33.3% (30.9%\u201335.7%) |\n\n## Where the models do poorly\n\n- **Levels do not carry between programs.** Loss rates range from 1.0% to 22.9%. Applied as it is to a program it has not seen, the dropout model ranks households usefully but its chances are off: in three of the six programs its Brier score is worse than having no model. The tool therefore shows a new program only the tier and how far a household is above the round's average, and shows a chance only after recalibrating on the program's own rounds.\n- **The ranking is moderate, not sharp.** The weakest held-out program is L2Indo (AUC 0.69). The high tier holds between 29% and 49% of next round's losses; most losses still come from the medium and low tiers.\n- **The return model is weak.** Its AUC is about 0.6 within a program (L2PHL 0.59, L2Indo 0.62 after recalibration), and recalibrated it is only slightly better than the average return rate. Its return levels differ so much between L2PHL and L2Indo that pooling the two inverts the ranking. Use it only to order redials, never to decide whom to drop.\n- **Some features are missing in some programs.** L2T's and L2KGZ's result codes are not defined in the handbook, so the number and refusal features rest on the other programs; L2Indo records no call length.\n- **Rounds since joining counts from the first round in the data.** A program that starts using the tool mid-panel undercounts its households' tenure until earlier rounds are loaded.\n- **Dropout also depends on next round's effort,** which no model fitted before the round can see.\n\n## How the tool uses them\n\n- **Tiers, tied to workload.** Within the round, the top 15% of households by score are high, the next 35% medium, the rest low. The dropout model keeps high, medium, low: no two adjacent tiers' 95% intervals overlapped in any held-out test of the model as trained or recalibrated. For the return model the medium and low tiers overlapped in L2PHL's rolling-origin test of the recalibrated model (60.5% and 57.0%), so its tiers are merged to high and low, the low tier taking the rest. The program-only refit is tested separately, on the program's own rounds, before the tool offers it.\n- **Leader only.** Enumerators never see a household's tier. The tier is not written into assignment files; it only moves high tier households earlier in the plan of first dials, as Section 3.4's box asks.\n- **Features behind the score.** The three groups of features that move the score most, with the household's own values.\n- **The program's own data.** After two rounds with outcomes, the tool offers a recalibration, backtested on the program's own rounds; after about 300 own losses, a refit. The leader switches only after seeing the backtest, and the card says which version is active.\n";
+window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWritten by `models/make_card.py` from the backtests of `models/train_risk.py` (trained 2026-10-27). Every number below comes from those files. The tool shows this card beside every risk list.\n\n## What the models predict\n\n| Model | For | Predicts | Handbook measure | What the leader does with it |\n|---|---|---|---|---|\n| Dropout risk | a household interviewed in the last round | not interviewed in this round | loss, the complement of continuation (Box 2.0, Section 3.4.3) | give it an early first dial at its usual hour, keep its enumerator, check its numbers, collect another number |\n| Return likelihood | a household interviewed two rounds ago and missed last round | interviewed again within the next three rounds | returns (Sections 3.3.5 and 3.4.3) | order the redials; never drop a household, which the handbook rules out (3.3.5) |\n\nInterviewed means a completed call-log case, as the handbook's build script defines it. A tier is never a prediction about one household: it says how similar households fared.\n\n## Training data\n\n| Program | Rounds used | Round numbers | Cases | Dropout pairs | Return pairs | Number codes | Refusal codes | Call length |\n|---|---|---|---|---|---|---|---|---|\n| L2CU | 79 | 2\u201382 | 125,670 | 115,609 | \u2013 | yes | no | yes |\n| L2T | 15 | 1\u201317 | 35,679 | 25,387 | \u2013 | no | no | yes |\n| L2KGZ | 30 | 1\u201342 | 50,948 | 33,011 | \u2013 | no | no | yes |\n| L2Kaz | 32 | 1\u201333 | 58,272 | 44,489 | \u2013 | yes | yes | yes |\n| L2PHL | 9 | 2\u201310 | 22,055 | 9,378 | 1,405 | yes | yes | yes |\n| L2Indo | 15 | 1\u201328 | 68,962 | 12,164 | 1,675 | yes | yes | no |\n\nThe handbook's harmonized case and dial tables of its six programs with dial logs, kept locally and never published. Loss rate over all dropout pairs: 5.0%; return rate over all return pairs: 46.6%. The return model uses L2PHL and L2Indo only, because they redial almost every missed household; elsewhere the households redialed are chosen, and a model would learn the team's choice rather than the household's chance (3.3.5). Training writes only coefficients and the aggregates below, with no household ID and with cells under 10 suppressed.\n\n## Features\n\nOperational only: no demographic feature. Each is computed from what is known before the round predicted.\n\n| Dropout model | Coefficient | 95% interval | z | p | Mean | SD |\n|---|---|---|---|---|---|---|\n| Joined in the round before | +0.282 | +0.263 to +0.300 | 29.5 | <0.001 | 0.07 | 0.25 |\n| Joined two rounds before | +0.131 | +0.114 to +0.148 | 15.1 | <0.001 | 0.05 | 0.21 |\n| Joined three rounds before | +0.074 | +0.057 to +0.091 | 8.7 | <0.001 | 0.04 | 0.20 |\n| In the panel 7 to 12 rounds | -0.060 | -0.086 to -0.034 | -4.6 | <0.001 | 0.17 | 0.38 |\n| In the panel 13 rounds or more | -0.377 | -0.411 to -0.343 | -21.7 | <0.001 | 0.56 | 0.50 |\n| Rounds missed among the three before | +0.203 | +0.185 to +0.221 | 22.7 | <0.001 | 0.05 | 0.31 |\n| Missed the round before | +0.020 | +0.003 to +0.036 | 2.3 | 0.019 | 0.02 | 0.13 |\n| Dials needed last round (log) | +0.264 | +0.235 to +0.294 | 17.5 | <0.001 | 1.24 | 0.60 |\n| Days needed last round | +0.110 | +0.088 to +0.132 | 9.8 | <0.001 | 1.72 | 1.43 |\n| Same enumerator in the last two interviews | -0.092 | -0.114 to -0.070 | -8.2 | <0.001 | 0.79 | 0.41 |\n| Last round's first dial within an hour of the interview before | -0.031 | -0.057 to -0.006 | -2.4 | 0.016 | 0.20 | 0.40 |\n| Last interview at 18:00 or later | +0.019 | -0.002 to +0.040 | 1.8 | 0.080 | 0.20 | 0.40 |\n| Last interview before 12:00 | -0.034 | -0.057 to -0.012 | -3.0 | 0.003 | 0.24 | 0.42 |\n| Length of the last interview (minutes) | +0.010 | -0.011 to +0.030 | 0.9 | 0.351 | 13.08 | 7.83 |\n| A number not working or switched off last round | +0.029 | +0.005 to +0.053 | 2.3 | 0.020 | 0.09 | 0.29 |\n| A refusal last round before the interview | -0.015 | -0.034 to +0.004 | -1.5 | 0.130 | 0.02 | 0.12 |\n\n\n| Return model | Coefficient | 95% interval | z | p | Mean | SD |\n|---|---|---|---|---|---|---|\n| Joined in the round before the miss | -0.408 | -0.516 to -0.299 | -7.3 | <0.001 | 0.32 | 0.47 |\n| Joined two rounds before the miss | -0.223 | -0.315 to -0.132 | -4.8 | <0.001 | 0.11 | 0.31 |\n| Joined three rounds before the miss | -0.077 | -0.168 to +0.014 | -1.6 | 0.098 | 0.18 | 0.38 |\n| In the panel 7 to 12 rounds | -0.027 | -0.106 to +0.051 | -0.7 | 0.494 | 0.05 | 0.22 |\n| In the panel 13 rounds or more | -0.307 | -0.402 to -0.213 | -6.4 | <0.001 | 0.09 | 0.28 |\n| Rounds missed among the three before the last interview | -0.207 | -0.296 to -0.119 | -4.6 | <0.001 | 0.27 | 0.60 |\n| Dialed in the missed round | -0.049 | -0.144 to +0.046 | -1.0 | 0.315 | 0.99 | 0.08 |\n| Dials in the missed round (log) | -0.130 | -0.307 to +0.047 | -1.4 | 0.150 | 2.08 | 0.68 |\n| Days dialed in the missed round | -0.294 | -0.483 to -0.106 | -3.1 | 0.002 | 5.25 | 3.08 |\n| Reached in the missed round, no interview | +0.147 | +0.070 to +0.223 | 3.7 | <0.001 | 0.35 | 0.48 |\n| A refusal in the missed round | -0.100 | -0.177 to -0.023 | -2.5 | 0.011 | 0.10 | 0.30 |\n| A number not working or switched off in the missed round | +0.028 | -0.082 to +0.138 | 0.5 | 0.621 | 0.47 | 0.50 |\n| Dials needed at the last interview (log) | -0.017 | -0.097 to +0.063 | -0.4 | 0.681 | 1.54 | 0.63 |\n| Missed round first dialed by the enumerator of the last interview | +0.026 | -0.088 to +0.140 | 0.5 | 0.655 | 0.61 | 0.49 |\n\nSignificance (`models/coef_significance.py`): standard errors from the sandwich estimator of the same penalised fit, with households as clusters, since a household contributes several household-rounds (240,038 household-rounds from 18,152 households for dropout; 3,080 from 2,550 for return). z is the coefficient over its standard error; p is two-sided. With this many household-rounds, small effects reach significance: the size of a coefficient and the backtests below say more about the lists than p does. Features are correlated (the tenure bands, the missed rounds), so each coefficient is the feature's effect with the others held fixed. 95% intervals that include zero: dropout, last interview at 18:00 or later, length of the last interview (minutes), a refusal last round before the interview; return, joined three rounds before the miss, in the panel 7 to 12 rounds, dialed in the missed round, dials in the missed round (log), a number not working or switched off in the missed round, dials needed at the last interview (log), missed round first dialed by the enumerator of the last interview.\n\n\nCoefficients are per standard deviation, from a ridge-penalised logistic regression with one intercept per program. Rounds since joining is compared with 4 to 6 rounds. A feature a program's codes do not define counts as average for that program. In the tool, the explanation adds up the contributions of related features and describes the household's own values.\n\n**Left out on purpose:** household size, the respondent's sex and age, education, region, urban or rural, language, and every survey answer. Region and urban or rural are sampling variables, but they would steer effort by place; survey answers would steer it by welfare. The leader view shows how each tier divides by stratum, so that any concentration in one area is visible.\n\n**Not in the training tables:** the number of phone numbers and whether another number was used. The tool records both, so a program can add them once its own data allow a refit.\n\n## How well they work, on data they were not trained on\n\n### Dropout risk, each program left out in turn\n\nTrained on five programs, tested on the sixth with the average intercept: the honest test for a new program such as Mongolia.\n\n| Program left out | Household-rounds | Loss rate | AUC | AUC, tenure only | AUC, dials rule | AUC, boosted trees | Brier / no model | Losses in the high tier | \u2026 tenure only |\n|---|---|---|---|---|---|---|---|---|---|\n| L2CU | 115,609 | 1.0% | 0.72 | 0.64 | 0.60 | 0.72 | 0.0107 / 0.0099 | 41% | 29% |\n| L2T | 25,387 | 6.8% | 0.75 | 0.67 | 0.58 | 0.74 | 0.0607 / 0.0633 | 42% | 31% |\n| L2KGZ | 33,011 | 3.0% | 0.72 | 0.63 | 0.61 | 0.71 | 0.0285 / 0.0293 | 44% | 30% |\n| L2Kaz | 44,489 | 9.1% | 0.75 | 0.70 | 0.59 | 0.71 | 0.0813 / 0.0830 | 35% | 24% |\n| L2PHL | 9,378 | 22.9% | 0.72 | 0.59 | 0.58 | 0.65 | 0.1795 / 0.1766 | 29% | 26% |\n| L2Indo | 12,164 | 15.3% | 0.69 | 0.60 | 0.57 | 0.65 | 0.1373 / 0.1299 | 31% | 21% |\n\nAUC is the chance that a lost household scores above a kept one (0.5 is no better than chance). The high tier is the top 15% of each round's households. The two baselines: the loss rate by rounds since joining alone (the handbook's hazard curve), and the rule \"needed more dials than three households in four last round\". The boosted trees are a check on the model's form. They ranked households no better than the logistic model in any program (AUC); their chances were somewhat closer to what happened in L2CU, L2Kaz, L2PHL, L2Indo (Brier), which bears on calibration, and the tool recalibrates chances on the program's own rounds before showing any. The logistic model, whose explanations are clearer, is the one used.\n\n### Dropout risk, with the program's own past rounds\n\nRolling origin: at each round, only the rounds whose outcomes were already known are used. \"Recalibrated\" here is the model trained on the other five programs, with its intercept and slope refitted on the program's own past rounds once two rounds have outcomes. The tool does the same for a new program with the model trained on all six.\n\n| Program | Rounds tested | AUC, own rounds only | AUC, recalibrated | Brier, recalibrated / as is | Losses in the high tier | High tier: loss rate (95% CI) | Medium tier | Low tier |\n|---|---|---|---|---|---|---|---|---|\n| L2CU | 75 | 0.74 | 0.74 | 0.0095 / 0.0099 | 42% | 2.7% (2.5%\u20132.9%) | 1.0% (0.9%\u20131.1%) | 0.4% (0.4%\u20130.5%) |\n| L2T | 11 | 0.73 | 0.74 | 0.0515 / 0.0524 | 49% | 18.8% (17.5%\u201320.2%) | 5.2% (4.8%\u20135.7%) | 2.3% (2.0%\u20132.6%) |\n| L2KGZ | 20 | 0.72 | 0.71 | 0.0262 / 0.0261 | 46% | 8.5% (7.7%\u20139.3%) | 2.7% (2.4%\u20133.0%) | 1.1% (0.9%\u20131.3%) |\n| L2Kaz | 28 | 0.75 | 0.74 | 0.0734 / 0.0770 | 37% | 21.2% (20.2%\u201322.2%) | 9.2% (8.8%\u20139.7%) | 4.4% (4.1%\u20134.7%) |\n| L2PHL | 6 | 0.72 | 0.73 | 0.1568 / 0.1761 | 30% | 46.0% (43.0%\u201349.0%) | 31.1% (29.3%\u201333.0%) | 9.7% (8.8%\u201310.7%) |\n| L2Indo | 7 | 0.68 | 0.67 | 0.1126 / 0.1200 | 34% | 30.2% (27.8%\u201332.6%) | 15.2% (14.0%\u201316.5%) | 6.8% (6.1%\u20137.6%) |\n\n### Return likelihood\n\n| Program tested | Household-rounds | Return rate | AUC, trained on the other | AUC, tenure only | Brier / no model | AUC, recalibrated on own rounds | Brier recalibrated / no model | High tier: return rate, trained on the other | Low tier (all but the high tier), trained on the other |\n|---|---|---|---|---|---|---|---|---|---|\n| L2PHL | 1,405 | 59.1% | 0.61 | 0.55 | 0.3916 / 0.2418 | 0.59 | 0.2326 / 0.2376 | 74.5% (68.2%\u201380.0%) | 56.4% (53.6%\u201359.2%) |\n| L2Indo | 1,675 | 36.1% | 0.60 | 0.57 | 0.3738 / 0.2306 | 0.62 | 0.2254 / 0.2272 | 52.2% (46.0%\u201358.4%) | 33.3% (30.9%\u201335.7%) |\n\n## Where the models do poorly\n\n- **Levels do not carry between programs.** Loss rates range from 1.0% to 22.9%. Applied as it is to a program it has not seen, the dropout model ranks households usefully but its chances are off: in three of the six programs its Brier score is worse than having no model. The tool therefore shows a new program only the tier and how far a household is above the round's average, and shows a chance only after recalibrating on the program's own rounds.\n- **The ranking is moderate, not sharp.** The weakest held-out program is L2Indo (AUC 0.69). The high tier holds between 29% and 49% of next round's losses; most losses still come from the medium and low tiers.\n- **The return model is weak.** Its AUC is about 0.6 within a program (L2PHL 0.59, L2Indo 0.62 after recalibration), and recalibrated it is only slightly better than the average return rate. Its return levels differ so much between L2PHL and L2Indo that pooling the two inverts the ranking. Use it only to order redials, never to decide whom to drop.\n- **Some features are missing in some programs.** L2T's and L2KGZ's result codes are not defined in the handbook, so the number and refusal features rest on the other programs; L2Indo records no call length.\n- **Rounds since joining counts from the first round in the data.** A program that starts using the tool mid-panel undercounts its households' tenure until earlier rounds are loaded.\n- **Dropout also depends on next round's effort,** which no model fitted before the round can see.\n\n## How the tool uses them\n\n- **Tiers, tied to workload.** Within the round, the top 15% of households by score are high, the next 35% medium, the rest low. The dropout model keeps high, medium, low: no two adjacent tiers' 95% intervals overlapped in any held-out test of the model as trained or recalibrated. For the return model the medium and low tiers overlapped in L2PHL's rolling-origin test of the recalibrated model (60.5% and 57.0%), so its tiers are merged to high and low, the low tier taking the rest. The program-only refit is tested separately, on the program's own rounds, before the tool offers it.\n- **Leader only.** Enumerators never see a household's tier. The tier is not written into assignment files; it only moves high tier households earlier in the plan of first dials, as Section 3.4's box asks.\n- **Features behind the score.** The three groups of features that move the score most, with the household's own values.\n- **The program's own data.** After two rounds with outcomes, the tool offers a recalibration, backtested on the program's own rounds; after about 300 own losses, a refit. The leader switches only after seeing the backtest, and the card says which version is active.\n";
 </script>
 <script>/* RTM interview tool, leader side: the dropout-risk and return-likelihood models (Step 4; PROPOSAL.md section E).
    The models were trained and backtested locally on the handbook's tables (models/train_risk.py); this file computes each
@@ -2936,7 +3164,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     return `<button class="card" data-act="open" data-hh="${esc(c.hhid)}">
       <span class="when">${t}</span><span class="kind k-${s.kind}">${kindLabel[s.kind] || ''}</span>
       <span class="id">${esc(c.hhid)}</span><span class="name">${esc((c.h.contact || {}).name || '')}</span>
-      <span class="meta">${c.n ? `${c.n} dial${c.n > 1 ? 's' : ''} · last: ${esc(statusLabel(c.last.status))}` : esc(reasonText(c.h))}${c.kind === 'replacement' ? ' · replacement' : ''}</span>
+      <span class="meta">${c.n ? `${c.n} dial${c.n > 1 ? 's' : ''} · last: ${esc(statusLabel(c.last.status))}` : c.prior && c.prior.dials ? `${R.plural(c.prior.dials, 'dial')} by ${esc(c.prior.from)} before the move${c.prior.last_status ? ` · last: ${esc(statusLabel(c.prior.last_status))}` : ''}` : esc(reasonText(c.h))}${c.kind === 'replacement' ? ' · replacement' : ''}</span>
     </button>`;
   }
   function todayPanel(C, now) {
@@ -2954,8 +3182,10 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <div class="today">
         ${q.isToday ? col('Due now', q.due, 'Nothing is due right now.', true) : ''}
         ${col(q.isToday ? 'Later today' : 'Planned for this day', q.later, 'No calls planned.', false)}
+        ${q.isToday && q.dayList ? col('Ahead of plan', q.ahead, q.due.length + q.later.length >= q.dayList ? `Your day list of ${q.dayList} is full with the calls above.` : 'Nothing left to pull forward.', true) : ''}
         ${q.isToday ? col('Needs your decision', q.decide, 'No decisions waiting.', false) : ''}
-      </div>`;
+      </div>
+      ${q.isToday && q.dayList ? `<p class="muted small">Your leader set a day list of ${q.dayList} households. When the calls due today are done, continue with “Ahead of plan”: households planned for later days, soonest first, so that unanswered calls do not leave you waiting.</p>` : ''}`;
   }
   const RULE_NOTE = 'How households are assigned: the handbook\'s stated default is to keep the same enumerator, rotate a planned share of households each round, and switch the enumerator for a household that becomes hard to reach (Section 3.5.3).';
   const RULE_REASONS = new Set(['keep', 'rotation', 'switch_hard_to_reach']);
@@ -2976,6 +3206,8 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     const a = h.assignment || {}, hist = h.history || {}, li = hist.last_interview, rule = ruleName();
     // 'rule' since the review loop; files written before it gave such households 'rotation'
     if (a.reason === 'rule' || (rule !== 'keep_same' && a.reason === 'rotation')) return ruleReason();
+    if (a.reason === 'mid_round') return `Moved to you during the round${a.previous_enumerator ? ` from ${a.previous_enumerator}` : ''}, so that the round finishes on time`;
+    if (a.reason === 'match') return `Matched to you by your leader's criteria${h.criteria ? ` (${criteriaText(h)})` : ''}`;
     if (a.reason !== 'keep') return R.REASONS[a.reason] || '';
     const t = APP.S ? APP.S.assignment.round : null;
     if (li && t !== null && li.round === t - 1) return 'Kept with you: you interviewed it last round';
@@ -2983,7 +3215,10 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     return 'Kept with you: you had it last round';
   }
   const reasonShort = { keep: 'Kept with you', rotation: 'Rotation', switch_hard_to_reach: 'Switched: hard to reach', enumerator_unavailable: 'Previous enumerator away',
-    new: 'New to the panel', manual: 'Assigned by hand', capacity: 'Workload balance', replacement: 'Replacement' };
+    new: 'New to the panel', manual: 'Assigned by hand', capacity: 'Workload balance', match: 'Matched to you', mid_round: 'Moved to you mid-round', replacement: 'Replacement' };
+  // the criteria the leader matched on (language, sex, area…): the household's values and the enumerator's
+  const criteriaText = h => { const A = APP.S && APP.S.assignment, m = A && A.matching; if (!m || !h.criteria) return '';
+    return Object.entries(h.criteria).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · '); };
   const shortReason = h => { const r = (h.assignment || {}).reason || '';
     return r === 'rule' || (ruleName() !== 'keep_same' && r === 'rotation') ? (byBlocks() ? 'By a block of the list' : 'Dealt at random') : reasonShort[r] || r.replace(/_/g, ' '); };
   const stateLabel = { reassigned: 'No longer yours', complete: 'Complete', in_progress: 'In progress', not_started: 'Not started', released: 'Released', replaced: 'Replaced', remove_requested: 'Removal requested' };
@@ -3158,6 +3393,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
         : RULE_REASONS.has((h.assignment || {}).reason) ? `<details class="why"><summary>Why is this household with me?</summary><p class="muted small">${RULE_NOTE}</p></details>` : ''}
       ${c.flags.complete_short && c.open ? `<div class="alert warn">The complete you logged lasted under ${R.MIN_COMPLETE_MIN} minutes. Box 3.0 counts it as an appointment contact, not a complete, so the household stays open: call again, or correct the time if it is wrong.</div>` : ''}
       ${c.kind === 'removed' ? `<div class="alert info">This household is no longer in your assignment${h.removed_at ? ` (your leader's update, opened ${isoWhen(h.removed_at)})` : ''}. The calls you logged stay in your log and in your exports; you cannot log new calls for it.</div>` : ''}
+      ${c.prior ? `<div class="alert info">Moved to you by your leader${c.prior.moved_at ? ` on ${isoWhen(c.prior.moved_at)}` : ''}${c.prior.from ? ` from ${esc(c.prior.from)}` : ''}, who made ${R.plural(c.prior.dials, 'dial')}${c.prior.last_status ? ` (last: ${esc(statusLabel(c.prior.last_status))}${c.prior.last_ts ? ', ' + isoWhen(c.prior.last_ts) : ''})` : ''}. ${c.prior.dials ? `Those dials count toward the cap of ${C.cal.cap}: ${Math.max(0, C.cal.cap - c.nAll)} left.` : ''}</div>` : ''}
       ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}</div>` : ''}
       <dl class="facts">
         <dt>Usual time</dt><dd>${usual ? (hist.last_interview ? `${usual}, from the last interview` : `${usual}, planned by your leader (no interview yet)`) : 'not known'}${tzNote}</dd>
@@ -3167,6 +3403,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
         <dt>In the panel since</dt><dd>${hist.joined_round ? 'round ' + hist.joined_round : '–'}</dd>
         <dt>First dial planned</dt><dd>${pl.first_dial_date ? dayLabel(pl.first_dial_date) + (usual ? ' at ' + usual : '') : '–'}</dd>
         <dt>Sampling unit</dt><dd>${esc(h.psu || '')}${h.stratum ? ' · stratum ' + esc(h.stratum) : ''}</dd>
+        ${h.criteria && Object.keys(h.criteria).length ? `<dt>Matching</dt><dd>${esc(criteriaText(h))}${(h.assignment || {}).matched === false ? ' <span class="tag warn">not matched to you</span>' : ''}</dd>` : ''}
         ${h.note ? `<dt>Leader's note</dt><dd>${esc(h.note)}</dd>` : ''}
       </dl>
       <section class="sec"><h4>Phone numbers</h4>${phones}
@@ -3381,12 +3618,13 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   const WDN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const LV = window.LEAD = {};
   let st = null, cache = {};
-  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, passphrases: null, busy: '' };
+  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, readyKind: '', passphrases: null, busy: '', moves: null, movesInclude: 'not_started', movesStale: false };
   LV.state = () => st;
   LV.ui = ui;
   LV.unsavedCount = () => (st ? st.unsaved : 0);
   LV.refresh = () => { invalidate(); render(); };
   LV.riskData = () => riskData();
+  LV.merged = () => merged();
   const invalidate = () => { cache = {}; };
   // the assignment and its files follow the settings they were made with: a later change asks for the rule again
   const stale = () => { if (st.plan || ui.ready) ui.stale = true; st.plan = null; ui.ready = null; ui.passphrases = null; };
@@ -3409,9 +3647,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     st = {
       schema: L.SCHEMA.leader, leader: o.leader, program: o.program, country: o.country, round: o.round, started_at: R.localISO(R.now()),
       inputs: { households: null, replacements: null, history: [], manual: null }, mapping: {},
-      cal: { window_start: '', window_end: '', working_weekdays: [1, 2, 3, 4, 5, 6], call_hours: { start: 9, end: 21 }, time_zone: TZ_OF[o.country] || '', dial_cap: null },
+      cal: { window_start: '', window_end: '', working_weekdays: [1, 2, 3, 4, 5, 6], call_hours: { start: 9, end: 21 }, time_zone: TZ_OF[o.country] || '', dial_cap: null, day_list: null },
       holidayWorking: [], customHolidays: [], removedHolidays: [], ramadanOn: RAMADAN.has(o.country), breakFast: null,
-      team: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
+      team: [], criteria: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
       spread: 0.5, margin: 0.15, policy: { active: true, triggers: ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'] }, protect: false,
       plan: null, generated: null, manifest: null, imports: [], resolutions: [], events: [], unsaved: 0,
       risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } },
@@ -3425,6 +3663,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   function calendar() {
     const c = st.cal;
     const out = { window_start: c.window_start, window_end: c.window_end, working_weekdays: c.working_weekdays.slice().sort(), call_hours: c.call_hours, time_zone: c.time_zone, dial_cap: c.dial_cap };
+    // the day list: the leader's number, else 1.5 × the planned first dials per day once the rule has been applied
+    const dl = Number.isInteger(c.day_list) && c.day_list >= 1 ? c.day_list : (st.plan && st.plan.dayListDefault) || null;
+    if (dl) out.day_list = dl;
     const hol = [];
     if (R.isDateKey(c.window_start) && R.isDateKey(c.window_end)) {
       R.bundledHolidays(st.country).filter(h => h.date >= c.window_start && h.date <= c.window_end && !st.removedHolidays.includes(h.date))
@@ -3488,12 +3729,17 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       if (c.call_hours) st.cal.call_hours = Object.assign({}, c.call_hours);
       if (Array.isArray(c.working_weekdays)) st.cal.working_weekdays = c.working_weekdays.slice();
       if (c.time_zone && !st.cal.time_zone) st.cal.time_zone = c.time_zone;
+      if ((st.cal.day_list === null || st.cal.day_list === undefined) && Number.isInteger(c.day_list)) st.cal.day_list = c.day_list;
     }
     if (!st.team.length && lastR !== null) {
       const ids = new Set();
       if (lm) { (lm.enumerators || []).forEach(e => ids.add(e.enumerator_id)); (lm.away || []).forEach(e => ids.add(e)); }
       (H.dials.get(lastR) || []).forEach(x => { if (x.operator) ids.add(x.operator); });
-      st.team = [...ids].sort().map(id => ({ id, available: true, share: 1 }));
+      // last round's matching criteria and each enumerator's values carry over; the leader can change them
+      const lmm = lm && lm.matching;
+      const attrsOf = id => { const m = lmm && lmm.enumerators && lmm.enumerators[id]; return m ? Object.fromEntries(Object.entries(m).map(([k, v]) => [k, (v || []).join(' ')])) : {}; };
+      st.team = [...ids].sort().map(id => ({ id, available: true, share: 1, attrs: attrsOf(id) }));
+      if (lmm && Array.isArray(lmm.criteria) && !st.criteria.length) st.criteria = lmm.criteria.slice();
     }
     if (lastR !== null) st.suggested = true;
   }
@@ -3519,12 +3765,17 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       if (Math.abs(tot - 100) > 0.5) e.push(`The shares of available enumerators add up to ${nm(tot, 1)}%, not 100% (step 5).`);
     }
     if (!Number.isInteger(+st.rule.seed)) e.push('The seed must be a whole number (step 6).');
+    if (st.criteria.length) {
+      const miss = st.team.filter(t => t.available && st.criteria.some(c => !L.splitVals((t.attrs || {})[c]).length));
+      if (miss.length) e.push(`Enter ${miss.map(t => t.id).join(', ')}'s values for ${st.criteria.join(', ')} (step 5), or untick the criterion.`);
+    }
+    if (st.cal.day_list !== null && st.cal.day_list !== undefined && !(Number.isInteger(st.cal.day_list) && st.cal.day_list >= 1)) e.push('The day list must be a whole number of households, or empty (step 4).');
     return e;
   }
   function inputFor() {
     const d = derived();
-    const team = st.team.map(t => ({ id: t.id, available: t.available, share: st.rule.name === 'share_of_total' ? t.share : (t.share > 0 ? t.share : 1) }));
-    return { round: st.round, households: d.round.mains, team, hist: d.hist, tz: st.cal.time_zone || null, cap: st.cal.dial_cap, rule: Object.assign(ruleObj(), { seed: +st.rule.seed }),
+    const team = st.team.map(t => ({ id: t.id, available: t.available, share: st.rule.name === 'share_of_total' ? t.share : (t.share > 0 ? t.share : 1), attrs: t.attrs || {} }));
+    return { round: st.round, households: d.round.mains, team, criteria: st.criteria.slice(), hist: d.hist, tz: st.cal.time_zone || null, cap: st.cal.dial_cap, rule: Object.assign(ruleObj(), { seed: +st.rule.seed }),
       manual: d.manualMap, calendar: calendar(), spread: st.spread };
   }
   // households in the high dropout tier get an early first dial (Section 3.4 box; proposal D)
@@ -3542,9 +3793,14 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     ui.stale = false;
     inp.highRisk = highRiskSet();
     const P = L.plan(inp, A.out, A.summaries, inp.hist);
-    st.plan = { out: A.out, sums: A.summaries, notes: A.notes, warnings: A.warnings, plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, moves: [], at: R.localISO(R.now()) };
+    st.plan = { out: A.out, sums: A.summaries, notes: A.notes, warnings: A.warnings, plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, moves: [], at: R.localISO(R.now()),
+      unmatched: A.unmatched || [], criteria: A.criteria || [] };
+    // the day list's default: 1.5 × the busiest enumerator's planned first dials per working day of the first part of the window
+    const perEnum = new Map(); for (const x of A.out.values()) perEnum.set(x.enumerator_id, (perEnum.get(x.enumerator_id) || 0) + 1);
+    st.plan.plannedPerDay = Math.max(0, ...perEnum.values()) / Math.max(1, P.firstDays);
+    st.plan.dayListDefault = Math.max(1, Math.ceil(1.5 * st.plan.plannedPerDay));
     st.generated = null; ui.ready = null; ui.passphrases = null;
-    logEv('rule_applied', { rule: st.rule.name, rotation_share: st.rule.rotation_share, seed: +st.rule.seed, households: A.out.size });
+    logEv('rule_applied', { rule: st.rule.name, rotation_share: st.rule.rotation_share, seed: +st.rule.seed, households: A.out.size, criteria: st.criteria.length ? st.criteria : undefined, unmatched: A.unmatched && A.unmatched.length ? A.unmatched.length : undefined });
     render();
   }
   function balance() {
@@ -3560,9 +3816,13 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     render();
   }
   function reassign(hhid, to) {
-    const x = st.plan.out.get(hhid);
-    if (!x || x.enumerator_id === to) return;
-    st.plan.out.set(hhid, { enumerator_id: to, reason: 'manual', previous_enumerator: x.previous_enumerator || x.enumerator_id });
+    const x = st.plan.out.get(hhid), d = derived();
+    if (!to || (x && x.enumerator_id === to)) return;
+    const elig = L.eligibleFn(st.criteria, st.team.filter(t => t.available)), h = d.round.mains.find(y => y.hhid === hhid);
+    const ok = elig && h ? elig(h, to) : undefined;
+    if (elig && h && !ok) toast(`${hhid} does not match ${to}'s values (${elig.criteria.map(c => `${c} ${L.hhValue(h, c) || '–'}`).join(', ')}). Moved anyway, marked as not matched.`, 'warn');
+    st.plan.out.set(hhid, R.clean({ enumerator_id: to, reason: 'manual', previous_enumerator: x ? (x.previous_enumerator || x.enumerator_id) : undefined, matched: ok }));
+    st.plan.unmatched = (st.plan.unmatched || []).filter(id => id !== hhid);
     const inp = inputFor();
     inp.highRisk = highRiskSet();
     st.plan.plans = L.plan(inp, st.plan.out, st.plan.sums, inp.hist).plans;
@@ -3573,6 +3833,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   const newPassphrase = () => { const a = new Uint32Array(12); crypto.getRandomValues(a); const s = [...a].map(x => PASS_ALPHA[x % PASS_ALPHA.length]).join(''); return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`; };
   async function writeFiles() {
     const d = derived(), p = st.plan;
+    if (p.unmatched && p.unmatched.length) { ui.errors = [`${R.plural(p.unmatched.length, 'household')} ${p.unmatched.length === 1 ? 'has' : 'have'} no enumerator (step 7): assign ${p.unmatched.length === 1 ? 'it' : 'them'} by hand, or change the criteria or the enumerators' values.`]; return render(); }
     const at = R.localISO(R.now());
     const B = L.buildFiles(Object.assign(inputFor(), {
       program: st.program, country: st.country, leader: st.leader, generated_at: at, replacement_policy: st.policy,
@@ -3599,9 +3860,72 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     files.push({ name: 'calendar.csv', text: R.toCSV([B.calendarRow], ['round', 'start', 'end']), calendar: true });
     st.generated = { at, files: files.map(f => R.clean({ name: f.name, enumerator_id: f.enumerator_id, households: f.n, fingerprint: f.fingerprint, protected: f.protected })) };
     st.manifest = B.manifest;
-    ui.ready = files;
-    logEv('files_written', { files: files.length, manifest_fingerprint: B.manifest.fingerprint, protected: st.protect ? 1 : undefined });
+    ui.ready = files; ui.readyKind = 'prepare'; ui.moves = null;
+    logEv('files_written', { files: files.length, manifest_fingerprint: B.manifest.fingerprint, protected: st.protect ? 1 : undefined, day_list: B.manifest.calendar.day_list });
     invalidate();
+    render();
+  }
+  // ---- moving waiting households between enumerators during the round ----
+  const manifestEligible = M => (M.matching && M.matching.criteria ? L.eligibleFn(M.matching.criteria, M.enumerators.map(e => ({ id: e.enumerator_id,
+    attrs: Object.fromEntries(Object.entries((M.matching.enumerators || {})[e.enumerator_id] || {}).map(([k, v]) => [k, (v || []).join(' ')])) }))) : null);
+  const planDateOf = id => (st.plan && st.plan.plans && st.plan.plans.get(id) ? st.plan.plans.get(id).first_dial_date || '' : '');
+  function proposeMoves() {
+    const g = merged(), M = st.manifest, d = derived();
+    const pace = L.pace(M, g.C, g.P, R.now());
+    const P = L.proposeMoves(pace, g.C, { include: ui.movesInclude, allowStale: ui.movesStale, eligible: manifestEligible(M), hh: d.hh && !d.hh.errors.length ? d.hh.households : null, planOf: planDateOf });
+    ui.moves = { list: P.moves, picked: new Set(P.moves.map((_, i) => i)), left_out: P.left_out, judged: P.judged };
+    logEv('moves_proposed', { moves: P.moves.length, include: ui.movesInclude, earlier_exports: ui.movesStale ? 1 : undefined, judged: P.judged });
+    render();
+  }
+  function addMove() {
+    const g = merged(), M = st.manifest;
+    const hhid = (($('#lmv-hh') || {}).value || '').trim(), to = ($('#lmv-to') || {}).value;
+    const c = g.C.get(hhid);
+    if (!c) return toast(`${hhid || 'That household'} is not in this round's manifest.`, 'warn');
+    if (c.enumerator_id === to) return toast(`${hhid} is already with ${to}.`, 'warn');
+    if (!L.movable(c, 'in_progress')) return toast(`${hhid} cannot move: it is ${L.STATES[c.state] || c.state}${c.state === 'in_progress' ? ' with a booked callback or a hard refusal' : ''}.`, 'warn');
+    if (!ui.moves) ui.moves = { list: [], picked: new Set(), left_out: [], judged: [] };
+    if (ui.moves.list.some(m => m.hhid === hhid)) return toast(`${hhid} is already in the list.`, 'warn');
+    const elig = manifestEligible(M), d = derived(), h = d.hh && !d.hh.errors.length ? d.hh.households.get(hhid) : null;
+    if (elig && h && !elig(h, to)) toast(`${hhid} does not match ${to}'s values (${elig.criteria.map(k => `${k} ${L.hhValue(h, k) || '–'}`).join(', ')}). Added anyway; it will be marked as not matched.`, 'warn');
+    ui.moves.list.push({ hhid, from: c.enumerator_id, to, state: c.state, dials: c.n, planned: planDateOf(hhid), by_hand: true });
+    ui.moves.picked.add(ui.moves.list.length - 1);
+    render();
+  }
+  async function writeMoves() {
+    const g = merged(), M = st.manifest, d = derived(), mv = ui.moves;
+    const moves = mv ? mv.list.filter((_, i) => mv.picked.has(i)) : [];
+    if (!moves.length) return;
+    if (!d.hh || d.hh.errors.length) return toast('Open the household list on the Prepare tab first: the updated files need the contacts.', 'warn');
+    const at = R.localISO(R.now()), tz = M.calendar.time_zone || null;
+    const sumOf = st.plan && st.plan.sums ? id => st.plan.sums.get(id) || L.summaryOf(d.hist, id, M.round, tz) : (d.hist.rounds.length ? id => L.summaryOf(d.hist, id, M.round, tz) : null);
+    const elig = manifestEligible(M);
+    const B = L.reviseFiles({ M, moves, C: g.C, hh: d.hh.households, sumOf, plans: st.plan ? st.plan.plans : null, updates: g.G.updates, leader: st.leader, at, now: R.now(),
+      matchedNow: elig ? (id, e) => { const h = d.hh.households.get(id); return h ? elig(h, e) : undefined; } : null });
+    const files = [];
+    ui.passphrases = null;
+    if (st.protect) {
+      if (!R.canSeal()) return toast('This browser cannot protect files here.', 'warn');
+      ui.busy = 'Protecting the files…'; render();
+      const pass = [];
+      for (const f of B.files) {
+        const pw = newPassphrase();
+        const { env } = await R.seal(f.obj, pw, { contains: R.SCHEMA.assign, program: st.program, round: st.round, enumerator_id: f.enumerator_id });
+        files.push({ name: f.name, text: JSON.stringify(env, null, 1), enumerator_id: f.enumerator_id, n: f.obj.households.length, fingerprint: f.obj.fingerprint, protected: true });
+        pass.push({ enumerator_id: f.enumerator_id, file: f.name, passphrase: pw });
+      }
+      ui.passphrases = pass; ui.busy = '';
+      B.manifest.enumerators.forEach(e => { if (B.affected.includes(e.enumerator_id)) e.protected = true; });
+      delete B.manifest.fingerprint; B.manifest.fingerprint = R.fingerprint(B.manifest);
+    } else B.files.forEach(f => files.push({ name: f.name, text: JSON.stringify(f.obj, null, 1), enumerator_id: f.enumerator_id, n: f.obj.households.length, fingerprint: f.obj.fingerprint }));
+    files.push({ name: `${st.program}_R${p2(st.round)}_manifest.json`, text: JSON.stringify(B.manifest, null, 1), manifest: true });
+    st.manifest = B.manifest;
+    st.generated = { at, revision: B.manifest.revision, files: files.map(f => R.clean({ name: f.name, enumerator_id: f.enumerator_id, households: f.n, fingerprint: f.fingerprint, protected: f.protected })) };
+    ui.ready = files; ui.readyKind = 'moves'; ui.moves = null;
+    logEv('households_moved_mid_round', { moves: moves.length, revision: B.manifest.revision, manifest_fingerprint: B.manifest.fingerprint, affected: B.affected,
+      hhids: moves.map(m => m.hhid).slice(0, 200), to: moves.map(m => m.to).slice(0, 200), protected: st.protect ? 1 : undefined });
+    invalidate();
+    toast(`${R.plural(moves.length, 'household')} moved. ${R.plural(B.files.length, 'updated assignment file')} and revision ${B.manifest.revision} of the manifest are ready.`);
     render();
   }
   async function saveAllToFolder(files) {
@@ -3708,7 +4032,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       schema: L.SCHEMA.leader, tool_version: R.VERSION, saved_at: R.localISO(R.now()), saved_by: st.leader,
       program: st.program, country: st.country, round: st.round, started_at: st.started_at, chain_genesis: st.genesis,
       settings: { cal: st.cal, holidayWorking: st.holidayWorking, customHolidays: st.customHolidays, removedHolidays: st.removedHolidays, ramadanOn: st.ramadanOn,
-        breakFast: st.breakFast, team: st.team, rule: st.rule, spread: st.spread, margin: st.margin, policy: st.policy, protect: st.protect, mapping: st.mapping, risk: st.risk },
+        breakFast: st.breakFast, team: st.team, criteria: st.criteria, rule: st.rule, spread: st.spread, margin: st.margin, policy: st.policy, protect: st.protect, mapping: st.mapping, risk: st.risk },
       inputs: st.inputs,
       plan: st.plan ? { out: [...st.plan.out], moves: st.plan.moves, notes: st.plan.notes, warnings: st.plan.warnings, at: st.plan.at } : null,
       generated: st.generated, manifest: st.manifest, imports: st.imports, resolutions: st.resolutions, events: st.events,
@@ -3752,6 +4076,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       inputs: o.inputs, plan: null, generated: o.generated, manifest: o.manifest, imports: o.imports || [], resolutions: o.resolutions || [], events: o.events || [], unsaved: 0 };
     Object.assign(st, o.settings);
     st.risk = st.risk || { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } };
+    st.criteria = Array.isArray(st.criteria) ? st.criteria : [];
+    (st.team || []).forEach(t => { t.attrs = t.attrs || {}; });
+    if (st.cal && st.cal.day_list === undefined) st.cal.day_list = null;
     if (o.plan) {
       invalidate();
       const inp = inputFor();
@@ -3883,7 +4210,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   };
   const decisionLabel = i => { const c = (i.choices || []).find(x => x.value === i.decision); return c ? c.label : i.decision === 'acknowledged' ? 'Noted' : i.decision; };
   const REASON_WORD = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new',
-    manual: 'by hand', capacity: 'capacity', rule: 'by the round’s rule', replacement: 'replacement' };
+    manual: 'by hand', capacity: 'capacity', match: 'matched', mid_round: 'moved mid-round', rule: 'by the round’s rule', replacement: 'replacement' };
   const list = arr => (arr && arr.length ? `<ul class="msgs">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
   const errList = arr => (arr && arr.length ? `<div class="alert warn">${list(arr)}</div>` : '');
 
@@ -3926,7 +4253,8 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <div class="checks">Working days: ${wd}</div>
       <div class="row3"><label>Calls from <input type="number" min="0" max="23" data-lset="cal.call_hours.start" data-type="int" value="${c.call_hours.start}"></label><label>until <input type="number" min="1" max="24" data-lset="cal.call_hours.end" data-type="int" value="${c.call_hours.end}"></label>
       <label>Time zone <input data-lset="cal.time_zone" value="${esc(c.time_zone)}" placeholder="Asia/Ulaanbaatar"></label></div>
-      ${days.length ? `<p>${days.length} working days in the window; first dials are spread over the first <input class="tiny" type="number" min="10" max="100" step="5" data-lset="spread" data-type="pct" value="${Math.round(st.spread * 100)}">% of them (Section 3.4: front-load the contact effort).</p>` : ''}
+      ${days.length ? `<p>${days.length} working days in the window; first dials are spread over the first <input class="tiny" type="number" min="10" max="100" step="5" data-lset="spread" data-type="pct" value="${Math.round(st.spread * 100)}">% of them (Section 3.4: front-load the contact effort).</p>
+      <p>Each enumerator's <b>day list</b>: up to <input class="tiny" type="number" min="1" data-lset="cal.day_list" data-type="int" value="${Number.isInteger(c.day_list) ? c.day_list : ''}" placeholder="${st.plan ? st.plan.dayListDefault : 'auto'}"> households a day. ${st.plan ? `The plan gives about ${nm(st.plan.plannedPerDay, 1)} first dials per enumerator per working day; empty means 1.5 × that, ${st.plan.dayListDefault}.` : 'Empty means 1.5 × the planned first dials per day, set when the rule is applied.'} The enumerator sees the calls due, then households pulled forward from later days, so that unanswered calls do not leave anyone waiting.</p>` : ''}
       <h4>Holidays inside the window</h4>${working}
       <div class="row3"><label>Add a day off <input type="date" id="lhol-date"></label><label>Name <input id="lhol-name" placeholder="call center closed"></label><button class="subtle" data-lact="addhol">Add</button></div>
       ${ram.length || st.ramadanOn ? `<h4>Ramadan</h4><label class="inline"><input type="checkbox" data-lset="ramadanOn" data-type="bool" ${st.ramadanOn ? 'checked' : ''}> Observed: no first dial is planned in the hour the fast is broken (Section 3.5.4)</label>
@@ -3934,9 +4262,23 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       </section>`;
     const lastR = d.hist.rounds.length ? d.hist.rounds[d.hist.rounds.length - 1] : null;
     const lastCount = id => (lastR !== null ? [...(d.hist.roster.get(lastR) || new Map()).values()].filter(e => e === id).length : 0);
+    // the columns of the household list a leader can match on: language and any column beyond the standard ones, with few distinct values
+    const critCols = (() => {
+      if (!d.hh || d.hh.errors.length) return [];
+      const cnt = new Map();
+      for (const h of d.hh.households.values()) {
+        if (h.status === 'removed') continue;
+        const vals = Object.assign({}, h.extra || {}); if (h.language) vals.language = h.language;
+        for (const [k, v] of Object.entries(vals)) { if (!cnt.has(k)) cnt.set(k, new Map()); const m = cnt.get(k), lv = String(v).toLowerCase(); m.set(lv, (m.get(lv) || 0) + 1); }
+      }
+      return [...cnt].map(([col, m]) => ({ col, values: [...m.keys()].sort(), n: [...m.values()].reduce((a, b) => a + b, 0) })).filter(x => x.values.length <= 40).sort((a, b) => (a.col < b.col ? -1 : 1));
+    })();
+    const exampleOf = c => { const x = critCols.find(y => y.col === c); return x ? x.values.slice(0, 2).join(' ') : ''; };
     const teamCard = `<section class="lcard"><h3>5 · Team</h3>
-      <table class="grid small"><thead><tr><th>Enumerator</th><th>Available this round</th><th>Share${st.rule.name === 'share_of_total' ? ' (%, adds up to 100)' : ' (relative)'}</th><th class="num">Households last round</th><th></th></tr></thead><tbody>
-      ${st.team.map((t, i) => `<tr><td class="id">${esc(t.id)}</td><td><input type="checkbox" data-lteam="${i}" data-f="available" ${t.available ? 'checked' : ''}></td><td><input class="tiny" type="number" min="0" step="any" data-lteam="${i}" data-f="share" value="${t.share}"></td><td class="num">${lastCount(t.id) || '–'}</td><td><button class="link" data-lact="delenum" data-i="${i}">remove</button></td></tr>`).join('')}
+      ${critCols.length || st.criteria.length ? `<div class="crit"><b>Match households to enumerators by:</b> ${[...new Set(critCols.map(x => x.col).concat(st.criteria))].map(c => { const x = critCols.find(y => y.col === c); return `<label class="inline"><input type="checkbox" data-lcrit="${esc(c)}" ${st.criteria.includes(c) ? 'checked' : ''}> ${esc(c.replace(/_/g, ' '))}${x ? ` <span class="muted small">(${x.values.slice(0, 6).map(esc).join(', ')}${x.values.length > 6 ? ', …' : ''}; ${x.n} households)</span>` : ' <span class="muted small">(not in this household list)</span>'}</label>`; }).join(' ')}
+        <p class="muted small">Language in a multilingual country, the respondent's sex, a dialect or an area: any column of the household list. A household goes only to an enumerator whose values include the household's; a household without a value can go to anyone. Enter each enumerator's values in the table, several separated by spaces or commas. The criteria and the values are written into the manifest and the assignment files, so the program can say how it assigned.</p></div>` : ''}
+      <table class="grid small"><thead><tr><th>Enumerator</th><th>Available this round</th><th>Share${st.rule.name === 'share_of_total' ? ' (%, adds up to 100)' : ' (relative)'}</th>${st.criteria.map(c => `<th>${esc(c.replace(/_/g, ' '))}</th>`).join('')}<th class="num">Households last round</th><th></th></tr></thead><tbody>
+      ${st.team.map((t, i) => `<tr><td class="id">${esc(t.id)}</td><td><input type="checkbox" data-lteam="${i}" data-f="available" ${t.available ? 'checked' : ''}></td><td><input class="tiny" type="number" min="0" step="any" data-lteam="${i}" data-f="share" value="${t.share}"></td>${st.criteria.map(c => `<td><input class="small" data-lattr="${i}" data-c="${esc(c)}" value="${esc((t.attrs || {})[c] || '')}" placeholder="${esc(exampleOf(c) || 'values')}"></td>`).join('')}<td class="num">${lastCount(t.id) || '–'}</td><td><button class="link" data-lact="delenum" data-i="${i}">remove</button></td></tr>`).join('')}
       </tbody></table>
       <div class="row3"><label>Add an enumerator ID <input id="lenum-id" placeholder="E08"></label><button class="subtle" data-lact="addenum">Add</button></div>
       <p class="muted small">An enumerator marked away keeps their history; their households are dealt to the others with reason "enumerator unavailable" (Section 3.5.3's forced change).</p></section>`;
@@ -3961,7 +4303,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   function previewCard() {
     const p = st.plan, d = derived(), inp = inputFor();
     const loads = L.loads(inp, p.out, p.sums);
-    const reasons = ['keep', 'rotation', 'switch_hard_to_reach', 'enumerator_unavailable', 'new', 'rule', 'manual', 'capacity'];
+    const reasons = ['keep', 'rotation', 'switch_hard_to_reach', 'enumerator_unavailable', 'new', 'rule', 'manual', 'capacity', 'match'];
     const cnt = {};
     for (const x of p.out.values()) { const k = `${x.enumerator_id}|${x.reason}`; cnt[k] = (cnt[k] || 0) + 1; }
     const enums = st.team.filter(t => t.available).map(t => t.id);
@@ -3970,13 +4312,17 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     const strata = [...new Set(d.round.mains.map(h => h.stratum || '–'))].sort();
     const sc = {};
     for (const [id, x] of p.out) { const k = `${x.enumerator_id}|${hh.get(id).stratum || '–'}`; sc[k] = (sc[k] || 0) + 1; }
-    const R_ = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new', manual: 'by hand', capacity: 'capacity',
+    const R_ = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new', manual: 'by hand', capacity: 'capacity', match: 'matched',
       rule: st.rule.name === 'equal_split' || (st.rule.name === 'share_of_total' && st.rule.method === 'blocks') ? 'by block of the list' : 'dealt at random' };
     const outside = loads.filter(l => Math.abs(l.departure) > st.margin);
     const rows = [...p.out.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
     const filt = ui.hhEnum ? rows.filter(([, x]) => x.enumerator_id === ui.hhEnum) : rows;
+    const unmatched = p.unmatched || [], crit = p.criteria || [];
+    const notMatched = [...p.out.values()].filter(x => x.matched === false).length;
+    const critOf = id => crit.map(c => `${c} ${L.hhValue(hh.get(id), c) || '–'}`).join(', ');
     return `<section class="lcard"><h3>7 · Check the assignment before any file is written</h3>
       ${list(p.notes)}${list(p.warnings)}
+      ${crit.length ? `<p class="small">Matching criteria: <b>${crit.join(', ')}</b>. ${unmatched.length ? `<span class="warn">${R.plural(unmatched.length, 'household')} without an enumerator (below).</span> ` : ''}${notMatched ? `${R.plural(notMatched, 'household')} ${notMatched === 1 ? 'is' : 'are'} with an enumerator who does not match ${notMatched === 1 ? 'it' : 'them'} (moved by hand).` : unmatched.length ? '' : 'Every household is with an enumerator who matches it.'}</p>` : ''}
       <table class="grid small"><thead><tr><th>Enumerator</th>${used.map(r => `<th class="num">${R_[r]}</th>`).join('')}<th class="num">Households</th>${strata.map(s => `<th class="num">stratum ${esc(s)}</th>`).join('')}<th class="num">Expected dials</th><th class="num">Against target</th></tr></thead><tbody>
       ${loads.map(l => `<tr><td class="id">${esc(l.id)}</td>${used.map(r => `<td class="num">${cnt[`${l.id}|${r}`] || ''}</td>`).join('')}<td class="num"><b>${l.households}</b></td>${strata.map(s => `<td class="num">${sc[`${l.id}|${s}`] || ''}</td>`).join('')}<td class="num">${nm(l.dials)}</td><td class="num ${Math.abs(l.departure) > st.margin ? 'warn' : ''}">${l.departure >= 0 ? '+' : ''}${pc(l.departure)}</td></tr>`).join('')}
       </tbody></table>
@@ -3984,23 +4330,25 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <div class="row3"><label>Margin (%) <input class="tiny" type="number" min="0" max="100" data-lset="margin" data-type="pct" value="${Math.round(st.margin * 100)}"></label>
         ${outside.length ? `<span class="warn">${R.plural(outside.length, 'enumerator')} ${outside.length === 1 ? 'is' : 'are'} outside the margin.</span> <button class="subtle" data-lact="balance">Move kept households at random to balance (reason: capacity)</button>` : '<span class="muted">Every load is within the margin.</span>'}</div>
       ${p.best && p.best.length ? `<p class="muted small">Households without a last interview are planned at the program's best hours from earlier rounds: ${p.best.map(h => p2(h) + ':00').join(', ')} (Section 3.5.1).</p>` : ''}
-      <details><summary>Households (${p.out.size}): move one by hand</summary>
+      <details ${unmatched.length ? 'open' : ''}><summary>Households (${p.out.size}${unmatched.length ? ` + ${unmatched.length} without an enumerator` : ''}): move one by hand</summary>
         <div class="row3"><label>Enumerator <select data-lset="__hhEnum"><option value="">all</option>${enums.map(e => `<option ${ui.hhEnum === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></label></div>
         <table class="grid small"><thead><tr><th>Household</th><th>Stratum</th><th>Enumerator</th><th>Reason</th><th>Before</th><th>First dial</th><th class="num">Replacements</th></tr></thead><tbody>
-        ${filt.slice(0, 400).map(([id, x]) => { const pl = p.plans.get(id) || {}; return `<tr><td class="id">${esc(id)}</td><td>${esc(hh.get(id).stratum || '')}</td><td><select data-lmove="${esc(id)}">${enums.map(e => `<option ${x.enumerator_id === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></td><td>${esc(R_[x.reason] || x.reason)}</td><td>${esc(x.previous_enumerator || '')}</td><td>${esc(pl.first_dial_date || '')} ${Number.isInteger(pl.target_hour) ? p2(pl.target_hour) + ':00' : ''}</td><td class="num">${(d.avail.get(id) || []).length || ''}</td></tr>`; }).join('')}
+        ${unmatched.map(id => `<tr class="unmatched"><td class="id">${esc(id)}</td><td>${esc((hh.get(id) || {}).stratum || '')}</td><td><select data-lmove="${esc(id)}"><option value="">— choose —</option>${enums.map(e => `<option>${esc(e)}</option>`).join('')}</select></td><td class="warn">no enumerator matches (${esc(critOf(id))})</td><td></td><td></td><td class="num">${(d.avail.get(id) || []).length || ''}</td></tr>`).join('')}
+        ${filt.slice(0, 400).map(([id, x]) => { const pl = p.plans.get(id) || {}; return `<tr><td class="id">${esc(id)}</td><td>${esc(hh.get(id).stratum || '')}</td><td><select data-lmove="${esc(id)}">${enums.map(e => `<option ${x.enumerator_id === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></td><td>${esc(R_[x.reason] || x.reason)}${x.matched === false ? ' <span class="tag warn">not matched</span>' : ''}${crit.length ? ` <span class="muted small">${esc(critOf(id))}</span>` : ''}</td><td>${esc(x.previous_enumerator || '')}</td><td>${esc(pl.first_dial_date || '')} ${Number.isInteger(pl.target_hour) ? p2(pl.target_hour) + ':00' : ''}</td><td class="num">${(d.avail.get(id) || []).length || ''}</td></tr>`; }).join('')}
         </tbody></table>${filt.length > 400 ? `<p class="muted">First 400 of ${filt.length} shown.</p>` : ''}</details>
       </section>
       <section class="lcard"><h3>8 · Write the files</h3>
-      <p>One assignment file per enumerator, holding only that enumerator's households and their replacements, a manifest of the round (IDs only, for the merge) and the <code>calendar.csv</code> row for the round template.</p>
+      <p>One assignment file per enumerator, holding only that enumerator's households and their replacements, a manifest of the round (IDs only, for the merge) and the <code>calendar.csv</code> row for the round template. Each file carries the day list of ${calendar().day_list || '–'} households (step 4)${crit.length ? ` and the matching criteria (${crit.join(', ')})` : ''}.</p>
       <label class="inline"><input type="checkbox" data-lset="protect" data-type="bool" ${st.protect ? 'checked' : ''}> Protect each assignment file with its own passphrase. The tool makes the passphrases and shows them once; give each enumerator theirs privately.</label>
       ${ui.busy ? `<p class="alert info">${esc(ui.busy)}</p>` : ''}
       ${outside.length ? `<p class="warn small">${outside.map(l => `${esc(l.id)} ${l.departure >= 0 ? '+' : ''}${pc(l.departure)}`).join(', ')}: outside the ${pc(st.margin)} margin (step 7). The files can still be written as they are.</p>` : ''}
-      <div class="btnrow"><button class="primary" data-lact="write">Write the files</button></div>
-      ${ui.ready ? readyList() : ''}</section>`;
+      ${unmatched.length ? `<p class="alert warn">${R.plural(unmatched.length, 'household')} ${unmatched.length === 1 ? 'has' : 'have'} no enumerator (step 7). No file is written until each household has one.</p>` : ''}
+      <div class="btnrow"><button class="primary" data-lact="write" ${unmatched.length ? 'disabled' : ''}>Write the files</button></div>
+      ${ui.ready && ui.readyKind !== 'moves' ? readyList() : ''}</section>`;
   }
-  function readyList() {
+  function readyList(note) {
     const f = ui.ready;
-    return `<div class="alert info"><b>${f.length} files are ready.</b> Put each assignment file in that enumerator's own folder, never in the common folder. The manifest and calendar row stay with you.</div>
+    return `<div class="alert info"><b>${f.length} files are ready.</b> ${note || 'Put each assignment file in that enumerator\'s own folder, never in the common folder. The manifest and calendar row stay with you.'}</div>
       ${ui.passphrases ? `<div class="alert warn"><b>Passphrases, shown once.</b> Copy them now or download the list; they are not saved anywhere.
         <table class="grid small"><tbody>${ui.passphrases.map(p => `<tr><td class="id">${esc(p.enumerator_id)}</td><td>${esc(p.file)}</td><td><code>${esc(p.passphrase)}</code></td></tr>`).join('')}</tbody></table>
         <button class="subtle" data-lact="dlpass">Download the passphrase list</button></div>` : ''}
@@ -4069,6 +4417,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     return `<section class="lcard"><h3>Team</h3><p class="muted small">Households: those assigned, plus any replacement brought in this round (the household it replaces stays in the count, as Replaced). Not reported: households of an enumerator whose export has not arrived, counted apart from completes and misses. Completes per enumerator-day as in Box 3.0, from this round's dials. Columns with nothing to count are left out.</p>
       <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th>${shownCols.map(([, l]) => `<th class="num">${l}</th>`).join('')}<th class="num">Share complete</th><th class="num">Completes per enumerator-day</th></tr></thead>
       <tbody>${P.list.map(row).join('')}${row(P.total)}</tbody></table></div></section>
+      ${movesCard(g)}
       <section class="lcard"><h3>Completes over the window</h3>${chart}
       <table class="grid small"><thead><tr><th>Stratum</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Share</th></tr></thead><tbody>${P.strata.map(s => `<tr><td>${esc(s.stratum)}</td><td class="num">${s.households}</td><td class="num">${s.complete}</td><td class="num">${pc(s.households ? s.complete / s.households : null)}</td></tr>`).join('')}</tbody></table></section>
       <section class="lcard"><h3>Households</h3>
@@ -4077,6 +4426,33 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <table class="grid small"><thead><tr><th>Household</th><th>Enumerator</th><th>Reason</th><th>State</th><th class="num">Dials</th><th>Last result</th><th>Complete on</th></tr></thead><tbody>
       ${f.slice(0, 500).map(c => { const last = c.dials[c.dials.length - 1]; return `<tr><td class="id">${esc(c.hhid)}${c.replaces ? ` <span class="tag">replaces ${esc(c.replaces)}</span>` : ''}</td><td class="id">${esc(c.enumerator_id)}</td><td>${esc(REASON_WORD[c.reason] || (c.reason || '').replace(/_/g, ' '))}</td><td><span class="st st-${c.state}">${esc(L.STATES[c.state])}</span>${c.short ? ' <span class="tag warn">complete under 3 min</span>' : ''}</td><td class="num">${c.n}</td><td>${last ? esc(sh().statusLabel(last.status)) : ''}</td><td>${c.complete ? esc(c.complete.ts.slice(0, 16).replace('T', ' ')) : ''}</td></tr>`; }).join('')}
       </tbody></table>${f.length > 500 ? `<p class="muted">First 500 of ${f.length}.</p>` : ''}</section>`;
+  }
+
+  // the card on the Progress tab: who is behind, which households may move, and the updated files
+  function movesCard(g) {
+    const M = st.manifest, pace = L.pace(M, g.C, g.P, R.now()), d = derived();
+    const canWrite = !!(d.hh && !d.hh.errors.length);
+    const mv = ui.moves;
+    const picked = mv ? mv.list.filter((_, i) => mv.picked.has(i)) : [];
+    const leftOut = x => (x && x.length ? `Not judged: ${x.map(y => `${esc(y.id)} (${esc(y.why)})`).join('; ')}.` : '');
+    const rows = pace.rows.map(r => `<tr><td class="id">${esc(r.enumerator_id)}</td><td class="num">${r.households}</td><td class="num">${r.complete}</td><td class="num">${r.waiting}</td><td class="num">${r.in_progress}</td><td class="num">${nm(r.pace, 2)}</td><td class="num">${r.known ? nm(r.capacity, 0) : '–'}</td><td class="num ${r.known && r.need > 0.5 ? 'warn' : ''}">${r.known ? (r.need > 0.5 ? `${nm(r.need, 0)} short` : r.need < -0.5 ? `${nm(-r.need, 0)} spare` : 'on time') : '–'}</td><td class="small">${r.why ? `<span class="muted">${esc(r.why)}</span>` : `export ${esc((r.export_at || '').slice(5, 16).replace('T', ' '))}`}</td></tr>`).join('');
+    return `<section class="lcard"><h3>Move waiting households</h3>
+      <p class="muted small">Part-way through the round, households not yet called can move from an enumerator who will not finish to one with spare days, with no household in two files and no double call: each move is recorded in the manifest, the previous enumerator's dials up to the move stay theirs, and any dial they make after it is flagged in the merge. Pace: completes per enumerator-day so far (Box 3.0). Capacity: pace × the ${pace.days_left} working days left from today. Only enumerators whose export is from today, with two or more enumerator-days, are judged.</p>
+      <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Not started</th><th class="num">In progress</th><th class="num">Completes per day</th><th class="num">Can still complete</th><th class="num">At this pace</th><th>Export</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="row3"><label>Which households may move <select data-lset="__movesInclude"><option value="not_started" ${ui.movesInclude === 'not_started' ? 'selected' : ''}>not yet called</option><option value="in_progress" ${ui.movesInclude === 'in_progress' ? 'selected' : ''}>also called, without a booked callback or a hard refusal</option></select></label>
+        <label class="inline"><input type="checkbox" data-lset="__movesStale" data-type="bool" ${ui.movesStale ? 'checked' : ''}> also judge enumerators whose latest export is from an earlier day</label>
+        <button class="subtle" data-lact="propose">Propose moves from the enumerators behind to those with spare days</button></div>
+      ${mv ? (mv.list.length ? `<table class="grid small"><thead><tr><th></th><th>Household</th><th>From</th><th>To</th><th>State</th><th class="num">Dials so far</th><th>First dial was planned</th></tr></thead><tbody>
+        ${mv.list.map((m, i) => `<tr><td><input type="checkbox" data-lmovesel="${i}" ${mv.picked.has(i) ? 'checked' : ''}></td><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc(L.STATES[m.state] || m.state)}${m.by_hand ? ' <span class="tag">by hand</span>' : ''}</td><td class="num">${m.dials}</td><td>${esc(m.planned || '')}</td></tr>`).join('')}</tbody></table>
+        <p class="muted small">Untick a move to leave that household where it is. Latest-planned households move first, so the receiving enumerator's own plan is disturbed least. ${leftOut(mv.left_out)}</p>`
+        : `<p class="muted">Nothing to move: at the current pace every judged enumerator finishes inside the window. ${leftOut(mv.left_out)}</p>`) : ''}
+      <div class="row3"><label>Or move one household <input id="lmv-hh" class="small" placeholder="household ID"></label><label>to <select id="lmv-to">${M.enumerators.map(e => `<option>${esc(e.enumerator_id)}</option>`).join('')}</select></label><button class="subtle" data-lact="addmove">Add to the list</button></div>
+      ${!canWrite ? '<p class="alert info">To write the updated assignment files, open the household list on the Prepare tab (step 1): the files need the contacts. Opening the earlier rounds (step 2) adds each household’s history.</p>' : ''}
+      ${picked.length ? `<div class="btnrow"><button class="primary" data-lact="writemoves" ${canWrite ? '' : 'disabled'}>Write the updated files for ${R.plural(picked.length, 'move')}</button></div>` : ''}
+      ${ui.busy ? `<p class="alert info">${esc(ui.busy)}</p>` : ''}
+      ${ui.ready && ui.readyKind === 'moves' ? readyList('Give each updated assignment file to its enumerator, in their own folder; they open it with “Load updated assignment”, which keeps their log. Their earlier file is superseded. The new manifest replaces the one you had: the merge uses it from now on, and the saved session keeps it.') : ''}
+      ${M.moves && M.moves.length ? `<details><summary>Moves so far this round (${M.moves.length})</summary><table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>When</th><th>By</th></tr></thead><tbody>${M.moves.map(m => `<tr><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc((m.at || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(m.by || '')}</td></tr>`).join('')}</tbody></table></details>` : ''}
+    </section>`;
   }
 
   // ---- Call log ----
@@ -4277,6 +4653,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       case 'apply': applyRule(); break;
       case 'balance': balance(); break;
       case 'write': writeFiles(); break;
+      case 'propose': proposeMoves(); break;
+      case 'addmove': addMove(); break;
+      case 'writemoves': writeMoves(); break;
       case 'saveall': saveAllToFolder(ui.ready); break;
       case 'dlall': downloadAll(ui.ready); break;
       case 'dlone': { const f = ui.ready[+el.dataset.i]; sh().download(f.name, f.text, f.name.endsWith('.csv') ? 'text/csv' : 'application/json'); break; }
@@ -4359,13 +4738,20 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     if (t.dataset.lteam !== undefined) { const x = st.team[+t.dataset.lteam]; if (t.dataset.f === 'available') x.available = t.checked; else x.share = parseFloat(t.value) || 0; logEv('team_changed', { id: x.id, available: x.available ? 1 : 0, share: x.share }); stale(); return render(); }
     if (t.dataset.lrule !== undefined) { st.rule.name = t.dataset.lrule; stale(); return render(); }
     if (t.dataset.lmove !== undefined) return reassign(t.dataset.lmove, t.value);
+    if (t.dataset.lcrit !== undefined) { const c = t.dataset.lcrit; st.criteria = t.checked ? [...new Set(st.criteria.concat(c))] : st.criteria.filter(x => x !== c); logEv('criteria_changed', { criteria: st.criteria }); stale(); return render(); }
+    if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
+    if (t.dataset.lmovesel !== undefined) { const i = +t.dataset.lmovesel; if (!ui.moves) return; if (t.checked) ui.moves.picked.add(i); else ui.moves.picked.delete(i); return render(); }
     if (t.dataset.lset !== undefined) {
       const path = t.dataset.lset, type = t.dataset.type;
       let v = t.type === 'checkbox' ? t.checked : t.value;
       if (type === 'int') v = t.value === '' ? null : parseInt(t.value, 10);
       if (type === 'pct') v = t.value === '' ? null : parseFloat(t.value) / 100;
+      if (path === '__movesInclude') { ui.movesInclude = v; ui.moves = null; return render(); }
+      if (path === '__movesStale') { ui.movesStale = !!v; ui.moves = null; return render(); }
       if (path.startsWith('__')) { ui[path.slice(2)] = v; return render(); }
       setPath(st, path, v);
+      // the day list changes the files, not the assignment: the files are written again, the rule need not be
+      if (path === 'cal.day_list') { logEv('day_list_set', { day_list: v }); filesStale(); return render(); }
       if (/^cal\.|ramadanOn|breakFast|spread/.test(path)) invalidate();
       if (/^(rule\.|cal\.|spread|ramadanOn|breakFast)/.test(path)) stale();
       else if (/^policy\./.test(path)) filesStale();

@@ -239,3 +239,8 @@ details.why { margin: 6px 0 4px; }
 details.why summary { cursor: pointer; color: var(--accent); font-size: 13px; }
 details.why p { margin: 6px 0 0; }
 .r3 { white-space: nowrap; margin-right: 4px; }
+/* matching criteria (step 5) and households without an enumerator (step 7) */
+.crit { margin: 0 0 10px; padding: 8px 10px; background: var(--soft); border-radius: 8px; }
+.crit label.inline { margin-right: 10px; }
+input.small { width: 9em; }
+tr.unmatched td { background: var(--warn-bg, #fff4d6); }

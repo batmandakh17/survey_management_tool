@@ -14,11 +14,27 @@
     "round": { "type": "integer", "minimum": 1 },
     "generated_by": { "type": "string" },
     "generated_at": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 1, "description": "1 before the round; one more each time households are moved during the round." },
+    "supersedes": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The fingerprint of the manifest this revision replaces." },
     "synthetic": { "type": "boolean" },
     "rule": { "$ref": "urn:rtm:schema:rtm-assign-1.0#/properties/rule" },
     "replacement_policy": { "$ref": "urn:rtm:schema:rtm-assign-1.0#/properties/replacement_policy" },
     "calendar": { "$ref": "urn:rtm:schema:rtm-assign-1.0#/$defs/calendar" },
     "away": { "type": "array", "items": { "type": "string" }, "description": "Enumerators marked as away this round." },
+    "matching": {
+      "type": "object",
+      "description": "The leader's matching criteria and every enumerator's values: the record of how the round was assigned.",
+      "required": ["criteria"],
+      "properties": {
+        "criteria": { "type": "array", "items": { "type": "string" } },
+        "enumerators": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } } }
+      }
+    },
+    "moves": {
+      "type": "array",
+      "description": "Households moved during the round, in order. The merge accepts the previous enumerator's dials up to the move and flags any made after it.",
+      "items": { "type": "object", "required": ["hhid", "from", "to", "at"], "properties": { "hhid": { "type": "string" }, "from": { "type": "string" }, "to": { "type": "string" }, "at": { "type": "string" }, "by": { "type": "string" } } }
+    },
     "enumerators": {
       "type": "array", "minItems": 1,
       "items": {
@@ -27,7 +43,8 @@
           "enumerator_id": { "type": "string" }, "available": { "type": "boolean" }, "share": { "type": "number", "minimum": 0 },
           "households": { "type": "integer", "minimum": 0 }, "file": { "type": "string" },
           "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The fingerprint of that enumerator's assignment file." },
-          "protected": { "type": "boolean" }
+          "protected": { "type": "boolean" },
+          "previous_fingerprints": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "description": "This enumerator's earlier files in this round, oldest first; a log that started from any of them belongs to the round." }
         }
       }
     },
@@ -38,8 +55,9 @@
         "additionalProperties": false,
         "properties": {
           "hhid": { "type": "string" }, "enumerator_id": { "type": "string" },
-          "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule"] },
+          "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "match", "mid_round"] },
           "previous_enumerator": { "type": "string" }, "psu": { "type": "string" }, "stratum": { "type": "string" },
+          "matched": { "type": "boolean", "description": "Only when the round has matching criteria: whether the enumerator matches the household." },
           "replacements": { "type": "array", "items": { "type": "string" }, "description": "The household's unused replacements, in order (IDs only)." }
         }
       }

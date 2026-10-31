@@ -54,7 +54,7 @@
     <div class="sub">User manual for enumerators and team leaders<br>Assignment, scheduling and call logs for phone panel surveys</div>
   </div>
   <img src="img/e03_today.png" alt="The enumerator's Today tab">
-  <div class="meta">Tool version 0.2.0 · Manual of 28 October 2026<br>
+  <div class="meta">Tool version 0.3.0 · Manual of 31 October 2026<br>
     Real-Time Monitoring (RTM) Handbook task team. Every picture in this manual shows the synthetic practice program
     “L2MN-DEMO”: no real household, name or phone number appears anywhere in it.</div>
 </section>
@@ -177,10 +177,13 @@ left. The bar shows the share of your households completed. Under it are the mai
 <b class="ui">Households</b>, <b class="ui">Calendar</b>, <b class="ui">My performance</b> and <b class="ui">Log</b>.</p>
 
 <h3><span class="num">A3</span>The Today tab</h3>
-<p>The Today tab lists the calls to make, in three columns:</p>
+<p>The Today tab lists the calls to make, in four columns:</p>
 <ul>
   <li><b>Due now:</b> calls whose time has come, including overdue ones from earlier days.</li>
   <li><b>Later today:</b> calls planned for later in the day, in time order.</li>
+  <li><b>Ahead of plan:</b> when fewer households are due or planned today than your leader's <b>day list</b> holds (the
+  number is given under the columns), households planned for later days, soonest first, so that unanswered calls do not
+  leave you waiting. Work through them once the calls due are done; a booked callback is never pulled forward.</li>
   <li><b>Needs your decision:</b> households where the next step is not a call, such as a hard refusal to release or a
   household with no working number.</li>
 </ul>
@@ -366,10 +369,15 @@ and choose your saved session file. Everything comes back, and the tool checks t
 not replace saving: save your session as well.</div>
 
 <h3><span class="num">A20</span>An updated assignment</h3>
-<p>Your leader may send a new version of your assignment during the round, for example after moving a household to
-you. Click <b class="ui">Load updated assignment</b> and choose the new file. The tool keeps every call you logged,
-adds the new households, and marks those no longer yours as “No longer yours”: their calls stay in your log, but you
-cannot log new ones for them. A file for another enumerator or another round is refused.</p>
+<p>Your leader may send a new version of your assignment during the round, for example after moving households
+between enumerators so that the round finishes on time. Click <b class="ui">Load updated assignment</b> and choose the
+new file. The tool keeps every call you logged, adds the new households, and marks those no longer yours as “No longer
+yours”: their calls stay in your log, but you cannot log new ones for them. A file for another enumerator or another
+round is refused, and so is a file older than the one in your session.</p>
+<p>A household moved to you shows who had it before and the calls they made, with the reason “Moved to you mid-round”.
+Those calls count toward the dial cap: if the previous enumerator made 7 of 8, you have one left. Its first dial is
+planned for the day of the move, at the household's usual hour. Households you already had keep their plan and history
+even when the new file does not repeat them.</p>
 
 <h3><span class="num">A21</span>On a phone</h3>
 <p>The page also works on a phone's browser. The columns stack, and a household's panel fills the screen; close it
@@ -460,12 +468,18 @@ refusal, when no number works, or when the dial cap is reached.</p>
   <li>Tick the <b>working days</b> and set the <b>call hours</b> and the <b>time zone</b>.</li>
   <li>Choose over what share of the working days the first dials are spread (50% by default), to front-load the contact
   effort (Section 3.4).</li>
+  <li>Set the <b>day list</b>: how many households each enumerator's Today tab offers at most each day. It is taken from
+  the last round's manifest when one is loaded; empty, it becomes 1.5 × the busiest enumerator's planned first dials per
+  day, shown once the rule is applied (step 6). The enumerator sees
+  the calls due first, then households pulled forward from later days (“Ahead of plan”, A3), so that unanswered calls leave
+  nobody waiting.</li>
   <li>Check the <b>holidays inside the window</b>. They come from a table bundled with the tool, built from the Python
   package <code>holidays</code>. Tick <b>Call center works</b> for a holiday you will work, <b>remove</b> a day that is
   not a holiday, or <b>add a day off</b>, such as a regional or decreed closure. Dates the table estimates, such as
   lunar holidays, are labelled; correct them when the official dates are known.</li>
 </ol>
 <figure><img class="w100" src="img/l06_calendar.png"><figcaption><b>Figure B6.</b> The round calendar: 22 working days, with the 10 November holiday.</figcaption></figure>
+<figure><img class="w100" src="img/l28_day_list.png"><figcaption><b>Figure B6b.</b> The day list after the rule is applied: the plan's first dials per enumerator per day, and the default of 1.5 × that.</figcaption></figure>
 <p>When the window falls in Ramadan, the card also asks for the hour the fast is broken; that hour is kept free of
 planned calls.</p>
 
@@ -478,7 +492,14 @@ planned calls.</p>
   total” rule;</li>
   <li><b>remove</b> someone who has left.</li>
 </ul>
-<figure><img class="w100" src="img/l07_team.png"><figcaption><b>Figure B7.</b> The team, with E03 marked away this round.</figcaption></figure>
+<p><b>Matching criteria.</b> Above the table, the card offers the columns of the household list that can decide who calls
+whom: <code>language</code>, and any other column with few distinct values, such as the respondent's sex, a dialect or an
+area (add the column to the household list; nothing else changes). Tick a criterion and a column appears in the team
+table: type each enumerator's values, several separated by spaces or commas (<code>mn kk</code>). A household then goes
+only to an enumerator whose values include the household's; a household without a value can go to anyone. Every
+available enumerator needs a value for every criterion ticked. The criteria and the values are written into the
+manifest and the assignment files, so the program can say how it assigned, and the next round offers them again.</p>
+<figure><img class="w100" src="img/l07_team.png"><figcaption><b>Figure B7.</b> The team, with E03 marked away this round, and the language criterion: E01 speaks Mongolian and Kazakh, the others Mongolian.</figcaption></figure>
 
 <h3><span class="num">B8</span>Step 6 · Assignment rule</h3>
 <table>
@@ -512,8 +533,13 @@ computed from each household's dials last round, against the enumerator's target
   every load is within the margin.</li>
   <li>Open <b>Households: move one by hand</b> to change any household's enumerator; the move is recorded as “by
   hand”.</li>
+  <li>With matching criteria (B7), a kept household whose enumerator does not match moves with the reason “matched”,
+  the balance never moves a household to an enumerator who does not match it, and the card says whether every
+  household is with a matching enumerator. A household that no available enumerator matches is listed at the top of
+  the household table without an enumerator: choose one by hand (it is marked as not matched), or give an enumerator
+  the value in step 5. No file is written while a household has no enumerator.</li>
 </ul>
-<figure><img class="w100" src="img/l09_check.png"><figcaption><b>Figure B9.</b> The check: E01 and E02 are outside the 15% margin.</figcaption></figure>
+<figure><img class="w100" src="img/l09_check.png"><figcaption><b>Figure B9.</b> The check, with the language criterion: the households moved to match are counted under “matched”.</figcaption></figure>
 <figure><img class="w100" src="img/l10_by_hand.png"><figcaption><b>Figure B10.</b> Moving one household by hand.</figcaption></figure>
 <p>Households without a last interview are planned at the program's best hours from earlier rounds (Section 3.5.1).
 New households, households switched as hard to reach and households in the high dropout tier (B18) get the earliest
@@ -603,6 +629,28 @@ numbers: keep it in your own folder.</p>
   <figure><img src="img/l25_progress_chart.png" style="width:100%"><figcaption><b>Figure B21.</b> Completes by day and by stratum.</figcaption></figure>
   <figure><img src="img/l26_progress_households.png" style="width:100%"><figcaption><b>Figure B22.</b> The households, with their state.</figcaption></figure>
 </div>
+<h4>Move waiting households</h4>
+<p>Part-way through the round, the card <b class="ui">Move waiting households</b> shows, for each enumerator, the
+completes per enumerator-day so far (the pace), how many they can still complete in the working days left, and whether
+they are <b>short</b> or have <b>spare</b> days at that pace. Only enumerators whose latest export is from today, with
+two or more enumerator-days, are judged; tick the box to judge earlier exports too.</p>
+<ol>
+  <li>Choose which households may move: those not yet called (the default), or also those called without a booked
+  callback or a hard refusal. A complete, a released or replaced household and a replacement never move.</li>
+  <li>Click <b class="ui">Propose moves</b>. Households move one at a time from the enumerator furthest behind to the one
+  with most spare days, until nobody is more than half a household off; the latest-planned households go first, and only
+  to an enumerator who matches their criteria (B7). Untick a move to leave that household where it is, or add one by
+  hand by its ID.</li>
+  <li>Click <b class="ui">Write the updated files</b>. The tool writes a new assignment file for each enumerator who gives
+  or receives a household (revision 2, 3…) and the next revision of the manifest, which lists every move with when and
+  by whom. Give each file to its enumerator, who opens it with <b class="ui">Load updated assignment</b> (A20). This
+  needs the household list open in the session (step 1).</li>
+</ol>
+<p>No household is in two files, and no double call goes unnoticed: a moved household carries the dials its previous
+enumerator made, which count toward the dial cap, and in the merge the previous enumerator's dials up to the move are
+theirs while any made after it is flagged for you to keep or leave out.</p>
+<figure><img class="w100" src="img/l28_moves.png"><figcaption><b>Figure B22b.</b> Who is short and who has spare days, and the moves proposed.</figcaption></figure>
+<figure><img class="w100" src="img/l29_moves_files.png"><figcaption><b>Figure B22c.</b> The revised files and the manifest's next revision, ready to give out.</figcaption></figure>
 
 <h3><span class="num">B16</span>Call log and the round's files</h3>
 <p>The <b class="ui">Call log</b> tab shows the merged call log, filtered by enumerator, result or household, and
@@ -716,6 +764,8 @@ bottom of the tab gives the training data, the features, the backtests and the m
   <tr><td><code>rule</code></td><td>Dealt to you at random, or placed with you by a block of the list, by the round's rule</td></tr>
   <tr><td><code>manual</code></td><td>Assigned by hand</td></tr>
   <tr><td><code>capacity</code></td><td>Moved to balance workloads</td></tr>
+  <tr><td><code>match</code></td><td>Matched to you by your leader's criteria (language, sex or area), with the household's values</td></tr>
+  <tr><td><code>mid_round</code></td><td>Moved to you during the round from another enumerator, so that the round finishes on time</td></tr>
   <tr><td><code>replacement</code></td><td>Replacement household</td></tr>
 </table>
 

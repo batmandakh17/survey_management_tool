@@ -45,9 +45,14 @@ def main():
     rk = [f["key"] for f in model["return"]["features"]]
     py_d, py_r = ref_risk.rows_of(D, dk), ref_risk.rows_of(Rr, rk)
     check("the reference has rows to compare: every interviewed household-round, and every miss after an interview", len(py_d) > 300 and len(py_r) > 30, [len(py_d), len(py_r)])
-    for p in ("risk_models.json", "validation.json"):
+    for p in ("risk_models.json", "validation.json", "coefficients.json"):
         txt = open(os.path.join(ROOT, "models", p)).read()
         check(f"models/{p} holds aggregates only: no household ID field", '"hhid"' not in txt and "hhid" not in json.loads(txt).keys())
+    C = json.load(open(os.path.join(ROOT, "models", "coefficients.json")))
+    MJ = json.load(open(os.path.join(ROOT, "models", "risk_models.json")))
+    check("the significance table refits the bundled models exactly, with a standard error, z and p for every feature",
+          all(C[k]["max_difference_from_bundled_model"] < 1e-6 and [f["key"] for f in C[k]["features"]] == [f["key"] for f in MJ[k]["features"]]
+              and all(f["se"] > 0 and f["ci_lo"] < f["coef"] < f["ci_hi"] for f in C[k]["features"]) for k in ("dropout", "return")))
     b = Browser(os.path.join(SCRATCH, f"rprofile_{STAMP}"), port=9346)
     try:
         b.downloads_to(DL)

@@ -1,151 +1,151 @@
-hhid,psu,stratum,contact_name,phone_1,phone_1_label,phone_2,phone_2_label,phone_3,phone_3_label,language,status
-0101-001,0101,1,Contact 0101-001 (synthetic),+000 01001 1927,respondent,,,,,mn,active
-0101-002,0101,1,Contact 0101-002 (synthetic),+000 01002 1712,respondent,,,,,mn,active
-0101-003,0101,1,Contact 0101-003 (synthetic),+000 01003 1203,respondent,,,,,mn,active
-0101-004,0101,1,Contact 0101-004 (synthetic),+000 01004 1128,respondent,,,,,mn,active
-0101-005,0101,1,Contact 0101-005 (synthetic),+000 01005 1530,respondent,+000 01005 2667,spouse,,,mn,active
-0101-006,0101,1,Contact 0101-006 (synthetic),+000 01006 1180,respondent,+000 01006 2846,spouse,+000 01006 3543,son or daughter,mn,active
-0101-007,0101,1,Contact 0101-007 (synthetic),+000 01007 1606,respondent,,,,,mn,active
-0101-008,0101,1,Contact 0101-008 (synthetic),+000 01008 1822,respondent,+000 01008 2312,spouse,,,mn,active
-0101-009,0101,1,Contact 0101-009 (synthetic),+000 01009 1932,respondent,,,,,mn,removed
-0101-101,0101,1,Reserve 0101-101 (synthetic),+000 01101 1277,respondent,,,,,mn,reserve
-0101-102,0101,1,Reserve 0101-102 (synthetic),+000 01102 1305,respondent,,,,,mn,reserve
-0101-103,0101,1,Reserve 0101-103 (synthetic),+000 01103 1596,respondent,,,,,mn,reserve
-0102-001,0102,1,Contact 0102-001 (synthetic),+000 02001 1517,respondent,+000 02001 2232,spouse,,,mn,active
-0102-002,0102,1,Contact 0102-002 (synthetic),+000 02002 1426,respondent,,,,,mn,active
-0102-003,0102,1,Contact 0102-003 (synthetic),+000 02003 1957,respondent,,,,,mn,active
-0102-004,0102,1,Contact 0102-004 (synthetic),+000 02004 1773,respondent,+000 02004 2319,spouse,+000 02004 3372,son or daughter,mn,active
-0102-005,0102,1,Contact 0102-005 (synthetic),+000 02005 1677,respondent,+000 02005 2762,spouse,+000 02005 3654,son or daughter,mn,active
-0102-006,0102,1,Contact 0102-006 (synthetic),+000 02006 1376,respondent,+000 02006 2185,spouse,,,mn,active
-0102-007,0102,1,Contact 0102-007 (synthetic),+000 02007 1636,respondent,+000 02007 2869,spouse,,,mn,active
-0102-008,0102,1,Contact 0102-008 (synthetic),+000 02008 1699,respondent,+000 02008 2474,spouse,,,mn,active
-0102-009,0102,1,Contact 0102-009 (synthetic),+000 02009 1198,respondent,+000 02009 2493,spouse,,,mn,active
-0102-101,0102,1,Reserve 0102-101 (synthetic),+000 02101 1681,respondent,,,,,mn,reserve
-0102-102,0102,1,Reserve 0102-102 (synthetic),+000 02102 1710,respondent,,,,,mn,reserve
-0102-103,0102,1,Reserve 0102-103 (synthetic),+000 02103 1822,respondent,,,,,mn,reserve
-0103-001,0103,1,Contact 0103-001 (synthetic),+000 03001 1493,respondent,+000 03001 2751,spouse,,,mn,active
-0103-002,0103,1,Contact 0103-002 (synthetic),+000 03002 1900,respondent,+000 03002 2462,spouse,,,mn,active
-0103-003,0103,1,Contact 0103-003 (synthetic),+000 03003 1394,respondent,,,,,mn,active
-0103-004,0103,1,Contact 0103-004 (synthetic),+000 03004 1246,respondent,+000 03004 2138,spouse,,,mn,active
-0103-005,0103,1,Contact 0103-005 (synthetic),+000 03005 1996,respondent,,,,,mn,active
-0103-006,0103,1,Contact 0103-006 (synthetic),+000 03006 1923,respondent,+000 03006 2445,spouse,+000 03006 3406,son or daughter,mn,active
-0103-007,0103,1,Contact 0103-007 (synthetic),+000 03007 1726,respondent,+000 03007 2953,spouse,,,mn,active
-0103-008,0103,1,Contact 0103-008 (synthetic),+000 03008 1749,respondent,,,,,mn,active
-0103-009,0103,1,Contact 0103-009 (synthetic),+000 03009 1163,respondent,+000 03009 2326,spouse,,,mn,active
-0103-101,0103,1,Reserve 0103-101 (synthetic),+000 03101 1124,respondent,,,,,mn,reserve
-0103-102,0103,1,Reserve 0103-102 (synthetic),+000 03102 1584,respondent,,,,,mn,reserve
-0103-103,0103,1,Reserve 0103-103 (synthetic),+000 03103 1234,respondent,,,,,mn,reserve
-0104-001,0104,1,Contact 0104-001 (synthetic),+000 04001 1835,respondent,+000 04001 2230,spouse,,,mn,active
-0104-002,0104,1,Contact 0104-002 (synthetic),+000 04002 1693,respondent,,,,,mn,active
-0104-003,0104,1,Contact 0104-003 (synthetic),+000 04003 1372,respondent,,,,,mn,active
-0104-004,0104,1,Contact 0104-004 (synthetic),+000 04004 1330,respondent,+000 04004 2579,spouse,,,mn,active
-0104-005,0104,1,Contact 0104-005 (synthetic),+000 04005 1749,respondent,+000 04005 2186,spouse,,,mn,active
-0104-006,0104,1,Contact 0104-006 (synthetic),+000 04006 1650,respondent,+000 04006 2428,spouse,+000 04006 3950,son or daughter,mn,active
-0104-007,0104,1,Contact 0104-007 (synthetic),+000 04007 1492,respondent,+000 04007 2513,spouse,,,mn,active
-0104-008,0104,1,Contact 0104-008 (synthetic),+000 04008 1513,respondent,+000 04008 2804,spouse,,,mn,active
-0104-009,0104,1,Contact 0104-009 (synthetic),+000 04009 1219,respondent,+000 04009 2510,spouse,,,mn,active
-0104-101,0104,1,Reserve 0104-101 (synthetic),+000 04101 1457,respondent,,,,,mn,reserve
-0104-102,0104,1,Reserve 0104-102 (synthetic),+000 04102 1388,respondent,,,,,mn,reserve
-0104-103,0104,1,Reserve 0104-103 (synthetic),+000 04103 1603,respondent,,,,,mn,reserve
-0105-001,0105,1,Contact 0105-001 (synthetic),+000 05001 1643,respondent,+000 05001 2635,spouse,,,mn,active
-0105-002,0105,1,Contact 0105-002 (synthetic),+000 05002 1176,respondent,,,,,mn,active
-0105-003,0105,1,Contact 0105-003 (synthetic),+000 05003 1328,respondent,,,,,mn,active
-0105-004,0105,1,Contact 0105-004 (synthetic),+000 05004 1466,respondent,+000 05004 2585,spouse,,,mn,active
-0105-005,0105,1,Contact 0105-005 (synthetic),+000 05005 1270,respondent,,,,,mn,active
-0105-006,0105,1,Contact 0105-006 (synthetic),+000 05006 1797,respondent,,,,,mn,active
-0105-007,0105,1,Contact 0105-007 (synthetic),+000 05007 1239,respondent,+000 05007 2325,spouse,,,mn,active
-0105-008,0105,1,Contact 0105-008 (synthetic),+000 05008 1344,respondent,,,,,mn,active
-0105-009,0105,1,Contact 0105-009 (synthetic),+000 05009 1688,respondent,,,,,mn,active
-0105-101,0105,1,Reserve 0105-101 (synthetic),+000 05101 1640,respondent,,,,,mn,reserve
-0105-102,0105,1,Reserve 0105-102 (synthetic),+000 05102 1902,respondent,,,,,mn,reserve
-0105-103,0105,1,Reserve 0105-103 (synthetic),+000 05103 1565,respondent,,,,,mn,reserve
-0106-001,0106,1,Contact 0106-001 (synthetic),+000 06001 1751,respondent,+000 06001 2860,spouse,,,mn,active
-0106-002,0106,1,Contact 0106-002 (synthetic),+000 06002 1770,respondent,+000 06002 2587,spouse,,,mn,active
-0106-003,0106,1,Contact 0106-003 (synthetic),+000 06003 1485,respondent,,,,,mn,active
-0106-004,0106,1,Contact 0106-004 (synthetic),+000 06004 1870,respondent,+000 06004 2833,spouse,,,mn,active
-0106-005,0106,1,Contact 0106-005 (synthetic),+000 06005 1135,respondent,,,,,mn,removed
-0106-006,0106,1,Contact 0106-006 (synthetic),+000 06006 1621,respondent,+000 06006 2357,spouse,+000 06006 3640,son or daughter,mn,active
-0106-007,0106,1,Contact 0106-007 (synthetic),+000 06007 1440,respondent,,,,,mn,active
-0106-008,0106,1,Contact 0106-008 (synthetic),+000 06008 1530,respondent,+000 06008 2265,spouse,+000 06008 3559,son or daughter,mn,active
-0106-009,0106,1,Contact 0106-009 (synthetic),+000 06009 1981,respondent,,,,,mn,active
-0106-101,0106,1,Reserve 0106-101 (synthetic),+000 06101 1110,respondent,,,,,mn,reserve
-0106-102,0106,1,Reserve 0106-102 (synthetic),+000 06102 1312,respondent,,,,,mn,reserve
-0106-103,0106,1,Reserve 0106-103 (synthetic),+000 06103 1944,respondent,,,,,mn,reserve
-0107-001,0107,2,Contact 0107-001 (synthetic),+000 07001 1478,respondent,,,,,mn,active
-0107-002,0107,2,Contact 0107-002 (synthetic),+000 07002 1522,respondent,,,,,mn,active
-0107-003,0107,2,Contact 0107-003 (synthetic),+000 07003 1632,respondent,+000 07003 2700,spouse,,,mn,removed
-0107-004,0107,2,Contact 0107-004 (synthetic),+000 07004 1754,respondent,,,,,mn,active
-0107-005,0107,2,Contact 0107-005 (synthetic),+000 07005 1762,respondent,,,,,mn,active
-0107-006,0107,2,Contact 0107-006 (synthetic),+000 07006 1464,respondent,+000 07006 2507,spouse,,,mn,active
-0107-007,0107,2,Contact 0107-007 (synthetic),+000 07007 1432,respondent,,,,,mn,active
-0107-008,0107,2,Contact 0107-008 (synthetic),+000 07008 1632,respondent,,,,,mn,active
-0107-009,0107,2,Contact 0107-009 (synthetic),+000 07009 1353,respondent,,,,,mn,active
-0107-101,0107,2,Reserve 0107-101 (synthetic),+000 07101 1291,respondent,,,,,mn,reserve
-0107-102,0107,2,Reserve 0107-102 (synthetic),+000 07102 1771,respondent,,,,,mn,reserve
-0107-103,0107,2,Reserve 0107-103 (synthetic),+000 07103 1571,respondent,,,,,mn,removed
-0108-001,0108,2,Contact 0108-001 (synthetic),+000 08001 1920,respondent,,,,,mn,active
-0108-002,0108,2,Contact 0108-002 (synthetic),+000 08002 1390,respondent,,,,,mn,active
-0108-003,0108,2,Contact 0108-003 (synthetic),+000 08003 1280,respondent,,,,,mn,active
-0108-004,0108,2,Contact 0108-004 (synthetic),+000 08004 1258,respondent,+000 08004 2487,spouse,,,mn,active
-0108-005,0108,2,Contact 0108-005 (synthetic),+000 08005 1263,respondent,+000 08005 2245,spouse,,,mn,active
-0108-006,0108,2,Contact 0108-006 (synthetic),+000 08006 1291,respondent,+000 08006 2910,spouse,+000 08006 3471,son or daughter,mn,active
-0108-007,0108,2,Contact 0108-007 (synthetic),+000 08007 1883,respondent,,,,,mn,active
-0108-008,0108,2,Contact 0108-008 (synthetic),+000 08008 1563,respondent,+000 08008 2858,spouse,+000 08008 3669,son or daughter,mn,active
-0108-009,0108,2,Contact 0108-009 (synthetic),+000 08009 1116,respondent,+000 08009 2221,spouse,,,mn,active
-0108-101,0108,2,Reserve 0108-101 (synthetic),+000 08101 1810,respondent,,,,,mn,reserve
-0108-102,0108,2,Reserve 0108-102 (synthetic),+000 08102 1424,respondent,,,,,mn,reserve
-0108-103,0108,2,Reserve 0108-103 (synthetic),+000 08103 1282,respondent,,,,,mn,reserve
-0109-001,0109,2,Contact 0109-001 (synthetic),+000 09001 1755,respondent,+000 09001 2379,spouse,,,mn,active
-0109-002,0109,2,Contact 0109-002 (synthetic),+000 09002 1203,respondent,+000 09002 2219,spouse,,,mn,active
-0109-003,0109,2,Contact 0109-003 (synthetic),+000 09003 1918,respondent,,,,,mn,active
-0109-004,0109,2,Contact 0109-004 (synthetic),+000 09004 1627,respondent,+000 09004 2263,spouse,,,mn,active
-0109-005,0109,2,Contact 0109-005 (synthetic),+000 09005 1428,respondent,+000 09005 2401,spouse,+000 09005 3908,son or daughter,mn,active
-0109-006,0109,2,Contact 0109-006 (synthetic),+000 09006 1203,respondent,+000 09006 2561,spouse,+000 09006 3581,son or daughter,mn,active
-0109-007,0109,2,Contact 0109-007 (synthetic),+000 09007 1261,respondent,+000 09007 2568,spouse,,,mn,active
-0109-008,0109,2,Contact 0109-008 (synthetic),+000 09008 1962,respondent,+000 09008 2192,spouse,+000 09008 3621,son or daughter,mn,active
-0109-009,0109,2,Contact 0109-009 (synthetic),+000 09009 1228,respondent,+000 09009 2180,spouse,,,mn,active
-0109-101,0109,2,Reserve 0109-101 (synthetic),+000 09101 1681,respondent,,,,,mn,reserve
-0109-102,0109,2,Reserve 0109-102 (synthetic),+000 09102 1748,respondent,,,,,mn,reserve
-0109-103,0109,2,Reserve 0109-103 (synthetic),+000 09103 1190,respondent,,,,,mn,reserve
-0110-001,0110,2,Contact 0110-001 (synthetic),+000 10001 1324,respondent,,,,,mn,active
-0110-002,0110,2,Contact 0110-002 (synthetic),+000 10002 1277,respondent,,,,,mn,active
-0110-003,0110,2,Contact 0110-003 (synthetic),+000 10003 1283,respondent,+000 10003 2568,spouse,,,mn,active
-0110-004,0110,2,Contact 0110-004 (synthetic),+000 10004 1925,respondent,+000 10004 2662,spouse,,,mn,active
-0110-005,0110,2,Contact 0110-005 (synthetic),+000 10005 1862,respondent,+000 10005 2333,spouse,+000 10005 3147,son or daughter,mn,active
-0110-006,0110,2,Contact 0110-006 (synthetic),+000 10006 1313,respondent,+000 10006 2636,spouse,+000 10006 3456,son or daughter,mn,active
-0110-007,0110,2,Contact 0110-007 (synthetic),+000 10007 1689,respondent,+000 10007 2120,spouse,,,mn,active
-0110-008,0110,2,Contact 0110-008 (synthetic),+000 10008 1143,respondent,+000 10008 2795,spouse,,,mn,active
-0110-009,0110,2,Contact 0110-009 (synthetic),+000 10009 1582,respondent,+000 10009 2625,spouse,+000 10009 3144,son or daughter,mn,active
-0110-101,0110,2,Reserve 0110-101 (synthetic),+000 10101 1901,respondent,,,,,mn,reserve
-0110-102,0110,2,Reserve 0110-102 (synthetic),+000 10102 1404,respondent,,,,,mn,reserve
-0110-103,0110,2,Reserve 0110-103 (synthetic),+000 10103 1453,respondent,,,,,mn,reserve
-0111-001,0111,2,Contact 0111-001 (synthetic),+000 11001 1545,respondent,+000 11001 2596,spouse,,,mn,active
-0111-002,0111,2,Contact 0111-002 (synthetic),+000 11002 1558,respondent,+000 11002 2788,spouse,,,mn,removed
-0111-003,0111,2,Contact 0111-003 (synthetic),+000 11003 1907,respondent,,,,,mn,active
-0111-004,0111,2,Contact 0111-004 (synthetic),+000 11004 1286,respondent,+000 11004 2855,spouse,,,mn,active
-0111-005,0111,2,Contact 0111-005 (synthetic),+000 11005 1574,respondent,+000 11005 2850,spouse,,,mn,active
-0111-006,0111,2,Contact 0111-006 (synthetic),+000 11006 1835,respondent,+000 11006 2226,spouse,+000 11006 3302,son or daughter,mn,active
-0111-007,0111,2,Contact 0111-007 (synthetic),+000 11007 1567,respondent,+000 11007 2267,spouse,+000 11007 3133,son or daughter,mn,active
-0111-008,0111,2,Contact 0111-008 (synthetic),+000 11008 1324,respondent,,,,,mn,active
-0111-009,0111,2,Contact 0111-009 (synthetic),+000 11009 1515,respondent,+000 11009 2258,spouse,,,mn,active
-0111-101,0111,2,Reserve 0111-101 (synthetic),+000 11101 1306,respondent,,,,,mn,reserve
-0111-102,0111,2,Reserve 0111-102 (synthetic),+000 11102 1118,respondent,,,,,mn,active
-0111-103,0111,2,Reserve 0111-103 (synthetic),+000 11103 1251,respondent,,,,,mn,reserve
-0112-001,0112,2,Contact 0112-001 (synthetic),+000 12001 1465,respondent,+000 12001 2213,spouse,+000 12001 3787,son or daughter,mn,active
-0112-002,0112,2,Contact 0112-002 (synthetic),+000 12002 1870,respondent,,,,,mn,active
-0112-003,0112,2,Contact 0112-003 (synthetic),+000 12003 1556,respondent,,,,,mn,active
-0112-004,0112,2,Contact 0112-004 (synthetic),+000 12004 1132,respondent,,,,,mn,active
-0112-005,0112,2,Contact 0112-005 (synthetic),+000 12005 1808,respondent,+000 12005 2180,spouse,,,mn,active
-0112-006,0112,2,Contact 0112-006 (synthetic),+000 12006 1887,respondent,+000 12006 2424,spouse,+000 12006 3151,son or daughter,mn,active
-0112-007,0112,2,Contact 0112-007 (synthetic),+000 12007 1827,respondent,+000 12007 2156,spouse,,,mn,active
-0112-008,0112,2,Contact 0112-008 (synthetic),+000 12008 1499,respondent,,,,,mn,active
-0112-009,0112,2,Contact 0112-009 (synthetic),+000 12009 1563,respondent,,,,,mn,removed
-0112-101,0112,2,Reserve 0112-101 (synthetic),+000 12101 1820,respondent,,,,,mn,reserve
-0112-102,0112,2,Reserve 0112-102 (synthetic),+000 12102 1486,respondent,,,,,mn,reserve
-0112-103,0112,2,Reserve 0112-103 (synthetic),+000 12103 1653,respondent,,,,,mn,reserve
-0113-001,0113,2,Contact 0113-001 (synthetic),+000 13001 1853,respondent,,,,,mn,active
-0113-002,0113,2,Contact 0113-002 (synthetic),+000 13002 1295,respondent,,,,,mn,active
-0113-003,0113,2,Contact 0113-003 (synthetic),+000 13003 1992,respondent,,,,,mn,active
-0113-004,0113,2,Contact 0113-004 (synthetic),+000 13004 1753,respondent,,,,,mn,active
-0113-005,0113,2,Contact 0113-005 (synthetic),+000 13005 1515,respondent,,,,,mn,active
-0113-006,0113,2,Contact 0113-006 (synthetic),+000 13006 1653,respondent,,,,,mn,active
+hhid,psu,stratum,contact_name,phone_1,phone_1_label,phone_2,phone_2_label,phone_3,phone_3_label,language,respondent_sex,status
+0101-001,0101,1,Contact 0101-001 (synthetic),+000 01001 1927,respondent,,,,,mn,f,active
+0101-002,0101,1,Contact 0101-002 (synthetic),+000 01002 1712,respondent,,,,,mn,f,active
+0101-003,0101,1,Contact 0101-003 (synthetic),+000 01003 1203,respondent,,,,,mn,f,active
+0101-004,0101,1,Contact 0101-004 (synthetic),+000 01004 1128,respondent,,,,,mn,m,active
+0101-005,0101,1,Contact 0101-005 (synthetic),+000 01005 1530,respondent,+000 01005 2667,spouse,,,mn,f,active
+0101-006,0101,1,Contact 0101-006 (synthetic),+000 01006 1180,respondent,+000 01006 2846,spouse,+000 01006 3543,son or daughter,mn,f,active
+0101-007,0101,1,Contact 0101-007 (synthetic),+000 01007 1606,respondent,,,,,mn,m,active
+0101-008,0101,1,Contact 0101-008 (synthetic),+000 01008 1822,respondent,+000 01008 2312,spouse,,,mn,m,active
+0101-009,0101,1,Contact 0101-009 (synthetic),+000 01009 1932,respondent,,,,,mn,f,removed
+0101-101,0101,1,Reserve 0101-101 (synthetic),+000 01101 1277,respondent,,,,,mn,m,reserve
+0101-102,0101,1,Reserve 0101-102 (synthetic),+000 01102 1305,respondent,,,,,mn,f,reserve
+0101-103,0101,1,Reserve 0101-103 (synthetic),+000 01103 1596,respondent,,,,,mn,f,reserve
+0102-001,0102,1,Contact 0102-001 (synthetic),+000 02001 1517,respondent,+000 02001 2232,spouse,,,mn,m,active
+0102-002,0102,1,Contact 0102-002 (synthetic),+000 02002 1426,respondent,,,,,mn,f,active
+0102-003,0102,1,Contact 0102-003 (synthetic),+000 02003 1957,respondent,,,,,mn,f,active
+0102-004,0102,1,Contact 0102-004 (synthetic),+000 02004 1773,respondent,+000 02004 2319,spouse,+000 02004 3372,son or daughter,mn,f,active
+0102-005,0102,1,Contact 0102-005 (synthetic),+000 02005 1677,respondent,+000 02005 2762,spouse,+000 02005 3654,son or daughter,mn,m,active
+0102-006,0102,1,Contact 0102-006 (synthetic),+000 02006 1376,respondent,+000 02006 2185,spouse,,,mn,f,active
+0102-007,0102,1,Contact 0102-007 (synthetic),+000 02007 1636,respondent,+000 02007 2869,spouse,,,mn,f,active
+0102-008,0102,1,Contact 0102-008 (synthetic),+000 02008 1699,respondent,+000 02008 2474,spouse,,,mn,f,active
+0102-009,0102,1,Contact 0102-009 (synthetic),+000 02009 1198,respondent,+000 02009 2493,spouse,,,mn,f,active
+0102-101,0102,1,Reserve 0102-101 (synthetic),+000 02101 1681,respondent,,,,,mn,f,reserve
+0102-102,0102,1,Reserve 0102-102 (synthetic),+000 02102 1710,respondent,,,,,mn,f,reserve
+0102-103,0102,1,Reserve 0102-103 (synthetic),+000 02103 1822,respondent,,,,,mn,m,reserve
+0103-001,0103,1,Contact 0103-001 (synthetic),+000 03001 1493,respondent,+000 03001 2751,spouse,,,mn,f,active
+0103-002,0103,1,Contact 0103-002 (synthetic),+000 03002 1900,respondent,+000 03002 2462,spouse,,,mn,m,active
+0103-003,0103,1,Contact 0103-003 (synthetic),+000 03003 1394,respondent,,,,,mn,m,active
+0103-004,0103,1,Contact 0103-004 (synthetic),+000 03004 1246,respondent,+000 03004 2138,spouse,,,mn,f,active
+0103-005,0103,1,Contact 0103-005 (synthetic),+000 03005 1996,respondent,,,,,mn,f,active
+0103-006,0103,1,Contact 0103-006 (synthetic),+000 03006 1923,respondent,+000 03006 2445,spouse,+000 03006 3406,son or daughter,mn,f,active
+0103-007,0103,1,Contact 0103-007 (synthetic),+000 03007 1726,respondent,+000 03007 2953,spouse,,,mn,f,active
+0103-008,0103,1,Contact 0103-008 (synthetic),+000 03008 1749,respondent,,,,,mn,f,active
+0103-009,0103,1,Contact 0103-009 (synthetic),+000 03009 1163,respondent,+000 03009 2326,spouse,,,mn,f,active
+0103-101,0103,1,Reserve 0103-101 (synthetic),+000 03101 1124,respondent,,,,,mn,f,reserve
+0103-102,0103,1,Reserve 0103-102 (synthetic),+000 03102 1584,respondent,,,,,mn,f,reserve
+0103-103,0103,1,Reserve 0103-103 (synthetic),+000 03103 1234,respondent,,,,,mn,f,reserve
+0104-001,0104,1,Contact 0104-001 (synthetic),+000 04001 1835,respondent,+000 04001 2230,spouse,,,mn,f,active
+0104-002,0104,1,Contact 0104-002 (synthetic),+000 04002 1693,respondent,,,,,mn,m,active
+0104-003,0104,1,Contact 0104-003 (synthetic),+000 04003 1372,respondent,,,,,mn,f,active
+0104-004,0104,1,Contact 0104-004 (synthetic),+000 04004 1330,respondent,+000 04004 2579,spouse,,,mn,f,active
+0104-005,0104,1,Contact 0104-005 (synthetic),+000 04005 1749,respondent,+000 04005 2186,spouse,,,mn,f,active
+0104-006,0104,1,Contact 0104-006 (synthetic),+000 04006 1650,respondent,+000 04006 2428,spouse,+000 04006 3950,son or daughter,mn,f,active
+0104-007,0104,1,Contact 0104-007 (synthetic),+000 04007 1492,respondent,+000 04007 2513,spouse,,,mn,f,active
+0104-008,0104,1,Contact 0104-008 (synthetic),+000 04008 1513,respondent,+000 04008 2804,spouse,,,mn,m,active
+0104-009,0104,1,Contact 0104-009 (synthetic),+000 04009 1219,respondent,+000 04009 2510,spouse,,,mn,m,active
+0104-101,0104,1,Reserve 0104-101 (synthetic),+000 04101 1457,respondent,,,,,mn,f,reserve
+0104-102,0104,1,Reserve 0104-102 (synthetic),+000 04102 1388,respondent,,,,,mn,f,reserve
+0104-103,0104,1,Reserve 0104-103 (synthetic),+000 04103 1603,respondent,,,,,mn,f,reserve
+0105-001,0105,1,Contact 0105-001 (synthetic),+000 05001 1643,respondent,+000 05001 2635,spouse,,,kk,m,active
+0105-002,0105,1,Contact 0105-002 (synthetic),+000 05002 1176,respondent,,,,,kk,f,active
+0105-003,0105,1,Contact 0105-003 (synthetic),+000 05003 1328,respondent,,,,,kk,f,active
+0105-004,0105,1,Contact 0105-004 (synthetic),+000 05004 1466,respondent,+000 05004 2585,spouse,,,kk,m,active
+0105-005,0105,1,Contact 0105-005 (synthetic),+000 05005 1270,respondent,,,,,kk,f,active
+0105-006,0105,1,Contact 0105-006 (synthetic),+000 05006 1797,respondent,,,,,kk,f,active
+0105-007,0105,1,Contact 0105-007 (synthetic),+000 05007 1239,respondent,+000 05007 2325,spouse,,,kk,m,active
+0105-008,0105,1,Contact 0105-008 (synthetic),+000 05008 1344,respondent,,,,,kk,f,active
+0105-009,0105,1,Contact 0105-009 (synthetic),+000 05009 1688,respondent,,,,,kk,m,active
+0105-101,0105,1,Reserve 0105-101 (synthetic),+000 05101 1640,respondent,,,,,kk,f,reserve
+0105-102,0105,1,Reserve 0105-102 (synthetic),+000 05102 1902,respondent,,,,,kk,f,reserve
+0105-103,0105,1,Reserve 0105-103 (synthetic),+000 05103 1565,respondent,,,,,kk,f,reserve
+0106-001,0106,1,Contact 0106-001 (synthetic),+000 06001 1751,respondent,+000 06001 2860,spouse,,,mn,f,active
+0106-002,0106,1,Contact 0106-002 (synthetic),+000 06002 1770,respondent,+000 06002 2587,spouse,,,mn,m,active
+0106-003,0106,1,Contact 0106-003 (synthetic),+000 06003 1485,respondent,,,,,mn,f,active
+0106-004,0106,1,Contact 0106-004 (synthetic),+000 06004 1870,respondent,+000 06004 2833,spouse,,,mn,m,active
+0106-005,0106,1,Contact 0106-005 (synthetic),+000 06005 1135,respondent,,,,,mn,f,removed
+0106-006,0106,1,Contact 0106-006 (synthetic),+000 06006 1621,respondent,+000 06006 2357,spouse,+000 06006 3640,son or daughter,mn,m,active
+0106-007,0106,1,Contact 0106-007 (synthetic),+000 06007 1440,respondent,,,,,mn,m,active
+0106-008,0106,1,Contact 0106-008 (synthetic),+000 06008 1530,respondent,+000 06008 2265,spouse,+000 06008 3559,son or daughter,mn,m,active
+0106-009,0106,1,Contact 0106-009 (synthetic),+000 06009 1981,respondent,,,,,mn,f,active
+0106-101,0106,1,Reserve 0106-101 (synthetic),+000 06101 1110,respondent,,,,,mn,f,reserve
+0106-102,0106,1,Reserve 0106-102 (synthetic),+000 06102 1312,respondent,,,,,mn,f,reserve
+0106-103,0106,1,Reserve 0106-103 (synthetic),+000 06103 1944,respondent,,,,,mn,f,reserve
+0107-001,0107,2,Contact 0107-001 (synthetic),+000 07001 1478,respondent,,,,,mn,f,active
+0107-002,0107,2,Contact 0107-002 (synthetic),+000 07002 1522,respondent,,,,,mn,m,active
+0107-003,0107,2,Contact 0107-003 (synthetic),+000 07003 1632,respondent,+000 07003 2700,spouse,,,mn,f,removed
+0107-004,0107,2,Contact 0107-004 (synthetic),+000 07004 1754,respondent,,,,,mn,f,active
+0107-005,0107,2,Contact 0107-005 (synthetic),+000 07005 1762,respondent,,,,,mn,f,active
+0107-006,0107,2,Contact 0107-006 (synthetic),+000 07006 1464,respondent,+000 07006 2507,spouse,,,mn,m,active
+0107-007,0107,2,Contact 0107-007 (synthetic),+000 07007 1432,respondent,,,,,mn,m,active
+0107-008,0107,2,Contact 0107-008 (synthetic),+000 07008 1632,respondent,,,,,mn,f,active
+0107-009,0107,2,Contact 0107-009 (synthetic),+000 07009 1353,respondent,,,,,mn,m,active
+0107-101,0107,2,Reserve 0107-101 (synthetic),+000 07101 1291,respondent,,,,,mn,m,reserve
+0107-102,0107,2,Reserve 0107-102 (synthetic),+000 07102 1771,respondent,,,,,mn,f,reserve
+0107-103,0107,2,Reserve 0107-103 (synthetic),+000 07103 1571,respondent,,,,,mn,f,removed
+0108-001,0108,2,Contact 0108-001 (synthetic),+000 08001 1920,respondent,,,,,mn,f,active
+0108-002,0108,2,Contact 0108-002 (synthetic),+000 08002 1390,respondent,,,,,mn,f,active
+0108-003,0108,2,Contact 0108-003 (synthetic),+000 08003 1280,respondent,,,,,mn,f,active
+0108-004,0108,2,Contact 0108-004 (synthetic),+000 08004 1258,respondent,+000 08004 2487,spouse,,,mn,f,active
+0108-005,0108,2,Contact 0108-005 (synthetic),+000 08005 1263,respondent,+000 08005 2245,spouse,,,mn,f,active
+0108-006,0108,2,Contact 0108-006 (synthetic),+000 08006 1291,respondent,+000 08006 2910,spouse,+000 08006 3471,son or daughter,mn,f,active
+0108-007,0108,2,Contact 0108-007 (synthetic),+000 08007 1883,respondent,,,,,mn,f,active
+0108-008,0108,2,Contact 0108-008 (synthetic),+000 08008 1563,respondent,+000 08008 2858,spouse,+000 08008 3669,son or daughter,mn,m,active
+0108-009,0108,2,Contact 0108-009 (synthetic),+000 08009 1116,respondent,+000 08009 2221,spouse,,,mn,f,active
+0108-101,0108,2,Reserve 0108-101 (synthetic),+000 08101 1810,respondent,,,,,mn,m,reserve
+0108-102,0108,2,Reserve 0108-102 (synthetic),+000 08102 1424,respondent,,,,,mn,f,reserve
+0108-103,0108,2,Reserve 0108-103 (synthetic),+000 08103 1282,respondent,,,,,mn,m,reserve
+0109-001,0109,2,Contact 0109-001 (synthetic),+000 09001 1755,respondent,+000 09001 2379,spouse,,,mn,f,active
+0109-002,0109,2,Contact 0109-002 (synthetic),+000 09002 1203,respondent,+000 09002 2219,spouse,,,mn,m,active
+0109-003,0109,2,Contact 0109-003 (synthetic),+000 09003 1918,respondent,,,,,mn,f,active
+0109-004,0109,2,Contact 0109-004 (synthetic),+000 09004 1627,respondent,+000 09004 2263,spouse,,,mn,m,active
+0109-005,0109,2,Contact 0109-005 (synthetic),+000 09005 1428,respondent,+000 09005 2401,spouse,+000 09005 3908,son or daughter,mn,f,active
+0109-006,0109,2,Contact 0109-006 (synthetic),+000 09006 1203,respondent,+000 09006 2561,spouse,+000 09006 3581,son or daughter,mn,f,active
+0109-007,0109,2,Contact 0109-007 (synthetic),+000 09007 1261,respondent,+000 09007 2568,spouse,,,mn,m,active
+0109-008,0109,2,Contact 0109-008 (synthetic),+000 09008 1962,respondent,+000 09008 2192,spouse,+000 09008 3621,son or daughter,mn,f,active
+0109-009,0109,2,Contact 0109-009 (synthetic),+000 09009 1228,respondent,+000 09009 2180,spouse,,,mn,f,active
+0109-101,0109,2,Reserve 0109-101 (synthetic),+000 09101 1681,respondent,,,,,mn,f,reserve
+0109-102,0109,2,Reserve 0109-102 (synthetic),+000 09102 1748,respondent,,,,,mn,m,reserve
+0109-103,0109,2,Reserve 0109-103 (synthetic),+000 09103 1190,respondent,,,,,mn,f,reserve
+0110-001,0110,2,Contact 0110-001 (synthetic),+000 10001 1324,respondent,,,,,mn,m,active
+0110-002,0110,2,Contact 0110-002 (synthetic),+000 10002 1277,respondent,,,,,mn,m,active
+0110-003,0110,2,Contact 0110-003 (synthetic),+000 10003 1283,respondent,+000 10003 2568,spouse,,,mn,m,active
+0110-004,0110,2,Contact 0110-004 (synthetic),+000 10004 1925,respondent,+000 10004 2662,spouse,,,mn,m,active
+0110-005,0110,2,Contact 0110-005 (synthetic),+000 10005 1862,respondent,+000 10005 2333,spouse,+000 10005 3147,son or daughter,mn,f,active
+0110-006,0110,2,Contact 0110-006 (synthetic),+000 10006 1313,respondent,+000 10006 2636,spouse,+000 10006 3456,son or daughter,mn,m,active
+0110-007,0110,2,Contact 0110-007 (synthetic),+000 10007 1689,respondent,+000 10007 2120,spouse,,,mn,m,active
+0110-008,0110,2,Contact 0110-008 (synthetic),+000 10008 1143,respondent,+000 10008 2795,spouse,,,mn,f,active
+0110-009,0110,2,Contact 0110-009 (synthetic),+000 10009 1582,respondent,+000 10009 2625,spouse,+000 10009 3144,son or daughter,mn,m,active
+0110-101,0110,2,Reserve 0110-101 (synthetic),+000 10101 1901,respondent,,,,,mn,f,reserve
+0110-102,0110,2,Reserve 0110-102 (synthetic),+000 10102 1404,respondent,,,,,mn,f,reserve
+0110-103,0110,2,Reserve 0110-103 (synthetic),+000 10103 1453,respondent,,,,,mn,m,reserve
+0111-001,0111,2,Contact 0111-001 (synthetic),+000 11001 1545,respondent,+000 11001 2596,spouse,,,kk,m,active
+0111-002,0111,2,Contact 0111-002 (synthetic),+000 11002 1558,respondent,+000 11002 2788,spouse,,,kk,f,removed
+0111-003,0111,2,Contact 0111-003 (synthetic),+000 11003 1907,respondent,,,,,kk,f,active
+0111-004,0111,2,Contact 0111-004 (synthetic),+000 11004 1286,respondent,+000 11004 2855,spouse,,,kk,f,active
+0111-005,0111,2,Contact 0111-005 (synthetic),+000 11005 1574,respondent,+000 11005 2850,spouse,,,kk,f,active
+0111-006,0111,2,Contact 0111-006 (synthetic),+000 11006 1835,respondent,+000 11006 2226,spouse,+000 11006 3302,son or daughter,kk,f,active
+0111-007,0111,2,Contact 0111-007 (synthetic),+000 11007 1567,respondent,+000 11007 2267,spouse,+000 11007 3133,son or daughter,kk,f,active
+0111-008,0111,2,Contact 0111-008 (synthetic),+000 11008 1324,respondent,,,,,kk,f,active
+0111-009,0111,2,Contact 0111-009 (synthetic),+000 11009 1515,respondent,+000 11009 2258,spouse,,,kk,f,active
+0111-101,0111,2,Reserve 0111-101 (synthetic),+000 11101 1306,respondent,,,,,kk,f,reserve
+0111-102,0111,2,Reserve 0111-102 (synthetic),+000 11102 1118,respondent,,,,,kk,m,active
+0111-103,0111,2,Reserve 0111-103 (synthetic),+000 11103 1251,respondent,,,,,kk,f,reserve
+0112-001,0112,2,Contact 0112-001 (synthetic),+000 12001 1465,respondent,+000 12001 2213,spouse,+000 12001 3787,son or daughter,mn,m,active
+0112-002,0112,2,Contact 0112-002 (synthetic),+000 12002 1870,respondent,,,,,mn,f,active
+0112-003,0112,2,Contact 0112-003 (synthetic),+000 12003 1556,respondent,,,,,mn,m,active
+0112-004,0112,2,Contact 0112-004 (synthetic),+000 12004 1132,respondent,,,,,mn,m,active
+0112-005,0112,2,Contact 0112-005 (synthetic),+000 12005 1808,respondent,+000 12005 2180,spouse,,,mn,f,active
+0112-006,0112,2,Contact 0112-006 (synthetic),+000 12006 1887,respondent,+000 12006 2424,spouse,+000 12006 3151,son or daughter,mn,f,active
+0112-007,0112,2,Contact 0112-007 (synthetic),+000 12007 1827,respondent,+000 12007 2156,spouse,,,mn,f,active
+0112-008,0112,2,Contact 0112-008 (synthetic),+000 12008 1499,respondent,,,,,mn,f,active
+0112-009,0112,2,Contact 0112-009 (synthetic),+000 12009 1563,respondent,,,,,mn,f,removed
+0112-101,0112,2,Reserve 0112-101 (synthetic),+000 12101 1820,respondent,,,,,mn,f,reserve
+0112-102,0112,2,Reserve 0112-102 (synthetic),+000 12102 1486,respondent,,,,,mn,f,reserve
+0112-103,0112,2,Reserve 0112-103 (synthetic),+000 12103 1653,respondent,,,,,mn,f,reserve
+0113-001,0113,2,Contact 0113-001 (synthetic),+000 13001 1853,respondent,,,,,mn,f,active
+0113-002,0113,2,Contact 0113-002 (synthetic),+000 13002 1295,respondent,,,,,mn,f,active
+0113-003,0113,2,Contact 0113-003 (synthetic),+000 13003 1992,respondent,,,,,mn,f,active
+0113-004,0113,2,Contact 0113-004 (synthetic),+000 13004 1753,respondent,,,,,mn,f,active
+0113-005,0113,2,Contact 0113-005 (synthetic),+000 13005 1515,respondent,,,,,mn,m,active
+0113-006,0113,2,Contact 0113-006 (synthetic),+000 13006 1653,respondent,,,,,mn,f,active
