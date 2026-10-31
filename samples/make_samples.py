@@ -29,6 +29,7 @@ import random
 import shutil
 import tempfile
 import uuid
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -603,6 +604,151 @@ def copy_log(log):
 
 KAZAKH_PSUS = {"0105", "0111"}     # two PSUs where the interview language is Kazakh: the leader's matching criterion (language)
 
+# ---- the same round-5 calls as a KoBoToolbox export, a Survey Solutions export and a calling service's log (proposal K) ----
+HH_COLS = ["name", "label", "hhid", "enumerator_id", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label",
+           "planned_date", "planned_hour", "psu", "stratum", "kind", "replaces", "rank"]
+KOBO_COLS = ["start", "end", "deviceid", "enumerator_id", "hhid", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label",
+             "planned_date", "planned_hour", "replaces", "psu", "stratum", "phone_slot", "call_start", "call_end", "result", "willing", "appointment", "action", "target_hhid", "note",
+             "_id", "_uuid", "_submission_time", "_validation_status", "_notes", "_status", "_submitted_by", "__version__", "_tags", "_index"]
+SUSO_ASSIGN_COLS = ["hhid", "enumerator_id", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label", "planned_date", "planned_hour",
+                    "psu", "stratum", "replacement_1", "replacement_1_name", "replacement_1_phone", "replacement_2", "replacement_2_name", "replacement_2_phone", "_responsible", "_quantity"]
+SUSO_MAIN_COLS = ["interview__key", "interview__id", "hhid", "enumerator_id", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label",
+                  "planned_date", "planned_hour", "psu", "stratum", "interview__status", "has_errors", "ssSys_IRnd"]
+SUSO_CALL_COLS = ["interview__key", "interview__id", "calls__id", "phone_slot", "call_start", "call_end", "result", "willing", "appointment", "action", "target_hhid", "replaces", "note"]
+SVC_COLS = ["sid", "date_created", "start_time", "end_time", "duration", "from", "to", "status", "direction", "price", "price_unit"]
+WILLING = {"COMPLETE": "yes", "APPOINTMENT": "later", "PARTIAL": "later", "NOT_AVAILABLE": "later", "REFUSAL_SOFT": "no", "REFUSAL_HARD": "no", "LANGUAGE": "not_asked", "OTHER": "not_asked"}
+SVC_STATUS = {"COMPLETE": "completed", "APPOINTMENT": "completed", "PARTIAL": "completed", "NOT_AVAILABLE": "completed", "REFUSAL_SOFT": "completed", "REFUSAL_HARD": "completed",
+              "LANGUAGE": "completed", "OTHER": "completed", "WRONG_NUMBER": "completed", "NO_ANSWER": "no-answer", "BUSY": "busy", "SWITCHED_OFF": "no-answer", "DEAD_NUMBER": "failed"}
+CENTER_LINE = "+000 11 000 0100"
+
+
+def kobo_dt(s):
+    """A KoboToolbox datetime answer: 2026-11-06T17:15:30.000+08:00."""
+    if not s:
+        return ""
+    t = parse(s)
+    z = t.strftime("%z")
+    return t.strftime("%Y-%m-%dT%H:%M:%S.000") + z[:3] + ":" + z[3:]
+
+
+def utc_naive(s):
+    return parse(s).astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def rfc2822(s):
+    return parse(s).astimezone(dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+
+def write_tsv(path, rows, cols):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\t".join(cols) + "\n")
+        for r in rows:
+            f.write("\t".join("" if r.get(c) is None else str(r.get(c)).replace("\t", " ") for c in cols) + "\n")
+
+
+def write_platform_samples(out, logs, files):
+    """households.csv and assignments.tab as the leader view writes them for round 5; the enumerators' round-5 calls up to the
+    6 November export as a KoBoToolbox CSV export (one submission per call), a Survey Solutions export (one interview per
+    household, the calls in a roster) and a Twilio-style call log of the calling service; all from the same simulated events."""
+    r2 = random.Random(SEED + 5000)              # a stream of its own: every other sample stays as it was
+    contact = {}                                 # hhid -> (name, {slot: (number, label)}), mains and replacements
+    hh_rows, as_rows, by_e = [], [], {}
+    for e, a in sorted(files.items()):
+        for h in a["households"]:
+            ph = {p["slot"]: (p["number"], p["label"]) for p in h["contact"]["phones"]}
+            contact[h["hhid"]] = (h["contact"]["name"], ph)
+            c = {f"phone_{s}": ph[s][0] for s in ph} | {f"phone_{s}_label": ph[s][1] for s in ph}
+            base = {"hhid": h["hhid"], "enumerator_id": e, "program": PROGRAM, "round": 5, "contact_name": h["contact"]["name"], "planned_date": h["plan"]["first_dial_date"],
+                    "planned_hour": h["plan"]["target_hour"], "psu": h["psu"], "stratum": h["stratum"]}
+            by_e[h["hhid"]] = e
+            hh_rows.append({"name": h["hhid"], "label": f"{h['hhid']} · {h['contact']['name']}", **base, **c, "kind": "main", "replaces": "", "rank": ""})
+            reps = h.get("replacements", [])
+            for i, r in enumerate(reps):
+                rph = {p["slot"]: (p["number"], p.get("label", "")) for p in r["contact"]["phones"]}
+                contact[r["hhid"]] = (r["contact"]["name"], rph)
+                by_e[r["hhid"]] = e
+                hh_rows.append({"name": r["hhid"], "label": f"{r['hhid']} · {r['contact']['name']} (replacement {i + 1} for {h['hhid']})", "hhid": r["hhid"], "enumerator_id": e,
+                                "program": PROGRAM, "round": 5, "contact_name": r["contact"]["name"], "planned_date": "", "planned_hour": "", "psu": h["psu"], "stratum": h["stratum"],
+                                **{f"phone_{s}": rph[s][0] for s in rph}, **{f"phone_{s}_label": rph[s][1] for s in rph}, "kind": "replacement", "replaces": h["hhid"], "rank": i + 1})
+            row = {**base, **c, "_responsible": e, "_quantity": 1}
+            for i, r in enumerate(reps[:2]):
+                row[f"replacement_{i + 1}"] = r["hhid"]; row[f"replacement_{i + 1}_name"] = r["contact"]["name"]; row[f"replacement_{i + 1}_phone"] = r["contact"]["phones"][0]["number"]
+            as_rows.append(row)
+    write_csv(os.path.join(out["kobo"], "households.csv"), hh_rows, HH_COLS)
+    write_tsv(os.path.join(out["suso"], "assignments.tab"), as_rows, SUSO_ASSIGN_COLS)
+    # the calls, from each enumerator's effective log at the time of the 6 November export
+    kobo, mains, calls, svc = [], [], [], []
+    n_id = 1000
+    for e, log in sorted(logs.items()):
+        live, standalone, via, _ = effective(log.events)
+        recs = [dict(d, _kind="dial") for d in live] + [dict(a, _kind="action") for a in standalone]
+        recs.sort(key=lambda x: (x.get("ts") or x["logged_at"], x["event_id"]))
+        per_hh = {}
+        for x in recs:
+            hid = x["hhid"]
+            name, ph = contact.get(hid, (f"Contact {hid}", {}))
+            c = {f"phone_{s}": ph[s][0] for s in ph} | {f"phone_{s}_label": ph[s][1] for s in ph}
+            planned = next((h for h in files[e]["households"] if h["hhid"] == hid), None)
+            common = {"enumerator_id": e, "hhid": hid, "program": PROGRAM, "round": 5, "contact_name": name, **c, "psu": H[hid]["psu"] if hid in H else "", "stratum": H[hid]["stratum"] if hid in H else "",
+                      "planned_date": planned["plan"]["first_dial_date"] if planned else "", "planned_hour": planned["plan"]["target_hour"] if planned else ""}
+            n_id += 1
+            if x["_kind"] == "dial":
+                blank_end = x["status"] != "COMPLETE" and x.get("end_ts") and r2.random() < 0.08      # a call end the enumerator forgot: the service's log fills it
+                rec = {"phone_slot": x["phone_slot"], "call_start": x["ts"], "call_end": "" if blank_end else (x.get("end_ts") or ""), "result": x["status"], "willing": WILLING.get(x["status"], ""),
+                       "appointment": x.get("appointment_ts", ""), "action": x.get("action") or "none", "target_hhid": "", "replaces": x.get("replaces", ""), "note": x.get("note", "")}
+                if x.get("end_ts") and x["event_id"] not in {} and r2.random() < 0.95:             # the calling service saw this call
+                    number = ph.get(x["phone_slot"], ("", ""))[0]
+                    if number:
+                        dur = int((parse(x["end_ts"]) - parse(x["ts"])).total_seconds())
+                        svc.append({"sid": "CA" + "".join(r2.choice("0123456789abcdef") for _ in range(32)), "date_created": rfc2822(x["ts"]), "start_time": rfc2822(x["ts"]),
+                                    "end_time": rfc2822(x["end_ts"]) if SVC_STATUS.get(x["status"]) == "completed" else "", "duration": dur if SVC_STATUS.get(x["status"]) == "completed" else "",
+                                    "from": CENTER_LINE, "to": number, "status": SVC_STATUS.get(x["status"], "completed"), "direction": "outbound-api",
+                                    "price": f"-{max(dur, 60) / 60 * 0.014:.4f}" if SVC_STATUS.get(x["status"]) == "completed" else "", "price_unit": "USD"})
+            else:
+                rec = {"phone_slot": "", "call_start": "", "call_end": "", "result": "NONE", "willing": "", "appointment": "", "action": x["action"], "target_hhid": x.get("target_hhid", ""),
+                       "replaces": "", "note": x.get("note", "")}
+            logged = x["logged_at"]
+            kobo.append({**common, "start": kobo_dt(rec["call_start"] or logged), "end": kobo_dt(logged), "deviceid": f"collect:{e}dev", **{k: (kobo_dt(v) if k in ("call_start", "call_end", "appointment") else v) for k, v in rec.items()},
+                         "_id": n_id, "_uuid": x["event_id"], "_submission_time": utc_naive(logged), "_validation_status": "", "_notes": "", "_status": "submitted_via_web",
+                         "_submitted_by": e, "__version__": "vK3xRtmCallRecord2026110101", "_tags": "", "_index": len(kobo) + 1})
+            per_hh.setdefault(hid, {"common": common, "calls": [], "complete": False})
+            per_hh[hid]["calls"].append(rec)
+            if x["_kind"] == "dial" and x["status"] == "COMPLETE":
+                per_hh[hid]["complete"] = True
+        for hid, p in sorted(per_hh.items()):
+            key = "-".join(f"{r2.randint(0, 99):02d}" for _ in range(4))
+            iid = "".join(r2.choice("0123456789abcdef") for _ in range(32))
+            mains.append({**p["common"], "interview__key": key, "interview__id": iid, "interview__status": 100 if p["complete"] else 65, "has_errors": 0, "ssSys_IRnd": round(r2.random(), 6)})
+            for i, rec in enumerate(p["calls"], start=1):
+                calls.append({"interview__key": key, "interview__id": iid, "calls__id": i, **{k: (parse(v).strftime("%Y-%m-%dT%H:%M:%S") if k in ("call_start", "call_end", "appointment") and v else v) for k, v in rec.items()}})
+    # three calls the service saw that nobody recorded, and two calls to numbers outside the list
+    for hid in r2.sample(sorted(h for h in by_e if contact[h][1]), 3):
+        at = dt.datetime(2026, 11, 5, r2.randint(10, 19), r2.randint(0, 59), r2.randint(0, 59), tzinfo=TZ)
+        svc.append({"sid": "CA" + "".join(r2.choice("0123456789abcdef") for _ in range(32)), "date_created": rfc2822(iso(at)), "start_time": rfc2822(iso(at)), "end_time": "", "duration": "",
+                    "from": CENTER_LINE, "to": contact[hid][1][1][0], "status": "no-answer", "direction": "outbound-api", "price": "", "price_unit": "USD"})
+    for k in (1, 2):
+        at = dt.datetime(2026, 11, 4, 11 + k, 5, 0, tzinfo=TZ)
+        svc.append({"sid": "CA" + "".join(r2.choice("0123456789abcdef") for _ in range(32)), "date_created": rfc2822(iso(at)), "start_time": rfc2822(iso(at)), "end_time": rfc2822(iso(at + dt.timedelta(seconds=40))),
+                    "duration": 40, "from": CENTER_LINE, "to": f"+000 99 999 990{k}", "status": "completed", "direction": "outbound-api", "price": "-0.0093", "price_unit": "USD"})
+    svc.sort(key=lambda r: parse(dt.datetime.strptime(r["start_time"], "%a, %d %b %Y %H:%M:%S %z").isoformat()))
+    kobo.sort(key=lambda r: r["_submission_time"])
+    for i, r in enumerate(kobo, start=1):
+        r["_index"] = i
+    with open(os.path.join(out["kobo"], "rtm_call_record_2026-11-06.csv"), "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=KOBO_COLS, delimiter=";", lineterminator="\n", extrasaction="ignore")
+        w.writeheader()
+        for r in kobo:
+            w.writerow({k: ("" if r.get(k) is None else r.get(k)) for k in KOBO_COLS})
+    write_tsv(os.path.join(out["suso"], "rtm_call_record.tab"), mains, SUSO_MAIN_COLS)
+    write_tsv(os.path.join(out["suso"], "calls.tab"), calls, SUSO_CALL_COLS)
+    with zipfile.ZipFile(os.path.join(out["suso"], "rtm_call_record_export.zip"), "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(os.path.join(out["suso"], "rtm_call_record.tab"), "rtm_call_record.tab")
+        z.write(os.path.join(out["suso"], "calls.tab"), "calls.tab")
+        z.writestr("export__readme.txt", "SYNTHETIC export of the questionnaire RTM call record (L2MN-DEMO round 5), in the layout of a Survey Solutions tabular export. No real household.\n")
+    write_csv(os.path.join(out["calls"], "service_calls_2026-11-06.csv"), svc, SVC_COLS)
+    print(f"kobo/households.csv: {len(hh_rows)} rows; kobo/rtm_call_record_2026-11-06.csv: {len(kobo)} submissions; suso: {len(mains)} interviews, {len(calls)} call records; "
+          f"calls/service_calls_2026-11-06.csv: {len(svc)} calls")
+
 
 def write_household_list(out):
     """The leader's household list (A.1) as it stands when round 5 is prepared. Two columns beyond the standard ones,
@@ -628,7 +774,7 @@ def main():
     H = make_households()
     for h in H.values():
         h["used_repl_at"] = {}
-    out = {k: os.path.join(HERE, k) for k in ("leader", "round05", "past", "leader/history", "leader/exports_R05", "leader/merge_cases")}
+    out = {k: os.path.join(HERE, k) for k in ("leader", "round05", "past", "leader/history", "leader/exports_R05", "leader/merge_cases", "kobo", "suso", "calls")}
     for p in out.values():
         os.makedirs(p, exist_ok=True)
     for sub_ in ("leader/merge_cases", "leader/exports_R05", "leader/history"):
@@ -698,6 +844,7 @@ def main():
         dials, rows, acts, arows = merged(logs.values())
         write_csv(os.path.join(out["leader"], "expected_R05_calls.csv"), rows, COLS)
         write_csv(os.path.join(out["leader"], "expected_R05_actions.csv"), arows, ACOLS)
+        write_platform_samples(out, logs, files)
         # ---- the merge cases (proposal F) ----
         mc = out["leader/merge_cases"]
         for d in ("duplicate", "csv_only", "wrong_round", "edited", "conflict"):

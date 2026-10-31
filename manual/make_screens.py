@@ -289,6 +289,22 @@ def main():
         b.js("RTM.setNow('2026-11-07T09:00:00+08:00'); true")
         b.click('[data-lact="tab"][data-t="calllog"]'); time.sleep(0.3)
         crop("l27_calllog", ["__card(\"The round's files\")", "__card('Merged call log')"], max_h=760)
+
+        # ======================= the team leader: with KoBoToolbox and a calling service (Part C) =======================
+        b.click('[data-lact="close"]'); b.wait("APP.modal")
+        close_without_saving(); b.wait("!LEAD.state()")
+        b.js("""(() => { const f = document.querySelector('#lstart'); f.querySelector('[name=leader]').value = 'L01'; f.querySelector('[name=program]').value = 'L2MN-DEMO';
+               f.querySelector('[name=country]').value = 'MN'; f.querySelector('[name=round]').value = '5'; return true; })()""")
+        b.click('[data-lact="start"]'); b.wait("!!LEAD.state()")
+        b.set_files("#lf-hh", [os.path.join(S, "leader", "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
+        b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
+        b.set_files("#lf-manifest", [os.path.join(S, "leader", "L2MN-DEMO_R05_manifest.json")]); b.wait("!!LEAD.state().manifest")
+        b.set_files("#lf-platform", [os.path.join(S, "kobo", "rtm_call_record_2026-11-06.csv"), os.path.join(S, "calls", "service_calls_2026-11-06.csv")])
+        b.wait("LEAD.state().imports.length === 2"); time.sleep(0.5)
+        crop("l30_platform_import", ["__card('Add exports from the common folder')", "__card('^Files')"], hls=["document.querySelector('#lf-platform').parentElement"], max_h=900)
+        crop("l31_unlogged", ["__card('Needs your decision')"], max_h=520)
+        b.click('[data-lact="tab"][data-t="calllog"]'); time.sleep(0.3)
+        crop("l32_platform_files", ["__card(\"The round's files\")"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"kobo\"]')"], max_h=600)
         print(f"{len(glob.glob(os.path.join(IMG, '*.png')))} pictures in {IMG}")
     finally:
         b.close()

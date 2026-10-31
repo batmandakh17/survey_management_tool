@@ -332,6 +332,24 @@ read as each category, and a summary of the backtests. It holds coefficients and
 - **One passphrase per enumerator** when assignment files are protected (D11), made by the tool and shown
   once, so that one enumerator's passphrase never opens another's file.
 
+## Files of KoBoToolbox, Survey Solutions and a calling service (1 November 2026)
+
+For a team that records its calls in KoBoToolbox or Survey Solutions rather than in this tool's enumerator view
+(proposal K; `formats/kobo/README.md` and `formats/suso/README.md` have the forms and the daily cycle).
+
+| File | Direction | Written or read as |
+|---|---|---|
+| `households.csv` | Leader view → the KoBoToolbox project (Settings › Media) | One row per household and unused replacement: `name`, `label`, `hhid`, `enumerator_id`, `program`, `round`, `contact_name`, `phone_1`–`phone_3` with labels, `planned_date`, `planned_hour`, `psu`, `stratum`, `kind`, `replaces`, `rank`. Has phone numbers |
+| `assignments.tab` | Leader view → Survey Solutions (Upload assignments) | One tab-delimited row per household: the identifying variables, up to two replacements, `_responsible` (the enumerator's login), `_quantity` (1). Has phone numbers |
+| KoBoToolbox data export | KoBoToolbox → Import tab | The form's CSV export ("XML values and headers"), one row per call record, recognised by `_uuid` and `_submission_time`; split by `enumerator_id` and merged as a CSV export of each enumerator |
+| Survey Solutions export | Survey Solutions → Import tab | The export zip, or `rtm_call_record.tab` (one row per interview, `interview__id`, `interview__key`, the identifying variables) with `calls.tab` (one row per call, `interview__id`, `calls__id`); joined and merged the same way |
+| Calling service log | The service → Import tab | A CSV with at least the number called, the start, the end or duration and the status (Twilio's Call resource names; case and spaces ignored); matched to the recorded calls by number and time, never re-exported |
+
+Each call record carries `hhid`, `enumerator_id`, `program`, `round`, `phone_slot`, `call_start`, `call_end`, `result`
+(the tool's codes, or `NONE` for an action or a note without a call), `willing` (yes, later, no, not asked),
+`appointment`, `action`, `target_hhid`, `replaces` and `note`; in the merged call log the willingness appears in
+`note` as `willing: later`, and the event ID is KoBo's `_uuid` or Survey Solutions' `interview__id:calls__id`.
+
 ## Additions made on 31 October 2026, from the supervisor's requests of 28 October, for the author's approval
 
 - **Matching criteria.** `matching` in the assignment file and the manifest; `criteria` and `assignment.matched`

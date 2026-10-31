@@ -667,6 +667,9 @@
       return { name, sha, base, kind: 'unknown', problem: `its schema is "${o.schema || 'missing'}"` };
     }
     const head = (t.split(/\r?\n/)[0] || '').split(',');
+    // a platform file: a KoBoToolbox export, a Survey Solutions export (main file or the calls roster) or a calling service's call log (proposal K)
+    const P = L.parseDelimited(t), pk = L.platformKind(P.header);
+    if (pk) return { name, sha, base, kind: pk, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '' };
     if (head.join(',') === R.CSV_COLS.join(',')) {
       const rows = R.parseCSV(t);
       const ids = [...new Set(rows.map(r => r.logged_by || r.operator).filter(Boolean))];
@@ -676,7 +679,7 @@
       return { name, sha, base, kind: 'csv', program: rows.length ? rows[0].program : '', round: rows.length ? +rows[0].round : null,
         enumerator_id: ids.length === 1 ? ids[0] : enumFromName(name), several: ids.length > 1, rows, at, exported_at: last ? last.logged_at : '', count: rows.length };
     }
-    return { name, sha, base, kind: 'unknown', problem: 'not a call-log export, contacts file or manifest' };
+    return { name, sha, base, kind: 'unknown', problem: 'not a call-log export, contacts file, manifest, platform export or call log' };
   };
   // a CSV row back into a dial (the CSV holds dials with corrections applied, so no further correction is possible)
   const rowDial = r => {
@@ -696,11 +699,247 @@
   };
   L.qualifies = d => d.status === 'COMPLETE' && (d.dur_min === null || d.dur_min === undefined || d.dur_min >= R.MIN_COMPLETE_MIN);
 
+  // ---- exports of KoBoToolbox, Survey Solutions and a calling service (proposal K) ----
+  // A delimited text (comma, semicolon or tab; quotes as in CSV) as rows of objects, the delimiter found from the header.
+  const splitDelimited = (text, d) => {
+    const rows = [], t = String(text).replace(/^\uFEFF/, '');
+    let row = [], field = '', q = false;
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (q) { if (ch === '"') { if (t[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += ch; continue; }
+      if (ch === '"') q = true;
+      else if (ch === d) { row.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; row.push(field); rows.push(row); row = []; field = ''; }
+      else field += ch;
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(x => x !== ''));
+  };
+  L.parseDelimited = (text, delim) => {
+    const first = String(text).replace(/^\uFEFF/, '').split(/\r?\n/)[0] || '';
+    const d = delim || (first.includes('\t') ? '\t' : first.split(';').length > first.split(',').length ? ';' : ',');
+    const rows = splitDelimited(text, d);
+    const head = rows.length ? rows[0].map(h => h.trim()) : [];
+    return { delimiter: d, header: head, rows: rows.slice(1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] === undefined ? '' : r[i]]))) };
+  };
+  // the kind of a platform file, from its columns
+  const normCol = c => String(c).toLowerCase().replace(/[\s_]/g, '');
+  L.platformKind = header => {
+    const h = new Set(header.map(c => c.trim())), n = new Set(header.map(normCol));
+    if ((h.has('_uuid') || h.has('_submission_time')) && h.has('hhid') && h.has('result')) return 'kobo';
+    if ((h.has('interview__id') || (h.has('Id') && h.has('ParentId1')) || h.has('calls__id')) && h.has('result') && (h.has('calls__id') || h.has('ParentId1'))) return 'suso_calls';
+    if ((h.has('interview__id') || h.has('Id')) && h.has('hhid') && !h.has('result')) return 'suso_main';
+    if ((n.has('sid') || n.has('callsid')) && n.has('to') && n.has('status') && (n.has('starttime') || n.has('datecreated'))) return 'service';
+    return null;
+  };
+  // 'YYYY-MM-DDTHH:MM:SS(.sss)?(Z|+HH:MM)?' or 'YYYY-MM-DD HH:MM:SS' into the harmonized wall time and offset
+  const isoParts = v => {
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return { wall: '', off: '' };
+    const m = /^(\d{4}-\d\d-\d\d)[T ](\d\d:\d\d(?::\d\d)?)(?:\.\d+)?\s*(Z|[+-]\d\d:?\d\d)?$/.exec(s);
+    if (!m) { const t = Date.parse(s); return isNaN(t) ? { wall: '', off: '' } : isoParts(R.localISO(new Date(t))); }
+    let off = m[3] || '';
+    if (off === 'Z') off = '+00:00'; else if (/^[+-]\d{4}$/.test(off)) off = off.slice(0, 3) + ':' + off.slice(3);
+    return { wall: `${m[1]} ${m[2].length === 5 ? m[2] + ':00' : m[2]}`, off };
+  };
+  const FORM_STATUS = new Set([...STATUS_SET, 'NONE']);
+  // one call record of a form into a row of the harmonized dial table (A.4), or a standalone action for a record without a call
+  const formRecord = (M, src, r, e, eid, loggedAt) => {
+    const raw = String(r.result || '').trim().toUpperCase(), status = FORM_STATUS.has(raw) ? raw : 'OTHER';
+    const s = isoParts(r.call_start), en = isoParts(r.call_end), ap = isoParts(r.appointment);
+    const willing = String(r.willing || '').trim().toLowerCase();
+    const note = [String(r.note || '').trim(), raw && status === 'OTHER' && raw !== 'OTHER' ? `result: ${raw}` : '', willing && willing !== 'not_asked' ? `willing: ${willing}` : ''].filter(Boolean).join(' · ');
+    const action = String(r.action || '').trim().toUpperCase(), act = action && action !== 'NONE' ? action : '';
+    const target = String(r.target_hhid || '').trim();
+    const hhid = String(r.hhid || '').trim();
+    const out = { dial: null, action: null };
+    if (status !== 'NONE' && hhid) {
+      out.dial = { program: String(r.program || M.program), round: String(r.round || M.round), hhid, attempt: '1', ts: s.wall, end_ts: en.wall, utc_offset: s.off || en.off,
+        dur_min: '', status, is_cmp_code: status === 'COMPLETE' ? '1' : '0', operator: e, phone_slot: String(r.phone_slot || '').trim(), appointment_ts: ap.wall,
+        action: act === 'ACTIVATE_REPLACEMENT' ? '' : act, replaces: String(r.replaces || '').trim(), note, corrected: '0', logged_by: e, logged_at: loggedAt, event_id: eid, prev_hash: '' };
+    }
+    // an action without a call, and an activation (which needs the replacement's ID, which the dial row cannot carry)
+    if (hhid && act && (status === 'NONE' || act === 'ACTIVATE_REPLACEMENT')) {
+      out.action = R.clean({ event_id: status === 'NONE' ? eid : `${eid}:a`, type: 'action', hhid, action: act, target_hhid: target || undefined, note: note || undefined,
+        logged_by: e, logged_at: loggedAt, via: src });
+    }
+    return out;
+  };
+  const pseudoExport = (M, orig, e, rows, actions, when) => ({
+    name: `${orig.name} (${e || 'no enumerator'})`, sha: R.sha256(`${orig.sha}|${e}`), base: `${baseName(orig.name)} (${e})`, kind: 'csv', form: orig.kind, parent: orig.name,
+    program: rows.length && rows[0].program ? rows[0].program : M.program, round: rows.length && rows[0].round ? +rows[0].round : M.round,
+    enumerator_id: e, rows, at: when || 0, exported_at: when ? R.localISO(new Date(when)) : '', count: rows.length + actions.length, formActions: actions,
+  });
+  // the platform files among the imports become one cumulative "CSV export" per enumerator; the merge then treats them as section F treats a CSV without its JSON
+  L.expandForms = (imports, M) => {
+    const out = [], extra = [], service = [];
+    const stamp = v => { const p = isoParts(v); return p.wall ? Date.parse(p.wall.replace(' ', 'T') + (p.off || '')) || 0 : 0; };
+    const emit = (orig, src, recs) => {        // recs: [{r, e, eid, loggedAt, when}]
+      const byE = new Map();
+      recs.forEach(x => { if (!byE.has(x.e)) byE.set(x.e, []); byE.get(x.e).push(x); });
+      let parts = 0;
+      for (const [e, xs] of byE) {
+        const rows = [], acts = [];
+        let when = 0;
+        xs.forEach(x => { const fr = formRecord(M, src, x.r, e, x.eid, x.loggedAt); if (fr.dial) rows.push(fr.dial); if (fr.action) acts.push(fr.action); when = Math.max(when, x.when || 0); });
+        if (!rows.length && !acts.length) continue;
+        out.push(pseudoExport(M, orig, e, rows, acts, when)); parts++;
+      }
+      return parts;
+    };
+    const mains = imports.filter(f => f.kind === 'suso_main'), callsFiles = imports.filter(f => f.kind === 'suso_calls');
+    const folder = n => (n.includes('/') ? n.slice(0, n.lastIndexOf('/') + 1) : '');
+    for (const f of imports) {
+      if (f.kind === 'kobo') {
+        const recs = f.rows.map(r => {
+          const sub = String(r._submission_time || '').trim(), loggedAt = sub ? (/(Z|[+-]\d\d:?\d\d)$/.test(sub) ? sub : sub + 'Z') : (isoParts(r.call_end).wall || isoParts(r.call_start).wall || '').replace(' ', 'T');
+          return { r, e: String(r.enumerator_id || '').trim(), eid: String(r._uuid || r._id || '').trim() || R.sha256(JSON.stringify(r)).slice(0, 32), loggedAt, when: Date.parse(loggedAt) || stamp(r.call_end) || stamp(r.call_start) };
+        });
+        const parts = emit(f, 'kobo', recs);
+        extra.push({ name: f.name, kind: 'KoBoToolbox export', enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(f.rows.length, 'record')}, split into ${R.plural(parts, 'export')} by enumerator` });
+      } else if (f.kind === 'suso_calls') {
+        const main = mains.find(m => folder(m.name) === folder(f.name)) || mains[0];
+        if (!main) { extra.push({ name: f.name, kind: 'Survey Solutions roster', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: its main file (interview__id, hhid, enumerator_id) was not added' }); continue; }
+        const byInt = new Map(main.rows.map(r => [String(r.interview__id || r.Id || '').trim(), r]));
+        let orphans = 0;
+        const recs = [];
+        f.rows.forEach(r => {
+          const iid = String(r.interview__id || r.ParentId1 || '').trim(), m = byInt.get(iid);
+          if (!m) { orphans++; return; }
+          const row = Object.assign({}, m, r), cid = String(r.calls__id || r.Id || '').trim();
+          const loggedAt = (isoParts(r.call_end).wall || isoParts(r.call_start).wall || '').replace(' ', 'T') + (isoParts(r.call_end).off || isoParts(r.call_start).off || '');
+          recs.push({ r: row, e: String(m.enumerator_id || '').trim(), eid: `${iid}:${cid}`, loggedAt, when: stamp(r.call_end) || stamp(r.call_start) });
+        });
+        const parts = emit(f, 'suso', recs);
+        extra.push({ name: f.name, kind: 'Survey Solutions export', enumerator_id: '', exported_at: '', count: f.rows.length,
+          use: `${R.plural(f.rows.length, 'call record')} joined with ${main.name} (${R.plural(main.rows.length, 'interview')}), split into ${R.plural(parts, 'export')} by enumerator${orphans ? `; ${orphans} rows without their interview left out` : ''}` });
+      } else if (f.kind === 'suso_main') {
+        extra.push({ name: f.name, kind: 'Survey Solutions export', enumerator_id: '', exported_at: '', count: f.rows.length,
+          use: callsFiles.length ? 'the interviews: joined with the call records' : 'not merged: its roster file calls.tab (the call records) was not added' });
+      } else if (f.kind === 'service') {
+        service.push(f);
+        extra.push({ name: f.name, kind: 'calling service log', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'matched to the recorded calls after the merge (needs the household list)' });
+      } else out.push(f);
+    }
+    return { imports: out, extra, service };
+  };
+  // the calling service's log against the merged dials: by the household's number and a start within three minutes;
+  // a missing call end is filled from the service; what does not match is reported (numbers never leave this computer)
+  L.applyService = (G, services, Hl, resolutions) => {
+    const res = resolutions || new Map(), digits = s => String(s || '').replace(/\D/g, '');
+    const numIndex = new Map();
+    for (const h of Hl.values()) (h.phones || []).forEach(p => { const d = digits(p.number); if (!d) return; if (!numIndex.has(d)) numIndex.set(d, []); numIndex.get(d).push({ hhid: h.hhid, slot: p.slot }); });
+    const bySuffix = new Map();
+    for (const d of numIndex.keys()) { const k = d.slice(-8); if (!bySuffix.has(k)) bySuffix.set(k, []); bySuffix.get(k).push(d); }
+    const find = d => (d ? numIndex.get(d) || (bySuffix.get(d.slice(-8)) || []).flatMap(x => numIndex.get(x)) : []);
+    const dialsBy = new Map();
+    G.dials.forEach(d => { if (!dialsBy.has(d.hhid)) dialsBy.set(d.hhid, []); dialsBy.get(d.hhid).push(d); });
+    const stats = { files: services.length, calls: 0, panel: 0, matched: 0, filled: 0, unknown: 0, unlogged: 0, dials: G.dials.length, unmatched_dials: 0 };
+    for (const f of services) {
+      const g = (r, k) => { const key = Object.keys(r).find(c => normCol(c) === k); return key ? r[key] : ''; };
+      const calls = f.rows.map(r => {
+        const to = digits(g(r, 'to')), start = Date.parse(g(r, 'starttime') || g(r, 'datecreated')), end = Date.parse(g(r, 'endtime')), dur = parseFloat(g(r, 'duration'));
+        return { sid: g(r, 'sid') || g(r, 'callsid'), to, hh: find(to), start: isNaN(start) ? null : start, end: isNaN(end) ? null : end, dur: isNaN(dur) ? null : dur, status: String(g(r, 'status') || '').toLowerCase() };
+      }).filter(c => c.start !== null).sort((a, b) => a.start - b.start);
+      stats.calls += calls.length;
+      let unlogged = 0;
+      for (const c of calls) {
+        if (!c.hh.length) { stats.unknown++; continue; }
+        stats.panel++;
+        let best = null, bd = 180000 + 1;
+        for (const { hhid, slot } of c.hh) for (const d of dialsBy.get(hhid) || []) {
+          if (d._svc || (d.phone_slot && slot && +d.phone_slot !== +slot)) continue;
+          const dt = Math.abs(Date.parse(d.ts) - c.start);
+          if (dt < bd) { bd = dt; best = d; }
+        }
+        if (!best) {
+          unlogged++; stats.unlogged++;
+          const key = `unlogged_call:${c.sid || c.start}`;
+          const r = res.get(key);
+          G.issues.push(Object.assign({ key, type: 'unlogged_call', severity: 'action', file: f.name, hhid: c.hh[0].hhid,
+            detail: `The calling service shows a ${c.status || ''} call to ${c.hh[0].hhid} at ${R.localISO(new Date(c.start)).slice(0, 16).replace('T', ' ')} that nobody recorded within three minutes.`,
+            choices: [{ value: 'acknowledged', label: 'Noted' }] }, r ? { status: 'resolved', decision: r.decision, note: r.note, by: r.logged_by, at: r.logged_at } : { status: 'open' }));
+          continue;
+        }
+        best._svc = c; stats.matched++;
+        if (!best.end_ts && (c.end !== null || c.dur !== null)) {
+          const endMs = c.end !== null ? c.end : c.start + c.dur * 1000;
+          best.end_ts = R.localISO(new Date(endMs)); best.dur_min = Math.max(0, (endMs - Date.parse(best.ts)) / 60000); stats.filled++;
+        }
+      }
+      G.issues.push({ key: `service:${f.sha}`, type: 'service_log', severity: 'info', status: 'noted', file: f.name,
+        detail: `${R.plural(calls.length, 'call')} in the service log: ${stats.panel} to the panel's numbers, of which ${stats.matched} matched a recorded call and ${unlogged} had no record within three minutes; ${stats.unknown} to numbers not in the household list.` });
+    }
+    stats.unmatched_dials = G.dials.filter(d => !d._svc).length;
+    G.serviceStats = stats;
+    return stats;
+  };
+  // the two files the platforms take in (proposal K.3): the household file for the KoBo form's media, and the Survey Solutions assignments upload
+  const planOf = (plans, id) => (plans && plans.get && plans.get(id)) || {};
+  L.KOBO_COLS = ['name', 'label', 'hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum', 'kind', 'replaces', 'rank'];
+  const contactCols = H => { const o = {}; (H && H.phones || []).forEach(p => { if (p.slot >= 1 && p.slot <= 3) { o[`phone_${p.slot}`] = p.number || ''; o[`phone_${p.slot}_label`] = p.label || ''; } }); return o; };
+  L.koboHouseholds = (M, Hl, plans) => {
+    const rows = [];
+    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
+      const H = Hl.get(h.hhid) || {}, pl = planOf(plans, h.hhid);
+      rows.push(Object.assign({ name: h.hhid, label: `${h.hhid} · ${H.name || ''}`.trim(), hhid: h.hhid, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: H.name || '',
+        planned_date: pl.first_dial_date || '', planned_hour: Number.isInteger(pl.target_hour) ? pl.target_hour : '', psu: h.psu || '', stratum: h.stratum || '', kind: 'main', replaces: '', rank: '' }, contactCols(H)));
+      (h.replacements || []).forEach((id, i) => {
+        const Rh = Hl.get(id) || {};
+        rows.push(Object.assign({ name: id, label: `${id} · ${Rh.name || ''} (replacement ${i + 1} for ${h.hhid})`, hhid: id, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: Rh.name || '',
+          planned_date: '', planned_hour: '', psu: h.psu || '', stratum: h.stratum || '', kind: 'replacement', replaces: h.hhid, rank: i + 1 }, contactCols(Rh)));
+      });
+    }
+    return R.toCSV(rows, L.KOBO_COLS);
+  };
+  L.SUSO_COLS = ['hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum',
+    'replacement_1', 'replacement_1_name', 'replacement_1_phone', 'replacement_2', 'replacement_2_name', 'replacement_2_phone', '_responsible', '_quantity'];
+  L.susoAssignments = (M, Hl, plans, logins) => {
+    const cell = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
+    const lines = [L.SUSO_COLS.join('\t')];
+    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
+      const H = Hl.get(h.hhid) || {}, pl = planOf(plans, h.hhid), reps = (h.replacements || []).slice(0, 2).map(id => Hl.get(id) || { hhid: id });
+      const row = Object.assign({ hhid: h.hhid, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: H.name || '', planned_date: pl.first_dial_date || '',
+        planned_hour: Number.isInteger(pl.target_hour) ? pl.target_hour : '', psu: h.psu || '', stratum: h.stratum || '',
+        _responsible: (logins && logins[h.enumerator_id]) || h.enumerator_id, _quantity: 1 }, contactCols(H));
+      reps.forEach((Rh, i) => { row[`replacement_${i + 1}`] = Rh.hhid || ''; row[`replacement_${i + 1}_name`] = Rh.name || ''; row[`replacement_${i + 1}_phone`] = ((Rh.phones || [])[0] || {}).number || ''; });
+      lines.push(L.SUSO_COLS.map(c => cell(row[c])).join('\t'));
+    }
+    return lines.join('\n') + '\n';
+  };
+  // a zip archive (a Survey Solutions export) as its text members: the same reader as the workbook's
+  L.readZip = async buf => {
+    const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), dec = new TextDecoder('utf-8');
+    let eocd = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('This is not a zip archive.');
+    const n = dv.getUint16(eocd + 10, true), out = new Map();
+    let p = dv.getUint32(eocd + 16, true);
+    const entries = [];
+    for (let k = 0; k < n; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      entries.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, off });
+      p += 46 + nl + el + cl;
+    }
+    for (const e of entries) {
+      if (e.name.endsWith('/') || !/\.(tab|csv|txt|json)$/i.test(e.name)) continue;
+      const start = e.off + 30 + dv.getUint16(e.off + 26, true) + dv.getUint16(e.off + 28, true);
+      const data = u8.subarray(start, start + e.csize);
+      if (e.method === 0) out.set(e.name, dec.decode(data));
+      else if (e.method === 8 && typeof DecompressionStream !== 'undefined') out.set(e.name, dec.decode(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
+    }
+    return out;
+  };
+
   // ---- the merge (F): every situation gives a line in the merge report; nothing is resolved silently ----
   // resolutions: Map issue key -> {decision, note, logged_by, logged_at}
   L.merge = (M, imports, resolutions, now) => {
     const res = resolutions || new Map(), issues = [], files = [];
     const nowMs = (now || R.now()).getTime();
+    const ex = L.expandForms(imports, M);          // platform exports become one CSV-like export per enumerator (proposal K)
+    imports = ex.imports; files.push(...ex.extra);
     const issue = x => {
       const r = res.get(x.key);
       issues.push(Object.assign(x, r ? { status: 'resolved', decision: r.decision, note: r.note, by: r.logged_by, at: r.logged_at } : { status: 'open' }));
@@ -718,7 +957,7 @@
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
     for (const f of imports) {
-      const row = { name: f.name, kind: f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
+      const row = { name: f.name, kind: f.form ? `${f.form === 'kobo' ? 'KoBoToolbox' : 'Survey Solutions'} records` : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
       files.push(row);
       if (seen.has(f.sha)) {
         row.use = 'duplicate, ignored';
@@ -842,7 +1081,7 @@
         const dials = latest.f.rows.map(rowDial);
         dials.forEach(d => { d.dur_min = d.end_ts ? Math.max(0, (Date.parse(d.end_ts) - Date.parse(d.ts)) / 60000) : null; });
         const viaDial = d => ({ event_id: d.event_id, type: 'action', hhid: d.hhid, action: d.action, logged_by: d.logged_by, logged_at: d.logged_at, via: 'dial' });
-        const actions = dials.filter(d => d.action).map(viaDial);
+        const actions = dials.filter(d => d.action).map(viaDial).concat(latest.f.formActions || []);      // a form records actions without a call too
         const haveD = new Set(dials.map(d => d.event_id)), haveA = new Set(actions.map(a => a.event_id));
         let contacts = [];
         const prior = cands.slice(1).find(x => x.f.kind === 'json');
@@ -971,7 +1210,7 @@
       if (!okNum || !okLog) issue({ key: `contact:${u.event_id}`, type: 'contact_mismatch', severity: 'info', file: f.name, hhid: u.hhid, enumerator: f.enumerator_id,
         detail: `The number for ${u.hhid}, slot ${u.slot}, does not match the digest ${okNum ? 'in the call log' : 'beside it'}.` });
     });
-    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed') };
+    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), service: ex.service };
   };
 
   // ---- cases and progress: one line per household of the round (manifest households and activated replacements) ----

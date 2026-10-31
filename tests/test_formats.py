@@ -58,6 +58,15 @@ clean = [os.path.join(S, d) for d in ("round05", "past", os.path.join("leader", 
     sorted(glob.glob(os.path.join(S, "leader", "*.*")))
 code, out = run(*clean)
 check("all sample files pass, the leader's inputs and outputs included", code == 0, out)
+# the files of KoBoToolbox, Survey Solutions and the calling service (proposal K)
+code, out = run(os.path.join(S, "kobo"), os.path.join(S, "calls"))
+check("the KoBo household file, the KoBo export and the calling service's log are recognised and pass, each with its phone-number warning",
+      code == 0 and out.count("OK") == 3 and out.count("holds") >= 3, out)
+hh_bad = copy(os.path.join(S, "kobo", "households.csv"), "households_dup.csv")
+lines = open(hh_bad, encoding="utf-8").read().rstrip("\n").split("\n")
+open(hh_bad, "w", encoding="utf-8").write("\n".join(lines + [lines[1]]) + "\n")
+code, out = run(hh_bad)
+check("a household listed twice in the KoBo household file is an error", code == 1 and "appears twice" in out, out)
 code, out = run(os.path.join(S, "leader", "merge_cases"))
 check("of the merge cases, only the deliberately edited file fails, at its broken chain",
       code == 1 and out.count("ERROR") == 1 and "edited" in out.split("ERROR")[1].split("\n")[0] and "hash chain" in out, out)

@@ -173,6 +173,30 @@ def check_leader(P, errs, warns):
 def other_csv(header, rows, errs, warns):
     """The leader's other tables, recognised by their columns. Returns a label, or None when the file is not one of them."""
     h = [c.strip().lower() for c in header]
+    # the files of KoBoToolbox, Survey Solutions and a calling service (proposal K); a KoBo export is semicolon-separated, so its header arrives as one field
+    joined = ";".join(header) if len(header) == 1 and ";" in header[0] else None
+    if joined is not None:
+        hk = [c.strip() for c in header[0].split(";")]
+        if "_uuid" in hk and "hhid" in hk and "result" in hk:
+            n = len([l for l in rows]) if rows else None
+            warns.append("a KoBoToolbox export of the call-record form: holds the numbers the form pulled in; for the leader's Import tab, never for the common folder")
+            return "KoBoToolbox call-record export"
+    if h[:3] == ["name", "label", "hhid"] and "enumerator_id" in h and "kind" in h:
+        bad = [r for r in rows if r.get("kind") not in ("main", "replacement")]
+        if bad:
+            errs.append(f"{len(bad)} row(s) with a kind other than main or replacement")
+        ids = [r["hhid"] for r in rows]
+        if len(ids) != len(set(ids)):
+            errs.append("a household appears twice in the household file")
+        warns.append("the KoBo form's household file: holds phone numbers; it goes to the KoBoToolbox project's media only")
+        return f"KoBo household file, {len(rows)} rows"
+    hn = [c.replace(" ", "").replace("_", "") for c in h]
+    if ("sid" in hn or "callsid" in hn) and "to" in hn and "status" in hn and ("starttime" in hn or "datecreated" in hn):
+        warns.append("a calling service's call log: holds phone numbers; for the leader's Import tab only, never re-exported")
+        return f"calling service log, {len(rows)} calls"
+    if "_uuid" in h and "hhid" in h and "result" in h:
+        warns.append("a KoBoToolbox export of the call-record form: holds the numbers the form pulled in; for the leader's Import tab, never for the common folder")
+        return f"KoBoToolbox call-record export, {len(rows)} records"
     if header == ACOLS:
         bad = [r for r in rows if r["action"] not in ("RELEASE", "SWITCH_REQUEST", "REMOVE_REQUEST", "ACTIVATE_REPLACEMENT")]
         if bad:

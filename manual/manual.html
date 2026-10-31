@@ -78,6 +78,9 @@
   <div>B12 Import the exports</div><div>B13 Merge questions and the merge report</div><div>B14 New or corrected numbers</div>
   <div>B15 Progress</div><div>B16 Call log and the round's files</div><div>B17 Analytics</div><div>B18 Risk lists</div>
   <div>B19 A round, step by step</div><div>B20 Messages and what to do</div>
+  <div class="p">Part C · With KoBoToolbox, Survey Solutions and a calling service</div>
+  <div>C1 When this part applies</div><div>C2 The call-record form in KoBoToolbox</div><div>C3 The same questionnaire in Survey Solutions</div>
+  <div>C4 A round, day by day</div><div>C5 The calling service's log</div><div>C6 What the leader sees</div>
   <div class="p">Reference</div>
   <div>R1 Call results</div><div>R2 Why a household is with an enumerator</div><div>R3 Every file the tool reads or writes</div>
 </div>
@@ -733,6 +736,86 @@ bottom of the tab gives the training data, the features, the backtests and the m
 </table>
 
 <!-- ======================================================== reference -->
+<h2 class="part">Part C · With KoBoToolbox, Survey Solutions and a calling service<small>When enumerators record their calls in a data-collection platform rather than in this tool</small></h2>
+
+<h3><span class="num">C1</span>When this part applies</h3>
+<p>Many call centers already interview in KoBoToolbox or in Survey Solutions, and some dial through an internet calling
+service. The leader's side of this tool works the same: you prepare the round, give out the assignment, import each
+day's records, follow progress and move households during the round. Two things change. The enumerators record each
+call in a short form on their platform instead of in the enumerator view (Part A), and the file you give the
+platform and the file it gives you back have the platform's layout. The tool writes the first and reads the second.
+Nothing is typed twice.</p>
+<p>What a program needs: the call-record form (C2, or its Survey Solutions specification, C3), the household list in
+the tool's columns (B3), and the team (B7). Each round: write the files (B10), upload one of them to the platform
+(C4), and each day drop the platform's export on the Import tab.</p>
+
+<h3><span class="num">C2</span>The call-record form in KoBoToolbox</h3>
+<p>The form is <code>formats/kobo/rtm_call_record.xlsx</code>, an XLSForm: one submission per call attempt. The
+enumerator types their ID, picks the household from their own list, sees its numbers and planned time, and records
+which number they dialed, when the call started and ended, the result (the same codes as in Part A, R1), whether
+the respondent is willing to take part (yes, later, no, not asked), a callback agreed, an action (release, ask for
+a switch, ask for removal, activate a replacement) and a note. A record whose result is “No call made” carries an
+action or a note only, as a release without a call does in Part A.</p>
+<p>The household list the form shows is <code>households.csv</code>, a <em>media file</em> of the KoBoToolbox project:
+upload it under the project's Settings › Media and deploy. The leader view writes it (C4); it lists each
+household and its unused replacements with the enumerator, the numbers, the planned first dial and the round, so the
+form can pull them in. Every submission therefore carries the household's numbers, which is why the export is for
+the leader only.</p>
+<table>
+  <tr><th>Where</th><th>What to do</th></tr>
+  <tr><td>KoBoToolbox, once</td><td>New project from <code>rtm_call_record.xlsx</code>; upload <code>households.csv</code> under Settings › Media; deploy; enumerators open the form in KoBo Collect or in the browser</td></tr>
+  <tr><td>KoBoToolbox, each round or after a move</td><td>Replace <code>households.csv</code> and redeploy</td></tr>
+  <tr><td>KoBoToolbox, each day</td><td>Data › Downloads › Export as CSV with <em>XML values and headers</em> (or the project's synchronous export link); the export holds every submission so far</td></tr>
+  <tr><td>This tool, each day</td><td>Import tab › Add platform files › the export</td></tr>
+</table>
+
+<h3><span class="num">C3</span>The same questionnaire in Survey Solutions</h3>
+<p>Survey Solutions does not read XLSForms, so the questionnaire is built once in Designer from
+<code>formats/suso/README.md</code>: the household's fields as <em>identifying</em> questions, which the assignments
+upload fills, and the calls in a roster. The leader view writes <code>assignments.tab</code>, one row per household
+with <code>_responsible</code> set to the enumerator's ID (use the IDs as the interviewers' logins, or edit the
+column) and <code>_quantity</code> 1; upload it under Survey Setup › Questionnaires › Upload assignments. Each day,
+export the questionnaire's data and add the zip itself on the Import tab: the browser opens it and joins the call
+records to their interviews.</p>
+
+<h3><span class="num">C4</span>A round, day by day</h3>
+<ol>
+  <li><b>Before the round.</b> Prepare it as in B3 to B10. On the Call log tab, write <code>households.csv</code>
+  (KoBoToolbox) or <code>assignments.tab</code> (Survey Solutions) and upload it to the platform. Both hold phone
+  numbers: they go to the platform, which stores the numbers anyway, and nowhere else.</li>
+  <li><b>Each day.</b> Download the platform's export and add it under <b class="ui">Add platform files</b> on the
+  Import tab. The tool recognises the file by its columns, splits it by enumerator and merges each enumerator's part
+  exactly as it merges a CSV export: unverified, cumulative, the latest file used, and every merge question of B13
+  raised where it applies (a call on another enumerator's household, two completes, a call after a move, an
+  enumerator without records). Progress (B15), the call log (B16) and the analytics (B17) follow.</li>
+  <li><b>Part-way through.</b> Move waiting households (B15, <em>Move waiting households</em>). Then write
+  <code>households.csv</code> or <code>assignments.tab</code> again from the new manifest and upload it: the moved
+  households appear in their new enumerator's list, and a call the previous enumerator records after the move is
+  flagged as a double call.</li>
+  <li><b>Next round.</b> The merged call log and the actions file of this round are the history the next round's
+  assignment reads (B4), whichever platform recorded them.</li>
+</ol>
+
+<h3><span class="num">C5</span>The calling service's log</h3>
+<p>Where calls go through an internet calling service, its call log is a second witness. The example is Twilio
+Programmable Voice, whose Call resource gives for every call the number called, the start and end, the duration and
+the status (completed, busy, no-answer, failed); the log can be exported from the Console or the API, and any
+service whose export has those fields is read the same way. Add the day's log under <b class="ui">Add platform
+files</b> (the household list must be open on the Prepare tab). The tool matches each service call to a recorded
+call by the household's number and a start within three minutes, fills a call end the enumerator left blank from
+the service's duration, lists under <b>Needs your decision</b> the calls to a panel number that nobody recorded, and
+counts the calls to numbers outside the list. The numbers never leave your computer: the merged call log carries the
+slot (number 1, 2 or 3), not the number.</p>
+
+<h3><span class="num">C6</span>What the leader sees</h3>
+<figure><img class="w100" src="img/l30_platform_import.png"><figcaption><b>Figure C1.</b> The Import tab with a KoBoToolbox export and the calling service's log added: the files table shows the export split by enumerator, and the note sums up the matching.</figcaption></figure>
+<figure><img class="w100" src="img/l31_unlogged.png"><figcaption><b>Figure C2.</b> Calls the service made to a panel number that nobody recorded, for the leader to note.</figcaption></figure>
+<figure><img class="w100" src="img/l32_platform_files.png"><figcaption><b>Figure C3.</b> The Call log tab's files for the platforms: the KoBo household file and the Survey Solutions assignments upload, written from the current manifest.</figcaption></figure>
+<p>The samples: <code>samples/kobo/</code>, <code>samples/suso/</code> and <code>samples/calls/</code> hold the
+synthetic program's round-5 household file, the enumerators' 342 records up to 6 November in both platforms' layouts
+(the same calls as the exports of Part B), and the service's log of the same calls with three calls nobody recorded
+and two to numbers outside the list.</p>
+
 <h2 class="part">Reference</h2>
 
 <h3><span class="num">R1</span>Call results</h3>

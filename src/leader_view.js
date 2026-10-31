@@ -346,6 +346,9 @@
     if (!st.manifest) return null;
     const recs = st.imports.map(f => Object.assign(L.readImport(f.name, f.text), { opened: f.opened }));
     const G = L.merge(st.manifest, recs, resolutionMap(), R.now());
+    // a calling service's log is matched to the merged dials by the household's number (proposal K.3); it needs the household list
+    const d = derived();
+    if (G.service && G.service.length && d.hh && !d.hh.errors.length) L.applyService(G, G.service, d.hh.households, resolutionMap());
     const C = L.cases(st.manifest, G), P = L.progress(st.manifest, C, G);
     cache.g = { G, C, P, recs };
     return cache.g;
@@ -353,6 +356,14 @@
   async function addImports(files) {
     let n = 0;
     for (const f of files) {
+      if (/\.zip$/i.test(f.name)) {            // a Survey Solutions export: its .tab members are added one by one (proposal K)
+        let parts;
+        try { parts = await L.readZip(await f.arrayBuffer()); } catch (e) { toast(`${f.name}: ${e.message}`, 'warn'); continue; }
+        let k = 0;
+        for (const [name, text] of parts) { if (/\.(tab|csv)$/i.test(name)) { st.imports.push({ name: `${f.name}/${name}`, text }); k++; n++; } }
+        if (!k) toast(`${f.name} holds no .tab or .csv file.`, 'warn');
+        continue;
+      }
       const text = await sh().readText(f);
       st.imports.push({ name: f.webkitRelativePath || f.name, text });
       n++;
@@ -421,9 +432,13 @@
       report: () => [`${base}_merge_report.csv`, R.toCSV(L.reportRows(g.G), L.REPORT_COLS)],
       contacts: () => [`${base}_contact_updates.csv`, R.toCSV(L.contactRows(g.G), L.CONTACT_COLS)],
       manifest: () => [`${base}_manifest.json`, JSON.stringify(M, null, 1)],
+      // the platform files (proposal K.3): the KoBo form's media file and the Survey Solutions assignments upload, from the current manifest
+      kobo: () => ['households.csv', L.koboHouseholds(M, derived().hh.households, st.plan ? st.plan.plans : null)],
+      suso: () => ['assignments.tab', L.susoAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null)],
     };
+    if ((what === 'kobo' || what === 'suso') && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: the platform files need the contacts.', 'warn');
     const [name, text] = files[what]();
-    sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : 'application/json');
+    sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : name.endsWith('.tab') ? 'text/tab-separated-values' : 'application/json');
     logEv('exported', { file: name });
   }
 
@@ -768,15 +783,24 @@
       return `<section class="lcard"><h3>Add exports from the common folder</h3>
         <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
         <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
-        <p class="muted">No export added yet. The merge checks every file against this round's manifest (${R.plural(st.manifest.households.length, 'household')}, ${R.plural(st.manifest.enumerators.length, 'enumerator')}); an enumerator whose export has not arrived is reported once you add the others.</p></section>`;
+        <p class="muted">No export added yet. The merge checks every file against this round's manifest (${R.plural(st.manifest.households.length, 'household')}, ${R.plural(st.manifest.enumerators.length, 'enumerator')}); an enumerator whose export has not arrived is reported once you add the others.</p>
+        <h4>Or from KoBoToolbox, Survey Solutions or a calling service</h4>
+        <p class="muted small">A KoBoToolbox export of the call-record form (CSV, "XML values and headers"), a Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files), or a calling service's call log (CSV with the number called, the start, the end or duration and the status, as Twilio's). The tool splits it by enumerator and merges it as a CSV export; the call log is matched to the recorded calls by the household's number and needs the household list open on the Prepare tab.</p>
+        <label class="btn subtle">Add platform files<input type="file" id="lf-platform" accept=".csv,.tab,.zip,.txt" multiple></label></section>`;
     }
     const open = G.issues.filter(i => i.status === 'open' && i.severity === 'action');
     const sealed = st.imports.map((f, i) => ({ f, i, rec: g.recs[i] })).filter(x => x.rec.kind === 'sealed' && x.rec.contains === R.SCHEMA.contacts);
+    const svc = G.serviceStats, d_ = derived(), noHH = G.service && G.service.length && !(d_.hh && !d_.hh.errors.length);
     return `<section class="lcard"><h3>Add exports from the common folder</h3>
       <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
       <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
       ${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}
-      ${sealed.map(x => `<div class="alert info">${esc(x.f.name)} is a protected contacts file. <button class="subtle" data-lact="opensealed" data-i="${x.i}">Open with its passphrase</button></div>`).join('')}</section>
+      ${sealed.map(x => `<div class="alert info">${esc(x.f.name)} is a protected contacts file. <button class="subtle" data-lact="opensealed" data-i="${x.i}">Open with its passphrase</button></div>`).join('')}
+      <h4>Or from KoBoToolbox, Survey Solutions or a calling service</h4>
+      <p class="muted small">A KoBoToolbox export of the call-record form (CSV, "XML values and headers"), a Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files), or a calling service's call log (CSV with the number called, the start, the end or duration and the status, as Twilio's). Each is cumulative: the tool splits it by enumerator and merges it as it merges a CSV export. The call log is matched to the recorded calls by the household's number; it needs the household list open on the Prepare tab.</p>
+      <label class="btn subtle">Add platform files<input type="file" id="lf-platform" accept=".csv,.tab,.zip,.txt" multiple></label>
+      ${noHH ? '<p class="alert warn">A calling service log was added, but the household list is not open: the numbers cannot be matched. Open it on the Prepare tab (step 1).</p>' : ''}
+      ${svc ? `<div class="alert info"><b>Calling service log:</b> ${R.plural(svc.calls, 'call')}, ${svc.panel} to the panel's numbers; ${svc.matched} matched a recorded call (${svc.filled} call ends filled from the service), ${svc.unlogged} had no record within three minutes (listed below if any), ${svc.unknown} went to numbers not in the list. ${svc.unmatched_dials} of ${svc.dials} recorded calls have no service call.</div>` : ''}</section>
       ${open.length ? `<section class="lcard"><h3>Needs your decision <span class="count warn">${open.length}</span></h3>${open.map(issueCard).join('')}</section>` : (st.imports.length ? '<p class="alert ok">No merge question is open.</p>' : '')}
       ${G.files.length ? `<section class="lcard"><h3>Files</h3><table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th>Exported</th><th class="num">Events or rows</th><th>Used</th></tr></thead><tbody>
         ${G.files.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td>${esc((f.exported_at || '').slice(0, 16).replace('T', ' '))}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table></section>` : ''}
@@ -871,7 +895,10 @@
       <div class="btnrow"><button class="primary" data-lact="export" data-what="calls">Merged call log (CSV)</button><button class="subtle" data-lact="export" data-what="actions">Actions (CSV)</button>
         <button class="subtle" data-lact="export" data-what="interviews">interviews.csv</button><button class="subtle" data-lact="export" data-what="outcomes">outcome_codes.csv</button>
         <button class="subtle" data-lact="export" data-what="calendar">calendar.csv</button><button class="subtle" data-lact="export" data-what="manifest">Manifest</button></div>
-      <p class="muted small">The merged call log has the harmonized dial-table columns of the enumerators' exports, the dial number counted per household across enumerators; the handbook's analysis scripts read it as a program's log, and the leader view reads it back as an earlier round. <code>interviews.csv</code> has one row per household for the Section 4.2 round template; <code>outcome_codes.csv</code> lists the codes and meanings to copy into the template's configuration.</p></section>
+      <p class="muted small">The merged call log has the harmonized dial-table columns of the enumerators' exports, the dial number counted per household across enumerators; the handbook's analysis scripts read it as a program's log, and the leader view reads it back as an earlier round. <code>interviews.csv</code> has one row per household for the Section 4.2 round template; <code>outcome_codes.csv</code> lists the codes and meanings to copy into the template's configuration.</p>
+      <h4>For a team that records calls in KoBoToolbox or Survey Solutions</h4>
+      <div class="btnrow"><button class="subtle" data-lact="export" data-what="kobo">households.csv (KoBoToolbox media file)</button><button class="subtle" data-lact="export" data-what="suso">assignments.tab (Survey Solutions assignments)</button> <span class="tag warn">both have phone numbers</span></div>
+      <p class="muted small">From the current manifest, so after moving households during the round they are written again. <code>households.csv</code> is the media file of the call-record form (<code>formats/kobo/rtm_call_record.xlsx</code>): upload it under the project's Settings › Media and redeploy. <code>assignments.tab</code> goes to Survey Solutions under Survey Setup › Questionnaires › Upload assignments; <code>_responsible</code> is the enumerator's ID, which should be their login. Each day, add the platform's export on the Import tab.${derived().hh && !derived().hh.errors.length ? '' : ' Open the household list on the Prepare tab first.'}</p></section>
       <section class="lcard"><h3>Merged call log <span class="count">${G.dials.length}</span></h3>
       <div class="filters"><select data-lset="__logEnum"><option value="">every enumerator</option>${[...G.perEnum.keys()].sort().map(e => `<option ${ui.logEnum === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select>
         <select data-lset="__logStatus"><option value="">every result</option>${R.STATUS.map(s => `<option value="${s.code}" ${ui.logStatus === s.code ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select>
@@ -1124,7 +1151,7 @@
       for (const f of t.files) st.inputs.history.push({ name: f.name, text: await sh().readText(f) });
       logEv('history_opened', { files: t.files.length }); invalidate(); stale(); suggestFromHistory(); invalidate(); return render();
     }
-    if (t.id === 'lf-imports' && t.files.length) return addImports([...t.files]);
+    if ((t.id === 'lf-imports' || t.id === 'lf-platform') && t.files.length) return addImports([...t.files]);
     if (t.id === 'lf-manifest' && file) {
       let o; try { o = JSON.parse(await sh().readText(file)); } catch (x) { return toast(`${file.name} is not readable JSON.`, 'warn'); }
       if (!L.validManifest(o)) return toast(`${file.name} is not a round manifest.`, 'warn');

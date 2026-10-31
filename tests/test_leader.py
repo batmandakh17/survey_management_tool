@@ -718,6 +718,81 @@ def main():
         b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
         b.click('[data-act="view"][data-v="leader"]')
 
+        # ================= E. exports of KoBoToolbox, Survey Solutions and a calling service (proposal K) =================
+        # the same round-5 calls as the enumerators' exports, in the three platforms' layouts (samples/kobo, samples/suso, samples/calls)
+        KOBO = os.path.join(ROOT, "samples", "kobo", "rtm_call_record_2026-11-06.csv")
+        SUSO_ZIP = os.path.join(ROOT, "samples", "suso", "rtm_call_record_export.zip")
+        SVC = os.path.join(ROOT, "samples", "calls", "service_calls_2026-11-06.csv")
+        exp_dials = {}
+        for r in csv.DictReader(io.StringIO(exp_calls)):
+            exp_dials[r["operator"]] = exp_dials.get(r["operator"], 0) + 1
+        exp_standalone = [r for r in csv.DictReader(io.StringIO(exp_acts)) if r["via"] != "dial"]
+
+        def merged_now():
+            return b.js("""(() => { const g = LEAD.merged(), G = g.G; const by = {};
+                G.dials.forEach(d => { by[d.source] = (by[d.source] || 0) + 1; });
+                return { dials: by, completes: Object.fromEntries(g.P.list.map(r => [r.enumerator_id, r.complete])), standalone: G.actions.filter(a => a.via !== 'dial').map(a => [a.hhid, a.action, a.target_hhid || '']),
+                  files: G.files.map(f => [f.name, f.kind, f.enumerator_id, f.count, f.use]), issues: G.issues.map(i => [i.type, i.status, i.enumerator || '', i.hhid || '', i.severity]),
+                  svc: G.serviceStats || null, unverified: [...G.perEnum.values()].every(x => x.unverified), nodur: G.dials.filter(d => d.dur_min === null).length }; })()""")
+
+        start()
+        b.js("RTM.setNow('2026-11-07T09:00:00+08:00'); true")
+        b.set_files("#lf-hh", [os.path.join(S, "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
+        b.click('[data-lact="tab"][data-t="import"]')
+        b.set_files("#lf-manifest", [MANIFEST]); b.wait("!!LEAD.state().manifest")
+        txt = b.js("document.querySelector('.panel').innerText")
+        check("the Import tab offers a second way in: KoBoToolbox, Survey Solutions or a calling service's exports", "Or from KoBoToolbox, Survey Solutions or a calling service" in txt and b.js("!!document.querySelector('#lf-platform')"))
+        b.set_files("#lf-platform", [KOBO]); b.wait("LEAD.state().imports.length === 1")
+        k = merged_now()
+        check("a KoBoToolbox export (one submission per call, semicolon CSV) is recognised, split by enumerator and merged as unverified CSV exports",
+              any(f[1] == "KoBoToolbox export" and "split into 3 exports" in f[4] for f in k["files"]) and k["unverified"] and sorted(f[2] for f in k["files"] if f[1] == "KoBoToolbox records") == ["E01", "E02", "E07"], k["files"])
+        check("the KoBo export gives the same dials per enumerator as the enumerators' own exports", k["dials"] == exp_dials, [k["dials"], exp_dials])
+        check("and the same completes per enumerator (Box 3.0: the first complete of 3 minutes or more)", k["completes"] == py_cmp, [k["completes"], py_cmp])
+        check("a record without a call (result NONE) becomes an action without a dial, as in the enumerators' own logs",
+              sorted(k["standalone"]) == sorted([a["hhid"], a["action"], a["target_hhid"]] for a in exp_standalone), [k["standalone"], [(a["hhid"], a["action"]) for a in exp_standalone]])
+        check("no merge question is open: the form's dials sit on their own households (each part is noted as unverified, as a CSV without its JSON is)",
+              not any(i[1] == "open" and i[4] == "action" for i in k["issues"]) and sum(1 for i in k["issues"] if i[0] == "unverified") == 3, [i for i in k["issues"] if i[1] == "open"])
+        kobo_rows = list(csv.DictReader(open(KOBO, encoding="utf-8"), delimiter=";"))
+        blank_ends = sum(1 for r in kobo_rows if r["result"] not in ("NONE",) and r["call_end"] == "")
+        check("call ends the enumerator left blank give dials without a length", k["nodur"] == blank_ends and blank_ends > 0, [k["nodur"], blank_ends])
+        willing = [r for r in kobo_rows if r["willing"] == "later"]
+        check("the willingness to take part travels into the merged log's note",
+              willing and b.js(f"LEAD.merged().G.dials.filter(d => (d.note || '').includes('willing: later')).length") == len([r for r in willing if r["result"] != "NONE"]), len(willing))
+        # the calling service's log fills the blanks and reports what nobody recorded
+        b.set_files("#lf-platform", [SVC]); b.wait("LEAD.state().imports.length === 2")
+        s = merged_now()
+        svc_rows = list(csv.DictReader(open(SVC, encoding="utf-8")))
+        check("the calling service's log (Twilio's call fields) is matched to the recorded calls by number and time; calls to numbers outside the list are counted apart",
+              s["svc"] and s["svc"]["calls"] == len(svc_rows) and s["svc"]["unknown"] == 2 and s["svc"]["matched"] + s["svc"]["unlogged"] + s["svc"]["unknown"] == len(svc_rows), s["svc"])
+        check("service calls that nobody recorded are listed for the leader; the matched ones fill the missing call ends",
+              3 <= s["svc"]["unlogged"] <= 6 and sum(1 for i in s["issues"] if i[0] == "unlogged_call") == s["svc"]["unlogged"] and s["svc"]["filled"] >= 1 and s["nodur"] == blank_ends - s["svc"]["filled"], s["svc"])
+        check("filled call ends change no complete (completes keep their own length)", s["completes"] == py_cmp)
+        b.shot(os.path.join(SCREENS, "leader_11_platform.png"), full=True)
+        # the Survey Solutions export: the zip is opened in the browser, the roster joined with its main file
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [SUSO_ZIP]); b.wait("LEAD.state().imports.length === 2")
+        u = merged_now()
+        check("a Survey Solutions export zip is opened in the browser: its main file and the calls roster are joined by interview__id and split by enumerator",
+              any("joined with" in f[4] and "split into 3 exports" in f[4] for f in u["files"]) and sorted(f[2] for f in u["files"] if f[1] == "Survey Solutions records") == ["E01", "E02", "E07"], u["files"])
+        check("the Survey Solutions export gives the same dials and completes per enumerator as the KoBo one", u["dials"] == exp_dials and u["completes"] == py_cmp, [u["dials"], u["completes"]])
+        check("a roster without its main file is reported, not merged",
+              b.js(f"""(() => {{ const st = LEAD.state(), calls = st.imports.find(f => f.name.endsWith('calls.tab'));
+                  const G = LCORE.merge(st.manifest, [LCORE.readImport(calls.name, calls.text)], new Map(), RTM.now());
+                  return G.files.length === 1 && G.files[0].use.startsWith('not merged') && G.dials.length === 0; }})()"""))
+        # the platform files the leader hands to the platforms, from the manifest
+        b.click('[data-lact="tab"][data-t="calllog"]')
+        before = snapshot()
+        b.click('[data-lact="export"][data-what="kobo"]'); b.click('[data-lact="export"][data-what="suso"]')
+        fk = wait_new("households*.csv", before); fs = wait_new("assignments*.tab", before)
+        hk = list(csv.DictReader(open(fk, encoding="utf-8")))
+        sample_hk = {r["hhid"]: r for r in csv.DictReader(open(os.path.join(ROOT, "samples", "kobo", "households.csv"), encoding="utf-8"))}
+        same = all(r["hhid"] in sample_hk and all(r[c] == sample_hk[r["hhid"]][c] for c in ("enumerator_id", "phone_1", "phone_2", "phone_3", "kind", "replaces", "rank", "program", "round")) for r in hk)
+        check("households.csv for the KoBo form: one row per household and reserve, with the enumerator, numbers and replacement links of the manifest (the sample file, apart from the plan)",
+              len(hk) == len(sample_hk) and same and "name" in hk[0] and "label" in hk[0], [len(hk), len(sample_hk)])
+        ta = [l.split("\t") for l in open(fs, encoding="utf-8").read().rstrip("\n").split("\n")]
+        check("assignments.tab for Survey Solutions: the manifest's households with _responsible and _quantity",
+              ta[0][-2:] == ["_responsible", "_quantity"] and len(ta) - 1 == len(man["households"]) and all(r[-1] == "1" and r[-2] in ("E01", "E02", "E07") for r in ta[1:]), [ta[0], len(ta)])
+
         # phone width
         b.ws.call("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=2, mobile=True)
         b.click('[data-lact="tab"][data-t="progress"]')
