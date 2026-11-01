@@ -79,7 +79,7 @@
   <div>B15 Progress</div><div>B16 Call log and the round's files</div><div>B17 Analytics</div><div>B18 Risk lists</div>
   <div>B19 A round, step by step</div><div>B20 Messages and what to do</div>
   <div class="p">Part C · With KoBoToolbox, a call-center system, Survey Solutions and a calling service</div>
-  <div>C1 When this part applies</div><div>C2 A form that records each call attempt</div><div>C3 A call-center system's log and the interview form</div>
+  <div>C1 When this part applies</div><div>C2 A form that records each call attempt</div><div>C3 A call-center system's exports and the interview form</div>
   <div>C4 A form the tool does not know</div><div>C5 A round, day by day</div><div>C6 Survey Solutions and a calling service</div><div>C7 What the leader sees</div>
   <div class="p">Reference</div>
   <div>R1 Call results</div><div>R2 Why a household is with an enumerator</div><div>R3 Every file the tool reads or writes</div>
@@ -773,24 +773,31 @@ the form's choices sheet, one row per household and unused replacement, with the
 <code>filter_int_id = ${int_id}</code> on the household question, each interviewer sees only their households.
 The list has no phone numbers.</p>
 
-<h3><span class="num">C3</span>A call-center system's log and the interview form</h3>
-<p>The Tajikistan program's system exports one semicolon-separated table, cumulative across rounds: operator,
-household, round, number dialed, start, end, a comment and a status code (<code>SCS</code> successful,
-<code>NOA</code> no answer, <code>NOT</code> no time, <code>NWR</code> non-working number, <code>WNM</code> wrong
-number, <code>OOS</code> out of service, <code>ITR</code> interrupted, <code>RFS</code> refused; two codes without a
-label in the files seen are read as "other" until the program names them). Add the day's download under
-<b class="ui">Add platform files</b>: only the round's rows are read, the operators' codes become the enumerators'
-IDs, the times are placed in the round's time zone, and the number dialed becomes the household's slot (number 1, 2
-or 3) through the household list, which must be open; the number itself is not kept. The Uzbekistan program's system
-exports a similar table with its own codes, which the tool reads too.</p>
+<h3><span class="num">C3</span>A call-center system's exports and the interview form</h3>
+<p>The Uzbekistan program's system gives three semicolon-separated tables a day: the <b>call log</b> (one row per
+dial: operator, household, round, number dialed, start, end, a comment and a status code: <code>CS</code> completed
+successfully, <code>NA</code> no answer, <code>NT</code> no time, <code>NWN</code> non-working number, <code>WN</code>
+wrong number, <code>OSA</code> out of service area, <code>IS</code> interrupted survey, <code>BS</code> busy,
+<code>HU</code> hangup, <code>NC</code> no call), the <b>sample table</b> (one row per household: the operator it is
+with, the next call planned, the agreement, the replacement links) and the baseline with the numbers, which the tool
+does not need. The operator's code is written <code>CATI-02</code> in the log and <code>CATI_02</code> in the sample
+table and the form; enter it once as the platform code (step 5): the tool matches it regardless of punctuation.</p>
+<p>Add the day's log under <b class="ui">Add platform files</b>: only the round's rows are read, "no call" rows are
+not dials, the times are placed in the round's time zone, and the number dialed becomes the household's slot (number
+1, 2 or 3) through the household list, which must be open; the number itself is not kept. Add the sample table too:
+the tool compares the system's view of the assignment with the manifest and lists under <b>Needs your decision</b>
+each household the system has with another operator (move it on the Progress tab and write the files again if the
+system is right, or correct the system), and counts as activated a replacement the system has activated. The
+Tajikistan program's system exports a similar log with its own codes, which the tool reads too.</p>
 <p>The interview form of such a program records no attempts, so its export is not counted as calls. Added with the
 log, it is checked against it: each interview with consent is matched to a completed call of its household within
-three hours of its start; an interview without one, and a completed call without an interview, are listed under
-<b>Needs your decision</b> (count it, keep it, or recode it as "other"), and the Import tab sums up the matching.
-Without a log, the form's export is read as the completes and refusals.</p>
-<p>What goes back: <b class="ui">cati_assignments.csv</b>, the assignment table for the system, one row per household
-and unused replacement with the operator's code, the planned first dial, the numbers and the replacement links.
-It holds phone numbers and goes to the system only.</p>
+three hours of its start, and a call the system closed early takes the interview's end; an interview without a
+logged completed call, and a completed call without an interview, are listed under <b>Needs your decision</b> (count
+it, keep it, or recode it as "other"), and the Import tab sums up the matching. Without a log, the form's export is
+read as the completes and refusals.</p>
+<p>What goes back: <b class="ui">cati_assignments.csv</b>, the assignment table for the system in its own column
+names, one row per household and unused replacement with the operator's code, the planned first dial, the numbers
+and the replacement links. It holds phone numbers and goes to the system only.</p>
 
 <h3><span class="num">C4</span>A form the tool does not know</h3>
 <p>A file whose columns match none of the layouts above is not merged; the Import tab shows a card for it instead
@@ -831,13 +838,13 @@ outside the list. The numbers never leave your computer.</p>
 
 <h3><span class="num">C7</span>What the leader sees</h3>
 <figure><img class="w100" src="img/l30_platform_import.png"><figcaption><b>Figure C1.</b> The Import tab with the Philippines-layout export added: the files table shows the export split by interviewer, merged as unverified exports.</figcaption></figure>
-<figure><img class="w100" src="img/l31_interviews.png"><figcaption><b>Figure C2.</b> The call-center log and the interview form's export together: the note sums up the matching, and the interviews without a logged completed call and the completed calls without an interview wait for a decision.</figcaption></figure>
+<figure><img class="w100" src="img/l31_interviews.png"><figcaption><b>Figure C2.</b> The call-center system's log, sample table and the interview form's export together: the notes sum up the two checks, and the household the system has with another operator, the interviews without a logged completed call and the completed calls without an interview wait for a decision.</figcaption></figure>
 <figure><img class="w100" src="img/l32_platform_files.png"><figcaption><b>Figure C3.</b> The Call log tab's lists for the platforms, written from the current manifest.</figcaption></figure>
 <figure><img class="w100" src="img/l33_mapping.png"><figcaption><b>Figure C4.</b> The mapping card for a file whose columns the tool does not know: the roles, and what each value of the result column means.</figcaption></figure>
 <p>The samples: <code>samples/kobo/</code> holds the synthetic program's round-5 calls in the Philippines layout
-(340 submissions, the same calls as the exports of Part B) and the interview form's export in the Tajikistan layout;
-<code>samples/cati/</code> the call-center log in the Tajikistan layout (717 rows, 340 of round 5) and the
-assignment table; <code>samples/suso/</code> and <code>samples/calls/</code> the Survey Solutions export and the
+(340 submissions, the same calls as the exports of Part B) and the interview form's export in the Uzbekistan layout;
+<code>samples/cati/</code> the call-center log in the Uzbekistan layout (717 rows, 340 of round 5), the system's
+sample table and the assignment table; <code>samples/suso/</code> and <code>samples/calls/</code> the Survey Solutions export and the
 service's log. Every phone number uses the invalid country code +000.</p>
 
 <!-- ======================================================== reference -->

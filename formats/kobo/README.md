@@ -56,20 +56,21 @@ With `choice_filter` set to `filter_int_id = ${int_id}` on the `hhid` question, 
 households; the Philippines form's choices sheet already has the `filter_int_id` column. The list has no phone
 numbers.
 
-## 2. An interview form that records no attempts: the L2Taj layout
+## 2. An interview form that records no attempts: the L2CU layout
 
-The Tajikistan program's form is submitted once per interview. The household ID, the operator's code and the round
-arrive in a code the call-center system shows on the operator's screen (`qrcode`, split into `hhid`, `bar_catiid`,
-`round`); the operator confirms their code (`ocode`); the form records consent (`agreement`, 1 or 2) and a refusal
-reason (`refusal`); `start` and `end` are the form's times. The calls themselves are logged by the call-center
-system (`formats/cati/README.md`).
+The Uzbekistan program's form is submitted once per interview. The household ID, the operator's number and the
+number to dial arrive in a code the call-center system shows on the operator's screen (`qrcode`, split into `hhid`,
+`bar_catiid` and more); the operator confirms their code (`ecode`, written `CATI_02`); the form records consent
+(`agreement`, 1 or 2) and a refusal reason (`refuse_text`); `start` and `end` are the form's times. The calls
+themselves are logged by the call-center system (`formats/cati/README.md`).
 
-The tool recognises the export by `_uuid`, `hhid`, `ocode` and `agreement`. With the call-center log added, the
-interviews are not dials: each interview with consent is matched to a completed call of the same household within
-three hours of its start; what does not match is listed for the leader (an interview without a logged completed
-call, which the leader can count; a completed call without an interview, which the leader can keep or recode as
-"other"). Without a call log, the export is read as the completes (consent 1) and refusals (consent 2), with the
-form's start and end as the call's.
+The tool recognises the export by `_uuid`, `hhid`, `ecode` and `agreement` (the Tajikistan program's form, with
+`ocode` and `refusal`, is read the same way). With the call-center log added, the interviews are not dials: each
+interview with consent is matched to a completed call of the same household within three hours of its start; a call
+the system closed early takes the interview's end; what does not match is listed for the leader (an interview
+without a logged completed call, which the leader can count; a completed call without an interview, which the
+leader can keep or recode as "other"). Without a call log, the export is read as the completes (consent 1) and
+refusals (consent 2), with the form's start and end as the call's.
 
 ## 3. The tool's own call-record form
 
@@ -101,9 +102,9 @@ and into the files for the platform, and every platform file is read under the t
 
 `samples/kobo/L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv` is the synthetic program's
 round-5 calls up to 6 November in the L2PHL layout (340 submissions by three enumerators with the codes CATI01,
-CATI02 and CATI07; the same calls as `samples/leader/exports_R05/`); `…_interviews_…csv` is the same round's
-completes and refusals as an export in the L2Taj layout, with two interviews the call-center log never logged as
-completed and two completed calls without an interview; `choices_households.csv` is the list the tool writes for
+CATI02 and CATI07; the same calls as `samples/leader/exports_R05/`); `…_interviews_-_latest_version_…csv` is the
+same round's completes and refusals as an export in the L2CU layout, with two interviews the call-center log never
+logged as completed and two completed calls without an interview; `choices_households.csv` is the list the tool writes for
 the choices sheet; `households.csv` and `rtm_call_record_2026-11-06.csv` belong to the tool's own form. Every phone
 number uses the invalid country code +000.
 
@@ -112,6 +113,7 @@ number uses the invalid country code +000.
 On 1 November 2026 the tool read the Philippines program's round-10 export as downloaded (17,915 submissions by 29
 interviewers, 707 columns): dials per interviewer were identical to a count made outside the tool, and the
 completes were 1,079 counted plus one household with two completes to decide, against 1,080 households with a
-qualifying complete in the file. The Tajikistan program's round-7 export (766 submissions) was read against its
-call-center log: every interview with consent had a completed call to its household in the log, and 601 of 621
-matched within three hours. Aggregates only; the files stay with the program.
+qualifying complete in the file. The Uzbekistan program's round-82 export (2,004 submissions, 2,001 with consent)
+was read against its call-center log: 1,976 interviews matched a completed call within three hours and 25 were
+listed on each side, the same 25 an independent count finds; 34 calls the system had closed early took the
+interview's end. Aggregates only; the files stay with the programs.

@@ -778,10 +778,11 @@ def main():
               b.js(f"""(() => {{ const st = LEAD.state(), calls = st.imports.find(f => f.name.endsWith('calls.tab'));
                   const G = LCORE.merge(st.manifest, [LCORE.readImport(calls.name, calls.text)], new Map(), RTM.now());
                   return G.files.length === 1 && G.files[0].use.startsWith('not merged') && G.dials.length === 0; }})()"""))
-        # ---- the two real layouts (proposal K.2): the L2PHL form's export, the L2Taj call-center log and its interview form ----
+        # ---- the two real layouts (proposal K.2): the L2PHL form's export, the L2CU call-center log, sample table and interview form ----
         PHL = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")
-        CATI = os.path.join(ROOT, "samples", "cati", "l2demo_calllog_2026-11-06.csv")
-        IV = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_interviews_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")
+        CATI = os.path.join(ROOT, "samples", "cati", "calllog_2026-11-06.csv")
+        SAMPLE = os.path.join(ROOT, "samples", "cati", "sample_2026-11-06.csv")
+        IV = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_interviews_-_latest_version_-_False_-_2026-11-06-18-00-00.csv")
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
         b.set_files("#lf-platform", [PHL]); b.wait("LEAD.state().imports.length === 1")
         q = merged_now()
@@ -794,21 +795,31 @@ def main():
         c = merged_now()
         cati_rows = list(csv.DictReader(open(CATI, encoding="utf-8"), delimiter=";"))
         other = sum(1 for r in cati_rows if r["round"] != "5")
-        check("a call-center system's log in the L2Taj layout (semicolon CSV, cumulative across rounds) is recognised; the rows of other rounds are left out",
-              any(f[1].startswith("Call-center system log (L2Taj") and f"{other} rows of other rounds left out" in f[4] for f in c["files"]), c["files"])
-        check("its dials and completes per enumerator match the enumerators' own exports (SCS is a complete; the round's time zone supplies the missing offsets)", c["dials"] == exp_dials and c["completes"] == py_cmp, [c["dials"], c["completes"]])
+        check("a call-center system's log in the L2CU layout (semicolon CSV, cumulative across rounds) is recognised; the rows of other rounds are left out",
+              any(f[1].startswith("Call-center system log (L2CU") and f"{other} rows of other rounds left out" in f[4] for f in c["files"]), c["files"])
+        check("its dials and completes per enumerator match the enumerators' own exports (CS is a complete; the operator code CATI-07 is read as E07 through the platform code CATI07; the round's time zone supplies the missing offsets)",
+              c["dials"] == exp_dials and c["completes"] == py_cmp, [c["dials"], c["completes"]])
         slots = b.js("(() => { const G = LEAD.merged().G; return [G.dials.length, G.dials.filter(d => d.phone_slot).length, G.dials.filter(d => /\+08:00$/.test(d.ts)).length]; })()")
         check("the number dialed becomes the household's slot, from the household list, and is not kept", slots[0] == slots[1] and slots[2] == slots[0], slots)
         b.set_files("#lf-platform", [IV]); b.wait("LEAD.state().imports.length === 2")
         v = merged_now()
         iv_stats = b.js("LEAD.merged().G.ivStats")
-        check("the interview form's export (L2Taj layout: hhid, ocode, agreement) is checked against the logged calls: two interviews without a completed call and two completed calls without an interview are listed",
+        check("the interview form's export (L2CU layout: hhid, ecode, agreement) is checked against the logged calls: two interviews without a completed call and two completed calls without an interview are listed",
               bool(iv_stats) and iv_stats["unlogged"] == 2 and iv_stats["without"] == 2 and iv_stats["matched"] == sum(py_cmp.values()) - 2
               and sum(1 for i in v["issues"] if i[0] == "interview_unlogged") == 2 and sum(1 for i in v["issues"] if i[0] == "complete_without_interview") == 2, iv_stats)
         key = b.js("LEAD.merged().G.issues.find(i => i.type === 'interview_unlogged').key")
         b.click(f'[data-lact="resolve"][data-key="{key}"][data-v="count"]'); b.wait("LEAD.state().resolutions.length >= 1")
         v2 = merged_now()
         check("an interview the leader counts becomes a complete", sum(v2["completes"].values()) == sum(v["completes"].values()) + 1, [v["completes"], v2["completes"]])
+        # the system's sample table: its view of the assignment against the manifest
+        smp_rows = list(csv.DictReader(open(SAMPLE, encoding="utf-8"), delimiter=";"))
+        sys_rep = next(r for r in smp_rows if r["replacement_for"])
+        b.set_files("#lf-platform", [SAMPLE]); b.wait("LEAD.state().imports.length === 3")
+        w = merged_now()
+        smp_stats = b.js("LEAD.merged().G.sampleStats")
+        check("the system's sample table (L2CU layout) is read against the manifest: the one household the system has with another operator is listed for a decision, and the replacement the system activated is counted as activated",
+              bool(smp_stats) and smp_stats["differing"] == 1 and smp_stats["activated"] == 1 and sum(1 for i in w["issues"] if i[0] == "system_assignment" and i[1] == "open") == 1
+              and sum(1 for i in w["issues"] if i[0] == "system_replacement") == 1 and b.js(f"LEAD.merged().C.has({json.dumps(sys_rep['hhid'])})"), [smp_stats, sys_rep["hhid"]])
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
         b.set_files("#lf-platform", [IV]); b.wait("LEAD.state().imports.length === 1")
         v3 = merged_now()
@@ -819,13 +830,13 @@ def main():
             w = csv.writer(f); w.writerow(["op", "household", "t0", "t1", "res", "rid"])
             for r in cati_rows:
                 if r["round"] == "5":
-                    w.writerow([r["operator_id"], r["hh_id"], r["start_time"], r["end_time"], r["status"], r["id"]])
+                    w.writerow([r["operator"], r["hhid"], r["start_time"], r["end_time"], r["status"], r["callid"]])
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
         b.set_files("#lf-platform", [unk]); b.wait("LEAD.state().imports.length === 1")
         check("a table with unknown columns opens the mapping card instead of being merged", b.js("!!document.querySelector('#lmap')") and merged_now()["dials"] == {}, merged_now()["files"])
         b.js("""(() => { const sel = (k, v) => { const s = document.querySelector(`[data-lprof="${k}"]`); if (!s) return; s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); };
             sel('col:hhid', 'household'); sel('col:enumerator', 'op'); sel('col:start', 't0'); sel('col:end', 't1'); sel('col:result', 'res'); sel('col:id', 'rid');
-            const codes = { SCS: 'COMPLETE', NOA: 'NO_ANSWER', NOT: 'NOT_AVAILABLE', NWR: 'DEAD_NUMBER', WNM: 'WRONG_NUMBER', OOS: 'SWITCHED_OFF', ITR: 'PARTIAL', RFS: 'REFUSAL_SOFT', PWI: 'OTHER', BLN: 'OTHER' };
+            const codes = { CS: 'COMPLETE', NA: 'NO_ANSWER', NT: 'NOT_AVAILABLE', NWN: 'DEAD_NUMBER', WN: 'WRONG_NUMBER', OSA: 'SWITCHED_OFF', IS: 'PARTIAL', BS: 'BUSY', HU: 'OTHER', NC: 'NONE' };
             Object.entries(codes).forEach(([k, v]) => sel(`code:${k}`, v)); sel('name', 'Our call-center log'); return true; })()""")
         b.click('[data-lact="saveprofile"]'); b.wait("LEAD.state().profiles.length === 1")
         u2 = merged_now()
@@ -851,8 +862,8 @@ def main():
         check("choices_households.csv (the L2PHL form's SN list): one row per household and reserve, the enumerator's platform code in filter_int_id",
               len(ch) == len(sample_hk) and all(r["list_name"] == "SN" and r["filter_int_id"] == "CATI" + sample_hk[r["name"]]["enumerator_id"][1:] for r in ch), [len(ch), ch[:1]])
         ca = list(csv.DictReader(open(fa, encoding="utf-8"), delimiter=";"))
-        check("cati_assignments.csv (the call-center system's table): household, operator code, planned first dial and numbers for every household and reserve",
-              len(ca) == len(sample_hk) and all(r["operator"].startswith("CATI") and r["hhid"] in sample_hk and r["phone_1"] == sample_hk[r["hhid"]]["phone_1"] for r in ca) and "date_nextcall" in ca[0], [len(ca), ca[:1]])
+        check("cati_assignments.csv (the call-center system's table, in the L2CU sample table's names): household, catiid, planned first dial and numbers for every household and reserve",
+              len(ca) == len(sample_hk) and all(r["catiid"].startswith("CATI") and r["hhid"] in sample_hk and r["respondent_phone"] == sample_hk[r["hhid"]]["phone_1"] for r in ca) and "date_nextcall" in ca[0], [len(ca), ca[:1]])
 
         # phone width
         b.ws.call("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=2, mobile=True)

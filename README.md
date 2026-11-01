@@ -87,12 +87,14 @@ above, after the manifest is open:
    submissions by three interviewers (the same calls as `exports_R05/`), one per attempt, with the result in the
    form's ten codes. The tool recognises the columns, reads each interviewer's code as the tool's enumerator ID
    through the manifest, and merges it as a CSV export: the same dials and completes per enumerator.
-2. **A call-center system's log** (the Tajikistan program's layout). Remove the file and add
-   `samples/cati/l2demo_calllog_2026-11-06.csv`: cumulative across rounds, with the number dialed and the system's
-   status codes. Only the round's rows are read; the numbers become the household's slot (the household list must be
-   open). Then add `…_interviews_…csv`, the interview form's export: the tool checks the interviews against the
-   logged calls and lists two interviews without a completed call and two completed calls without an interview
-   under "Needs your decision".
+2. **A call-center system's exports** (the Uzbekistan program's layout). Remove the file and add
+   `samples/cati/calllog_2026-11-06.csv`: the system's dial log, with the number dialed and the system's status codes,
+   operators written `CATI-01`. Only the round's rows are read; the numbers become the household's slot (the household
+   list must be open). Add `samples/cati/sample_2026-11-06.csv`, the system's sample table: the tool compares its view
+   of the assignment with the manifest and lists the one household the system has with another operator. Then add
+   `samples/kobo/…_interviews_-_latest_version_…csv`, the interview form's export: the tool checks the interviews
+   against the logged calls and lists two interviews without a completed call and two completed calls without an
+   interview under "Needs your decision".
 3. **Any other table.** Save the log with other column names and add it: the Import tab asks which column plays
    each role and what each code means, keeps the mapping in the session, and merges the file.
 4. **What the platform takes in.** On the Call log tab: *choices_households.csv* (the form's choices list, with the
@@ -128,7 +130,7 @@ above, after the manifest is open:
 | `samples/round05/E01_…`, `E02_assignment_R05.json` | The other enumerators' assignments; opening one as an update to E07's session is refused. A revised file the leader view writes after moving households opens as an update to the enumerator's session |
 | `samples/past/E07_2026-10-21.csv` and `.json` | E07's round-4 export, for the performance view |
 | `samples/rtmtools_export/` | A real `rtmsample draw` run with reserves (`selection.csv`, its manifest, and the do-file that made it), for the leader's Step 3 |
-| `samples/kobo/`, `samples/cati/`, `samples/suso/`, `samples/calls/` | The round-5 calls in the L2PHL and L2Taj layouts, the lists the tool writes for the platforms, the tool's own form's files, Survey Solutions and calling-service exports, and the calling service's log of the same calls |
+| `samples/kobo/`, `samples/cati/`, `samples/suso/`, `samples/calls/` | The round-5 calls in the L2PHL and L2CU layouts, the call-center system's sample table, the lists the tool writes for the platforms, the tool's own form's files, Survey Solutions and calling-service exports, and the calling service's log of the same calls |
 
 ## Folder
 
