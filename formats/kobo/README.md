@@ -1,82 +1,117 @@
-# The call record as a KoBoToolbox form
+# KoBoToolbox: the exports the tool reads and the files it writes
 
-For a team that records its calls in KoBoToolbox (KoBo Collect or web forms) instead of this tool's enumerator
-view. The leader keeps the leader view: the assignment, the plan, the merge, progress and the moves during the
-round. What crosses the boundary each day is a CSV in each direction. Everything here follows KoBoToolbox's own
-documentation (support.kobotoolbox.org: XLSForm question types, *Selecting options from an external file*,
-*Pulling data from an external CSV*, *Uploading media files*, *Exporting and downloading your data*, *Using the API
-for synchronous exports*).
+For a team that interviews in KoBoToolbox rather than in this tool's enumerator view. The leader keeps the leader
+view: the assignment, the plan, the merge, progress and the moves during the round. What crosses the boundary is a
+file in each direction: the project's data export comes in, and a list of households goes out. The layouts below
+are those of two L2 programs' real files; the tool was checked against those files (aggregates at the end). Any
+other form is mapped once on the Import tab (section 4).
 
-## The form
+## 1. A form that records every call attempt: the L2PHL layout
 
-`rtm_call_record.xlsx` is the XLSForm, written by `make_xlsform.py`. One submission is one call attempt.
+The Philippines program's interview form is submitted once per call attempt, whether or not anyone answered. Its
+first block asks the interviewer's ID (`int_id`, a `select_one` with a searchable list), the household (`hhid`, a
+`select_one SN` whose list of sample IDs sits in the form's choices sheet), the attempt number (`Z8`, 1st to 3rd)
+and whether someone answered (`call_status1`); then consent (`Z9`) and the interview; and in the closing block the
+result of the call (`X15`, ten codes) and remarks (`X16`). KoBo's metadata give the time the form was opened
+(`start`) and submitted (`end`).
 
-| Question | Type | What it does |
+**The export.** Data › Downloads › CSV with *XML values and headers* (or the project's synchronous export link,
+`data_url_csv`): semicolon-separated, every submission so far. The tool recognises it by the columns `_uuid`,
+`hhid`, `int_id` and `X15`, and reads:
+
+| Role | Column | Read as |
 |---|---|---|
-| `enumerator_id` | text | The enumerator's ID, as in the assignment |
-| `hhid` | `select_one_from_file households.csv` | The household, from the leader's household file, filtered to the enumerator's own list (`choice_filter enumerator_id = ${enumerator_id}`); replacements appear once the leader's file lists them for that enumerator |
-| `program`, `round`, `contact_name`, `phone_1`–`phone_3` and labels, `planned_date`, `planned_hour`, `replaces`, `psu`, `stratum` | calculate, `pulldata('households', …, 'hhid', ${hhid})` | Filled from the household file: shown to the enumerator, and exported with the record so that the leader view can check the round and link a replacement to the household it replaces |
-| `phone_slot` | select 1–3 | Which number was dialed; the labels show the numbers |
-| `call_start`, `call_end` | datetime | Start and end of the call; `call_start` defaults to now |
-| `result` | select | The tool's dial codes `COMPLETE` … `OTHER`, and `NONE` for a record without a call (an action or a note) |
-| `willing` | select | Willing to take part: yes, later, no, not asked (asked when the household was reached) |
-| `appointment` | datetime | The callback agreed |
-| `action` | select | Keep calling, `RELEASE`, `SWITCH_REQUEST`, `REMOVE_REQUEST`, `ACTIVATE_REPLACEMENT` |
-| `target_hhid` | `select_one_from_file households.csv` | The replacement activated, filtered to the household's own replacements (`kind = 'replacement' and replaces = ${hhid}`) |
-| `note` | text | Operational only |
-| `start`, `end`, `deviceid` | metadata | When the form was opened and closed, and the device |
+| Household | `hhid` | `hhid` |
+| Enumerator | `int_id` | the tool's ID, through the platform code the leader gave each enumerator (Prepare tab, step 5); an unknown code is kept as it is |
+| Call start, end | `start`, `end` | `ts`, `end_ts` (the form's open and submit times, with their offset) |
+| Result | `X15` | `status`, by the map below |
+| Attempt | `Z8` | kept for reference; the merge numbers the dials itself |
+| Record ID, submitted | `_uuid`, `_submission_time` | `event_id`, `logged_at` |
+| Note | `X16` | `note` |
 
-Upload the XLSForm as a new project, upload `households.csv` under the project's **Settings › Media**, and deploy.
-The file name must be exactly `households.csv`; the form refers to it as `households` in `pulldata()`. When the
-leader writes a new household file (a new round, or after moving households during the round), upload it again
-under the same name and redeploy. The select question's filter on a column of the external file needs a recent
-KoBo Collect or Enketo; where it is not honoured, the enumerator finds the household by typing its ID
-(`autocomplete`).
+| `X15` | Meaning in the form | Status in the tool |
+|---|---|---|
+| 1 | Complete | `COMPLETE` |
+| 2 | Partially complete, no more callback | `COMPLETE` (the program counts it as done) |
+| 3 | Partially complete, scheduled another call | `PARTIAL` |
+| 4 | Not yet started, with scheduled callback | `APPOINTMENT` |
+| 5 | Refused | `REFUSAL_SOFT` |
+| 6 | Nobody answering / just ringing | `NO_ANSWER` |
+| 7 | Number does not exist / not ringing | `DEAD_NUMBER` |
+| 8 | Phone turned off / not in service | `SWITCHED_OFF` |
+| 9 | Don't know the household | `WRONG_NUMBER` |
+| 10 | Reference person can't connect to the household | `OTHER`, with the code in the note |
 
-## The household file (`households.csv`)
+Each submission becomes one row of the harmonized dial table (A.4); the export is split by enumerator and each
+part merged as a CSV export without its JSON: unverified, cumulative, the latest file per enumerator used, every
+rule of the merge applied. A complete needs a call of three minutes or more (Box 3.0), measured from the form's
+open to its submit time.
 
-Written by the leader view (Call log tab, *households.csv*) from the round's manifest and the household list, so
-it never lists a household twice and follows every move the leader makes. One row per household and per unused
-replacement:
+**The list the tool writes back: `choices_households.csv`.** The form takes its households from the choices sheet,
+so the leader view (Call log tab) writes the list in that sheet's layout: `list_name` (`SN`), `name` and `label`
+(the household ID; a replacement's label says which household it replaces), `filter_int_id` (the enumerator's
+platform code), and for reference `enumerator_id`, `kind`, `replaces`, `rank`. Paste the rows into the choices
+sheet in place of the old SN list and redeploy; after moving households during the round, write and paste it again.
+With `choice_filter` set to `filter_int_id = ${int_id}` on the `hhid` question, each interviewer sees only their own
+households; the Philippines form's choices sheet already has the `filter_int_id` column. The list has no phone
+numbers.
 
-`name`, `label` (what the enumerator sees: the ID and the contact name), `hhid`, `enumerator_id`, `program`,
-`round`, `contact_name`, `phone_1`, `phone_1_label`, `phone_2`, `phone_2_label`, `phone_3`, `phone_3_label`,
-`planned_date`, `planned_hour`, `psu`, `stratum`, `kind` (`main` or `replacement`), `replaces` (the household a
-replacement belongs to), `rank` (its order of use).
+## 2. An interview form that records no attempts: the L2Taj layout
 
-It holds phone numbers. It goes to the KoBoToolbox project, which stores the numbers in any case, and nowhere else.
+The Tajikistan program's form is submitted once per interview. The household ID, the operator's code and the round
+arrive in a code the call-center system shows on the operator's screen (`qrcode`, split into `hhid`, `bar_catiid`,
+`round`); the operator confirms their code (`ocode`); the form records consent (`agreement`, 1 or 2) and a refusal
+reason (`refusal`); `start` and `end` are the form's times. The calls themselves are logged by the call-center
+system (`formats/cati/README.md`).
 
-## The daily export
+The tool recognises the export by `_uuid`, `hhid`, `ocode` and `agreement`. With the call-center log added, the
+interviews are not dials: each interview with consent is matched to a completed call of the same household within
+three hours of its start; what does not match is listed for the leader (an interview without a logged completed
+call, which the leader can count; a completed call without an interview, which the leader can keep or recode as
+"other"). Without a call log, the export is read as the completes (consent 1) and refusals (consent 2), with the
+form's start and end as the call's.
 
-Download the data under **Data › Downloads** (CSV, with *XML values and headers*, so that the columns carry the
-question names and the choice codes), or use the project's synchronous export link (`data_url_csv`, listed under
-`/api/v2/assets/<project uid>/export-settings/`). The export is cumulative: every submission so far. Add it on the
-leader view's Import tab, under *Add platform files*. The tool recognises it by its `_uuid` and `_submission_time`
-columns, splits it by `enumerator_id`, turns each submission into a row of the harmonized dial table (A.4:
-`ts` from `call_start`, `end_ts` from `call_end`, `status` from `result`, `phone_slot`, `appointment_ts`, `action`,
-`replaces`, `note` with the willingness appended as `willing: later`, `event_id` from `_uuid`, `logged_at` from
-`_submission_time`), and merges each enumerator's part as it merges a CSV export: unverified, the latest file used,
-every rule of the merge applied. A submission with `result = NONE` becomes an action without a call; an
-`ACTIVATE_REPLACEMENT` records the replacement's ID.
+## 3. The tool's own call-record form
 
-The CSV export leaves repeat groups out, which is why the form has none. A submission edited in KoBoToolbox
-after the export shows its new content in the next export; the tool takes the latest export as it stands.
+`rtm_call_record.xlsx` (written by `make_xlsform.py`) is a minimal form for a team that has no form of its own:
+one submission per call, with the household picked from a media file the leader view writes (`households.csv`, one
+row per household and unused replacement with the enumerator, numbers, planned first dial and replacement links),
+the number dialed, start, end, the tool's result codes, the willingness to take part (yes, later, no), a callback,
+an action (release, switch request, removal request, activate a replacement) and a note. The export is recognised
+by `_uuid`, `hhid`, `result` and `enumerator_id`. Upload the XLSForm as a new project, `households.csv` under
+Settings › Media, and deploy; replace the media file and redeploy each round or after a move. The filter of the
+household list by enumerator (`choice_filter` on a select-from-file question) depends on the KoBo Collect or
+Enketo version; where it is not honoured, the enumerator searches by ID. It has not been deployed to a real project.
 
-## The calling service
+## 4. Any other form
 
-The example in the manual uses Twilio Programmable Voice, whose call log (the Call resource: `sid`, `from`, `to`,
-`start_time`, `end_time`, `duration`, `status`) can be exported from the Console or the API. Any service whose
-call-detail export gives the number called, the start, the end or the duration and the status is read the same way;
-the column names are matched regardless of case and spaces. Added on the Import tab, the log is matched to the
-recorded calls by the household's number (from the household list, so the list must be open) and a start within
-three minutes; a call end the enumerator left blank is filled from the service; calls to a panel number that nobody
-recorded are listed for the leader; calls to numbers outside the list are counted apart. The numbers stay on the
-leader's computer: the merged call log carries the slot, never the number.
+A file whose columns match none of the layouts above opens a mapping card on the Import tab: the leader says which
+column plays each role (household, enumerator, start, result, and optionally end, attempt, callback, number
+dialed, round, record ID, submission time, note), and what each value of the result column means, chosen from the
+tool's codes (the card lists the values with their counts). The mapping is saved in the leader's session and used
+for every later file with the same columns. A value left unmapped is read as `OTHER`, with the value in the note.
 
-## Samples
+## 5. Platform codes
 
-`samples/kobo/households.csv` and `samples/kobo/rtm_call_record_2026-11-06.csv` are the synthetic program's
-round-5 household file and the enumerators' 342 records up to 6 November (the same calls as
-`samples/leader/exports_R05/`, in KoBoToolbox's export layout, semicolon-separated); `samples/calls/service_calls_2026-11-06.csv`
-is the calling service's log for the same calls, with three calls nobody recorded and two to numbers outside the
-list. Every number uses the invalid country code +000.
+Where the platform knows enumerators by another code than the tool's ID (an interviewer code, an operator code),
+the leader enters it on the Prepare tab, step 5, *Platform code*. It is written into the manifest (`platform_id`)
+and into the files for the platform, and every platform file is read under the tool's ID.
+
+## 6. Samples
+
+`samples/kobo/L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv` is the synthetic program's
+round-5 calls up to 6 November in the L2PHL layout (340 submissions by three enumerators with the codes CATI01,
+CATI02 and CATI07; the same calls as `samples/leader/exports_R05/`); `…_interviews_…csv` is the same round's
+completes and refusals as an export in the L2Taj layout, with two interviews the call-center log never logged as
+completed and two completed calls without an interview; `choices_households.csv` is the list the tool writes for
+the choices sheet; `households.csv` and `rtm_call_record_2026-11-06.csv` belong to the tool's own form. Every phone
+number uses the invalid country code +000.
+
+## 7. Checked against the real files
+
+On 1 November 2026 the tool read the Philippines program's round-10 export as downloaded (17,915 submissions by 29
+interviewers, 707 columns): dials per interviewer were identical to a count made outside the tool, and the
+completes were 1,079 counted plus one household with two completes to decide, against 1,080 households with a
+qualifying complete in the file. The Tajikistan program's round-7 export (766 submissions) was read against its
+call-center log: every interview with consent had a completed call to its household in the log, and 601 of 621
+matched within three hours. Aggregates only; the files stay with the program.

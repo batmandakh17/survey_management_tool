@@ -4,7 +4,7 @@
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.3.0';
+  RTM.VERSION = '0.3.1';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 

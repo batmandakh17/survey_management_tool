@@ -741,11 +741,11 @@ def main():
         b.click('[data-lact="tab"][data-t="import"]')
         b.set_files("#lf-manifest", [MANIFEST]); b.wait("!!LEAD.state().manifest")
         txt = b.js("document.querySelector('.panel').innerText")
-        check("the Import tab offers a second way in: KoBoToolbox, Survey Solutions or a calling service's exports", "Or from KoBoToolbox, Survey Solutions or a calling service" in txt and b.js("!!document.querySelector('#lf-platform')"))
+        check("the Import tab offers a second way in: KoBoToolbox, Survey Solutions or a calling service's exports", "Or from KoBoToolbox, a call-center system, Survey Solutions or a calling service" in txt and b.js("!!document.querySelector('#lf-platform')"))
         b.set_files("#lf-platform", [KOBO]); b.wait("LEAD.state().imports.length === 1")
         k = merged_now()
         check("a KoBoToolbox export (one submission per call, semicolon CSV) is recognised, split by enumerator and merged as unverified CSV exports",
-              any(f[1] == "KoBoToolbox export" and "split into 3 exports" in f[4] for f in k["files"]) and k["unverified"] and sorted(f[2] for f in k["files"] if f[1] == "KoBoToolbox records") == ["E01", "E02", "E07"], k["files"])
+              any(f[1].startswith("RTM call record") and "split into 3 exports" in f[4] for f in k["files"]) and k["unverified"] and sorted(f[2] for f in k["files"] if f[1] == "platform records") == ["E01", "E02", "E07"], k["files"])
         check("the KoBo export gives the same dials per enumerator as the enumerators' own exports", k["dials"] == exp_dials, [k["dials"], exp_dials])
         check("and the same completes per enumerator (Box 3.0: the first complete of 3 minutes or more)", k["completes"] == py_cmp, [k["completes"], py_cmp])
         check("a record without a call (result NONE) becomes an action without a dial, as in the enumerators' own logs",
@@ -774,16 +774,71 @@ def main():
         u = merged_now()
         check("a Survey Solutions export zip is opened in the browser: its main file and the calls roster are joined by interview__id and split by enumerator",
               any("joined with" in f[4] and "split into 3 exports" in f[4] for f in u["files"]) and sorted(f[2] for f in u["files"] if f[1] == "Survey Solutions records") == ["E01", "E02", "E07"], u["files"])
-        check("the Survey Solutions export gives the same dials and completes per enumerator as the KoBo one", u["dials"] == exp_dials and u["completes"] == py_cmp, [u["dials"], u["completes"]])
         check("a roster without its main file is reported, not merged",
               b.js(f"""(() => {{ const st = LEAD.state(), calls = st.imports.find(f => f.name.endsWith('calls.tab'));
                   const G = LCORE.merge(st.manifest, [LCORE.readImport(calls.name, calls.text)], new Map(), RTM.now());
                   return G.files.length === 1 && G.files[0].use.startsWith('not merged') && G.dials.length === 0; }})()"""))
+        # ---- the two real layouts (proposal K.2): the L2PHL form's export, the L2Taj call-center log and its interview form ----
+        PHL = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")
+        CATI = os.path.join(ROOT, "samples", "cati", "l2demo_calllog_2026-11-06.csv")
+        IV = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_interviews_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [PHL]); b.wait("LEAD.state().imports.length === 1")
+        q = merged_now()
+        check("a KoBoToolbox export in the L2PHL layout (the interview form that records each attempt: int_id, hhid, Z8, X15) is recognised by its columns and read under the tool's IDs through the manifest's platform codes",
+              any(f[1].startswith("L2PHL") for f in q["files"]) and sorted(f[2] for f in q["files"] if f[1] == "platform records") == ["E01", "E02", "E07"], q["files"])
+        check("it gives the same dials and completes per enumerator as the enumerators' own exports (X15 code 1 is a complete)", q["dials"] == exp_dials and q["completes"] == py_cmp, [q["dials"], exp_dials, q["completes"], py_cmp])
+        check("no merge question is open for it", not any(i[1] == "open" and i[4] == "action" for i in q["issues"]), [i for i in q["issues"] if i[1] == "open"])
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [CATI]); b.wait("LEAD.state().imports.length === 1")
+        c = merged_now()
+        cati_rows = list(csv.DictReader(open(CATI, encoding="utf-8"), delimiter=";"))
+        other = sum(1 for r in cati_rows if r["round"] != "5")
+        check("a call-center system's log in the L2Taj layout (semicolon CSV, cumulative across rounds) is recognised; the rows of other rounds are left out",
+              any(f[1].startswith("Call-center system log (L2Taj") and f"{other} rows of other rounds left out" in f[4] for f in c["files"]), c["files"])
+        check("its dials and completes per enumerator match the enumerators' own exports (SCS is a complete; the round's time zone supplies the missing offsets)", c["dials"] == exp_dials and c["completes"] == py_cmp, [c["dials"], c["completes"]])
+        slots = b.js("(() => { const G = LEAD.merged().G; return [G.dials.length, G.dials.filter(d => d.phone_slot).length, G.dials.filter(d => /\+08:00$/.test(d.ts)).length]; })()")
+        check("the number dialed becomes the household's slot, from the household list, and is not kept", slots[0] == slots[1] and slots[2] == slots[0], slots)
+        b.set_files("#lf-platform", [IV]); b.wait("LEAD.state().imports.length === 2")
+        v = merged_now()
+        iv_stats = b.js("LEAD.merged().G.ivStats")
+        check("the interview form's export (L2Taj layout: hhid, ocode, agreement) is checked against the logged calls: two interviews without a completed call and two completed calls without an interview are listed",
+              bool(iv_stats) and iv_stats["unlogged"] == 2 and iv_stats["without"] == 2 and iv_stats["matched"] == sum(py_cmp.values()) - 2
+              and sum(1 for i in v["issues"] if i[0] == "interview_unlogged") == 2 and sum(1 for i in v["issues"] if i[0] == "complete_without_interview") == 2, iv_stats)
+        key = b.js("LEAD.merged().G.issues.find(i => i.type === 'interview_unlogged').key")
+        b.click(f'[data-lact="resolve"][data-key="{key}"][data-v="count"]'); b.wait("LEAD.state().resolutions.length >= 1")
+        v2 = merged_now()
+        check("an interview the leader counts becomes a complete", sum(v2["completes"].values()) == sum(v["completes"].values()) + 1, [v["completes"], v2["completes"]])
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [IV]); b.wait("LEAD.state().imports.length === 1")
+        v3 = merged_now()
+        check("without a call log, the interview export is read as the completes and refusals", any("read as completes" in f[4] for f in v3["files"]) and sum(v3["completes"].values()) == sum(py_cmp.values()), [v3["files"], v3["completes"]])
+        # a file with unknown columns is mapped once, in the Import tab
+        unk = os.path.join(SCRATCH, "unknown_log.csv")
+        with open(unk, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f); w.writerow(["op", "household", "t0", "t1", "res", "rid"])
+            for r in cati_rows:
+                if r["round"] == "5":
+                    w.writerow([r["operator_id"], r["hh_id"], r["start_time"], r["end_time"], r["status"], r["id"]])
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [unk]); b.wait("LEAD.state().imports.length === 1")
+        check("a table with unknown columns opens the mapping card instead of being merged", b.js("!!document.querySelector('#lmap')") and merged_now()["dials"] == {}, merged_now()["files"])
+        b.js("""(() => { const sel = (k, v) => { const s = document.querySelector(`[data-lprof="${k}"]`); if (!s) return; s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); };
+            sel('col:hhid', 'household'); sel('col:enumerator', 'op'); sel('col:start', 't0'); sel('col:end', 't1'); sel('col:result', 'res'); sel('col:id', 'rid');
+            const codes = { SCS: 'COMPLETE', NOA: 'NO_ANSWER', NOT: 'NOT_AVAILABLE', NWR: 'DEAD_NUMBER', WNM: 'WRONG_NUMBER', OOS: 'SWITCHED_OFF', ITR: 'PARTIAL', RFS: 'REFUSAL_SOFT', PWI: 'OTHER', BLN: 'OTHER' };
+            Object.entries(codes).forEach(([k, v]) => sel(`code:${k}`, v)); sel('name', 'Our call-center log'); return true; })()""")
+        b.click('[data-lact="saveprofile"]'); b.wait("LEAD.state().profiles.length === 1")
+        u2 = merged_now()
+        check("once the leader has mapped its columns and codes, the file merges like a known layout, and the mapping is kept in the session",
+              u2["dials"] == exp_dials and u2["completes"] == py_cmp and b.js("LEAD.state().profiles[0].name") == "Our call-center log", [u2["dials"], u2["completes"], u2["files"]])
+        b.shot(os.path.join(SCREENS, "leader_12_mapping.png"), full=True)
+        check("the Survey Solutions export gives the same dials and completes per enumerator as the KoBo one", u["dials"] == exp_dials and u["completes"] == py_cmp, [u["dials"], u["completes"]])
         # the platform files the leader hands to the platforms, from the manifest
         b.click('[data-lact="tab"][data-t="calllog"]')
         before = snapshot()
         b.click('[data-lact="export"][data-what="kobo"]'); b.click('[data-lact="export"][data-what="suso"]')
-        fk = wait_new("households*.csv", before); fs = wait_new("assignments*.tab", before)
+        b.click('[data-lact="export"][data-what="choices"]'); b.click('[data-lact="export"][data-what="cati"]')
+        fk = wait_new("households*.csv", before); fs = wait_new("assignments*.tab", before); fc = wait_new("choices_households*.csv", before); fa = wait_new("cati_assignments*.csv", before)
         hk = list(csv.DictReader(open(fk, encoding="utf-8")))
         sample_hk = {r["hhid"]: r for r in csv.DictReader(open(os.path.join(ROOT, "samples", "kobo", "households.csv"), encoding="utf-8"))}
         same = all(r["hhid"] in sample_hk and all(r[c] == sample_hk[r["hhid"]][c] for c in ("enumerator_id", "phone_1", "phone_2", "phone_3", "kind", "replaces", "rank", "program", "round")) for r in hk)
@@ -792,6 +847,12 @@ def main():
         ta = [l.split("\t") for l in open(fs, encoding="utf-8").read().rstrip("\n").split("\n")]
         check("assignments.tab for Survey Solutions: the manifest's households with _responsible and _quantity",
               ta[0][-2:] == ["_responsible", "_quantity"] and len(ta) - 1 == len(man["households"]) and all(r[-1] == "1" and r[-2] in ("E01", "E02", "E07") for r in ta[1:]), [ta[0], len(ta)])
+        ch = list(csv.DictReader(open(fc, encoding="utf-8")))
+        check("choices_households.csv (the L2PHL form's SN list): one row per household and reserve, the enumerator's platform code in filter_int_id",
+              len(ch) == len(sample_hk) and all(r["list_name"] == "SN" and r["filter_int_id"] == "CATI" + sample_hk[r["name"]]["enumerator_id"][1:] for r in ch), [len(ch), ch[:1]])
+        ca = list(csv.DictReader(open(fa, encoding="utf-8"), delimiter=";"))
+        check("cati_assignments.csv (the call-center system's table): household, operator code, planned first dial and numbers for every household and reserve",
+              len(ca) == len(sample_hk) and all(r["operator"].startswith("CATI") and r["hhid"] in sample_hk and r["phone_1"] == sample_hk[r["hhid"]]["phone_1"] for r in ca) and "date_nextcall" in ca[0], [len(ca), ca[:1]])
 
         # phone width
         b.ws.call("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=2, mobile=True)

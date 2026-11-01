@@ -44,6 +44,7 @@
           "households": { "type": "integer", "minimum": 0 }, "file": { "type": "string" },
           "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The fingerprint of that enumerator's assignment file." },
           "protected": { "type": "boolean" },
+          "platform_id": { "type": "string", "description": "This enumerator's code in the program's platform or call-center system (an interviewer ID, an operator code), so that platform files are read under the tool's enumerator ID." },
           "previous_fingerprints": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "description": "This enumerator's earlier files in this round, oldest first; a log that started from any of them belongs to the round." }
         }
       }

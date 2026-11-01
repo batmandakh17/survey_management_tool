@@ -59,9 +59,9 @@ clean = [os.path.join(S, d) for d in ("round05", "past", os.path.join("leader", 
 code, out = run(*clean)
 check("all sample files pass, the leader's inputs and outputs included", code == 0, out)
 # the files of KoBoToolbox, Survey Solutions and the calling service (proposal K)
-code, out = run(os.path.join(S, "kobo"), os.path.join(S, "calls"))
-check("the KoBo household file, the KoBo export and the calling service's log are recognised and pass, each with its phone-number warning",
-      code == 0 and out.count("OK") == 3 and out.count("holds") >= 3, out)
+code, out = run(os.path.join(S, "kobo"), os.path.join(S, "calls"), os.path.join(S, "cati"))
+check("the platform files are recognised and pass: the KoBo household file and choices list, the three KoBo exports (the tool's form, the L2PHL and L2Taj layouts), the call-center log and table, the calling service's log",
+      code == 0 and out.count("OK") == 8 and out.count("holds") >= 5 and "L2PHL layout" in out and "L2Taj layout" in out, out)
 hh_bad = copy(os.path.join(S, "kobo", "households.csv"), "households_dup.csv")
 lines = open(hh_bad, encoding="utf-8").read().rstrip("\n").split("\n")
 open(hh_bad, "w", encoding="utf-8").write("\n".join(lines + [lines[1]]) + "\n")

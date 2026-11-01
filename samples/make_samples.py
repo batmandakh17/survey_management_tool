@@ -33,7 +33,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 PROGRAM, COUNTRY, TZNAME = "L2MN-DEMO", "MN", "Asia/Ulaanbaatar"
 TZ = dt.timezone(dt.timedelta(hours=8))
 OFF = "+08:00"
@@ -542,7 +542,7 @@ def manifest(t, assigned, files, generated_at):
          "rule": files[enums[0]]["rule"], "replacement_policy": files[enums[0]]["replacement_policy"], "calendar": calendar(t),
          "away": AWAY.get(t, []),
          "enumerators": [{"enumerator_id": e, "available": True, "share": round(1 / len(enums), 4), "households": len(files[e]["households"]),
-                          "file": f"{e}_assignment_R{t:02d}.json", "fingerprint": files[e]["fingerprint"]} for e in enums],
+                          "platform_id": platform_id(e), "file": f"{e}_assignment_R{t:02d}.json", "fingerprint": files[e]["fingerprint"]} for e in enums],
          "households": hh}
     m["fingerprint"] = fingerprint(m)
     return m
@@ -620,6 +620,24 @@ WILLING = {"COMPLETE": "yes", "APPOINTMENT": "later", "PARTIAL": "later", "NOT_A
 SVC_STATUS = {"COMPLETE": "completed", "APPOINTMENT": "completed", "PARTIAL": "completed", "NOT_AVAILABLE": "completed", "REFUSAL_SOFT": "completed", "REFUSAL_HARD": "completed",
               "LANGUAGE": "completed", "OTHER": "completed", "WRONG_NUMBER": "completed", "NO_ANSWER": "no-answer", "BUSY": "busy", "SWITCHED_OFF": "no-answer", "DEAD_NUMBER": "failed"}
 CENTER_LINE = "+000 11 000 0100"
+# the same calls in the layouts of two L2 programs' real files (proposal K.2): each enumerator's code in the platform
+def platform_id(e):
+    """The enumerator's code in the platform: E07 is CATI07."""
+    return "CATI" + e.lstrip("E")
+
+
+PHL_COLS = ["start", "end", "int_id", "hhid", "Z6", "Z7", "Z8", "call_status1", "Z17", "Z9", "X11", "X15", "X16",
+            "_id", "_uuid", "_submission_time", "_validation_status", "_notes", "_status", "_submitted_by", "__version__", "_tags", "_index"]
+PHL_CODE = {"COMPLETE": 1, "PARTIAL": 3, "APPOINTMENT": 4, "REFUSAL_SOFT": 5, "REFUSAL_HARD": 5, "NO_ANSWER": 6, "BUSY": 6, "DEAD_NUMBER": 7, "SWITCHED_OFF": 8,
+            "WRONG_NUMBER": 9, "NOT_AVAILABLE": 10, "LANGUAGE": 10, "OTHER": 10}
+CONTACT_SET = {"COMPLETE", "APPOINTMENT", "PARTIAL", "NOT_AVAILABLE", "REFUSAL_SOFT", "REFUSAL_HARD", "LANGUAGE"}
+CATI_COLS = ["operator_id", "hh_id", "round", "dialing_phone", "start_time", "end_time", "comment", "NT_comment", "IS_comment", "status", "id"]
+CATI_CODE = {"COMPLETE": "SCS", "NO_ANSWER": "NOA", "NOT_AVAILABLE": "NOT", "DEAD_NUMBER": "NWR", "WRONG_NUMBER": "WNM", "SWITCHED_OFF": "OOS", "PARTIAL": "ITR",
+             "REFUSAL_SOFT": "RFS", "REFUSAL_HARD": "RFS", "APPOINTMENT": "PWI", "BUSY": "BLN", "LANGUAGE": "BLN", "OTHER": "BLN"}
+IV_COLS = ["start", "end", "today", "qrcode", "hhid", "bar_catiid", "round", "ocode", "replacement", "replacedhhid", "agreement", "refusal",
+           "_id", "_uuid", "_submission_time", "_validation_status", "_notes", "_status", "_submitted_by", "__version__", "_tags", "_index"]
+CHOICE_COLS = ["list_name", "name", "label", "filter_int_id", "enumerator_id", "kind", "replaces", "rank"]
+CATI_ASSIGN_COLS = ["hhid", "operator", "enumerator_id", "round", "date_nextcall", "hour_nextcall", "phone_1", "phone_2", "phone_3", "replacement_for", "rank", "psu", "stratum"]
 
 
 def kobo_dt(s):
@@ -639,6 +657,14 @@ def rfc2822(s):
     return parse(s).astimezone(dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
 
+def write_semicolon(path, rows, cols):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=cols, delimiter=";", lineterminator="\n", extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: ("" if r.get(k) is None else r.get(k)) for k in cols})
+
+
 def write_tsv(path, rows, cols):
     with open(path, "w", encoding="utf-8") as f:
         f.write("\t".join(cols) + "\n")
@@ -646,7 +672,7 @@ def write_tsv(path, rows, cols):
             f.write("\t".join("" if r.get(c) is None else str(r.get(c)).replace("\t", " ") for c in cols) + "\n")
 
 
-def write_platform_samples(out, logs, files):
+def write_platform_samples(out, logs, files, hist):
     """households.csv and assignments.tab as the leader view writes them for round 5; the enumerators' round-5 calls up to the
     6 November export as a KoBoToolbox CSV export (one submission per call), a Survey Solutions export (one interview per
     household, the calls in a roster) and a Twilio-style call log of the calling service; all from the same simulated events."""
@@ -746,6 +772,75 @@ def write_platform_samples(out, logs, files):
         z.write(os.path.join(out["suso"], "calls.tab"), "calls.tab")
         z.writestr("export__readme.txt", "SYNTHETIC export of the questionnaire RTM call record (L2MN-DEMO round 5), in the layout of a Survey Solutions tabular export. No real household.\n")
     write_csv(os.path.join(out["calls"], "service_calls_2026-11-06.csv"), svc, SVC_COLS)
+    # ---- the same calls in the layouts of two L2 programs' real files (proposal K.2) ----
+    r3 = random.Random(SEED + 5001)
+    phl, cati, iv = [], [], []
+    n_phl, n_cati, sub_by = 50000, 230000, "demo_cati"
+    pid = platform_id
+    local = lambda s_: parse(s_).astimezone(TZ).strftime("%Y-%m-%d %H:%M:%S")     # a call-center system logs local time without an offset
+    # round 4 from the history (the system's log is cumulative across rounds), round 5 from the enumerators' effective logs
+    prev = [(hist.roster[4].get(d["hhid"], d.get("operator", "")), d) for d in hist.dials.get(4, [])]
+    cur = []
+    for e, log in sorted(logs.items()):
+        live, _, _, _ = effective(log.events)
+        cur += [(e, d) for d in live]
+    attempts = {}
+    for rnd, pairs in ((4, prev), (5, cur)):
+        for e, d in sorted(pairs, key=lambda x: (x[1]["ts"], x[1]["event_id"])):
+            _, ph = contact.get(d["hhid"], ("", {}))
+            number = ph.get(d.get("phone_slot"), ("", ""))[0]
+            end = d.get("end_ts") or iso(parse(d["ts"]) + dt.timedelta(seconds=r3.randint(2, 9)))
+            n_cati += 1
+            cati.append({"operator_id": pid(e), "hh_id": d["hhid"], "round": rnd, "dialing_phone": number, "start_time": local(d["ts"]), "end_time": local(end),
+                         "comment": d.get("note", "") if rnd == 5 else "", "NT_comment": "", "IS_comment": "", "status": CATI_CODE.get(d["status"], "BLN"), "id": n_cati})
+            if rnd != 5:
+                continue
+            attempts[(e, d["hhid"])] = attempts.get((e, d["hhid"]), 0) + 1
+            st_, logged = d["status"], d["logged_at"]
+            t_local = parse(d["ts"]).astimezone(TZ)
+            n_phl += 1
+            phl.append({"start": kobo_dt(d["ts"]), "end": kobo_dt(d.get("end_ts") or logged), "int_id": pid(e), "hhid": d["hhid"], "Z6": t_local.strftime("%Y-%m-%d"),
+                        "Z7": t_local.strftime("%H:%M:%S.000+08:00"), "Z8": min(attempts[(e, d["hhid"])], 3), "call_status1": 1 if st_ in CONTACT_SET else 2,
+                        "Z17": (1 if st_ in ("COMPLETE", "PARTIAL", "APPOINTMENT", "REFUSAL_SOFT", "REFUSAL_HARD") else 2) if st_ in CONTACT_SET else "",
+                        "Z9": 1 if st_ in ("COMPLETE", "PARTIAL") else (2 if st_ in ("REFUSAL_SOFT", "REFUSAL_HARD") else ""), "X11": 1 if st_ == "COMPLETE" else "",
+                        "X15": PHL_CODE.get(st_, 10), "X16": d.get("note", ""), "_id": n_phl, "_uuid": d["event_id"], "_submission_time": utc_naive(logged), "_validation_status": "",
+                        "_notes": "", "_status": "submitted_via_web", "_submitted_by": sub_by, "__version__": "vPHLdemo2026110201", "_tags": "", "_index": 0})
+            if st_ in ("COMPLETE", "REFUSAL_SOFT", "REFUSAL_HARD"):
+                iv.append({"start": kobo_dt(d["ts"]), "end": kobo_dt(d.get("end_ts") or logged), "today": t_local.strftime("%Y-%m-%d"), "qrcode": f"{d['hhid']},{pid(e)},05",
+                           "hhid": d["hhid"], "bar_catiid": pid(e), "round": 5, "ocode": pid(e), "replacement": 1 if d.get("replaces") else 2, "replacedhhid": d.get("replaces", ""),
+                           "agreement": 1 if st_ == "COMPLETE" else 2, "refusal": "" if st_ == "COMPLETE" else r3.choice([1, 2, 3, 4, 96]), "_id": 90000 + len(iv) + 1,
+                           "_uuid": "iv-" + d["event_id"][:28], "_submission_time": utc_naive(logged), "_validation_status": "", "_notes": "", "_status": "submitted_via_web",
+                           "_submitted_by": sub_by, "__version__": "vTAJdemo2026110201", "_tags": "", "_index": 0})
+    # two completed calls whose interview never reached the questionnaire, and two interviews for which the system logged no completed call
+    for x in r3.sample([x for x in iv if x["agreement"] == 1], 2):
+        iv.remove(x)
+    never = sorted({d["hhid"] for _, d in cur} - {x["hhid"] for x in iv} - {d["hhid"] for _, d in cur if d["status"] == "COMPLETE"})
+    for hid in r3.sample(never, 2):
+        e = by_e.get(hid, "E01")
+        at = dt.datetime(2026, 11, 5, r3.randint(10, 18), r3.randint(0, 59), 0, tzinfo=TZ)
+        iv.append({"start": kobo_dt(iso(at)), "end": kobo_dt(iso(at + dt.timedelta(minutes=14))), "today": at.strftime("%Y-%m-%d"), "qrcode": f"{hid},{pid(e)},05", "hhid": hid,
+                   "bar_catiid": pid(e), "round": 5, "ocode": pid(e), "replacement": 2, "replacedhhid": "", "agreement": 1, "refusal": "", "_id": 90000 + len(iv) + 1,
+                   "_uuid": "iv-unlogged-" + hid, "_submission_time": utc_naive(iso(at + dt.timedelta(minutes=15))), "_validation_status": "", "_notes": "",
+                   "_status": "submitted_via_web", "_submitted_by": sub_by, "__version__": "vTAJdemo2026110201", "_tags": "", "_index": 0})
+    phl.sort(key=lambda r: r["_submission_time"])
+    iv.sort(key=lambda r: r["_submission_time"])
+    for rows_ in (phl, iv):
+        for i, r in enumerate(rows_, start=1):
+            r["_index"] = i
+    write_semicolon(os.path.join(out["kobo"], "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv"), phl, PHL_COLS)
+    write_semicolon(os.path.join(out["kobo"], "L2MN-DEMO_CATI_R05_interviews_-_all_versions_-_False_-_2026-11-06-18-00-00.csv"), iv, IV_COLS)
+    write_semicolon(os.path.join(out["cati"], "l2demo_calllog_2026-11-06.csv"), cati, CATI_COLS)
+    # the files for the platforms: the choices list (L2PHL layout) and the call-center system's assignment table
+    ch, ca = [], []
+    for r in hh_rows:
+        ch.append({"list_name": "SN", "name": r["hhid"], "label": r["hhid"] if r["kind"] == "main" else f"{r['hhid']} (replacement {r['rank']} for {r['replaces']})",
+                   "filter_int_id": pid(r["enumerator_id"]), "enumerator_id": r["enumerator_id"], "kind": r["kind"], "replaces": r["replaces"], "rank": r["rank"]})
+        ca.append({"hhid": r["hhid"], "operator": pid(r["enumerator_id"]), "enumerator_id": r["enumerator_id"], "round": 5, "date_nextcall": r["planned_date"], "hour_nextcall": r["planned_hour"],
+                   "phone_1": r.get("phone_1", ""), "phone_2": r.get("phone_2", ""), "phone_3": r.get("phone_3", ""), "replacement_for": r["replaces"], "rank": r["rank"], "psu": r["psu"], "stratum": r["stratum"]})
+    write_csv(os.path.join(out["kobo"], "choices_households.csv"), ch, CHOICE_COLS)
+    write_semicolon(os.path.join(out["cati"], "cati_assignments.csv"), ca, CATI_ASSIGN_COLS)
+    print(f"kobo/L2MN-DEMO_CATI_R05 export (L2PHL layout): {len(phl)} submissions; interviews (L2Taj layout): {len(iv)}; "
+          f"cati/l2demo_calllog: {len(cati)} rows ({sum(1 for r in cati if r['round'] == 5)} of round 5); choices {len(ch)}; cati_assignments {len(ca)}")
     print(f"kobo/households.csv: {len(hh_rows)} rows; kobo/rtm_call_record_2026-11-06.csv: {len(kobo)} submissions; suso: {len(mains)} interviews, {len(calls)} call records; "
           f"calls/service_calls_2026-11-06.csv: {len(svc)} calls")
 
@@ -774,7 +869,7 @@ def main():
     H = make_households()
     for h in H.values():
         h["used_repl_at"] = {}
-    out = {k: os.path.join(HERE, k) for k in ("leader", "round05", "past", "leader/history", "leader/exports_R05", "leader/merge_cases", "kobo", "suso", "calls")}
+    out = {k: os.path.join(HERE, k) for k in ("leader", "round05", "past", "leader/history", "leader/exports_R05", "leader/merge_cases", "kobo", "suso", "calls", "cati")}
     for p in out.values():
         os.makedirs(p, exist_ok=True)
     for sub_ in ("leader/merge_cases", "leader/exports_R05", "leader/history"):
@@ -844,7 +939,7 @@ def main():
         dials, rows, acts, arows = merged(logs.values())
         write_csv(os.path.join(out["leader"], "expected_R05_calls.csv"), rows, COLS)
         write_csv(os.path.join(out["leader"], "expected_R05_actions.csv"), arows, ACOLS)
-        write_platform_samples(out, logs, files)
+        write_platform_samples(out, logs, files, hist)
         # ---- the merge cases (proposal F) ----
         mc = out["leader/merge_cases"]
         for d in ("duplicate", "csv_only", "wrong_round", "edited", "conflict"):

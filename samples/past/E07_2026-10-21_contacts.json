@@ -1,6 +1,6 @@
 {
  "schema": "rtm-contacts-1.0",
- "tool_version": "0.3.0",
+ "tool_version": "0.3.1",
  "program": "L2MN-DEMO",
  "round": 4,
  "enumerator_id": "E07",

@@ -299,12 +299,32 @@ def main():
         b.set_files("#lf-hh", [os.path.join(S, "leader", "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
         b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
         b.set_files("#lf-manifest", [os.path.join(S, "leader", "L2MN-DEMO_R05_manifest.json")]); b.wait("!!LEAD.state().manifest")
-        b.set_files("#lf-platform", [os.path.join(S, "kobo", "rtm_call_record_2026-11-06.csv"), os.path.join(S, "calls", "service_calls_2026-11-06.csv")])
-        b.wait("LEAD.state().imports.length === 2"); time.sleep(0.5)
+        b.set_files("#lf-platform", [os.path.join(S, "kobo", "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")])
+        b.wait("LEAD.state().imports.length === 1"); time.sleep(0.5)
         crop("l30_platform_import", ["__card('Add exports from the common folder')", "__card('^Files')"], hls=["document.querySelector('#lf-platform').parentElement"], max_h=900)
-        crop("l31_unlogged", ["__card('Needs your decision')"], max_h=520)
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [os.path.join(S, "cati", "l2demo_calllog_2026-11-06.csv"), os.path.join(S, "kobo", "L2MN-DEMO_CATI_R05_interviews_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")])
+        b.wait("LEAD.state().imports.length === 2"); time.sleep(0.5)
+        crop("l31_interviews", ["__card('Add exports from the common folder')", "__card('Needs your decision')"], hls=["document.querySelector('.alert.info')"], max_h=900)
         b.click('[data-lact="tab"][data-t="calllog"]'); time.sleep(0.3)
-        crop("l32_platform_files", ["__card(\"The round's files\")"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"kobo\"]')"], max_h=600)
+        crop("l32_platform_files", ["__card(\"The round's files\")"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"choices\"]')"], max_h=600)
+        # a file with unknown columns: the mapping card
+        import csv as _csv
+        unk = os.path.join(WORK, "our_calllog.csv")
+        rows_ = list(_csv.DictReader(open(os.path.join(S, "cati", "l2demo_calllog_2026-11-06.csv"), encoding="utf-8"), delimiter=";"))
+        with open(unk, "w", encoding="utf-8", newline="") as f_:
+            w_ = _csv.writer(f_); w_.writerow(["op", "household", "t0", "t1", "res", "rid"])
+            for r_ in rows_:
+                if r_["round"] == "5":
+                    w_.writerow([r_["operator_id"], r_["hh_id"], r_["start_time"], r_["end_time"], r_["status"], r_["id"]])
+        b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-platform", [unk]); b.wait("!!document.querySelector('#lmap')")
+        b.js("""(() => { const sel = (k, v) => { const s = document.querySelector(`[data-lprof="${k}"]`); if (!s) return; s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); };
+            sel('col:hhid', 'household'); sel('col:enumerator', 'op'); sel('col:start', 't0'); sel('col:end', 't1'); sel('col:result', 'res'); sel('col:id', 'rid');
+            sel('code:SCS', 'COMPLETE'); sel('code:NOA', 'NO_ANSWER'); sel('code:RFS', 'REFUSAL_SOFT'); sel('name', 'Our call-center log'); return true; })()""")
+        time.sleep(0.3)
+        crop("l33_mapping", ["document.querySelector('#lmap')"], max_h=1100)
         print(f"{len(glob.glob(os.path.join(IMG, '*.png')))} pictures in {IMG}")
     finally:
         b.close()

@@ -1,6 +1,6 @@
 {
  "schema": "rtm-roundmanifest-1.0",
- "tool_version": "0.3.0",
+ "tool_version": "0.3.1",
  "program": "L2MN-DEMO",
  "country": "MN",
  "round": 4,
@@ -48,32 +48,36 @@
    "available": true,
    "share": 0.25,
    "households": 33,
+   "platform_id": "CATI01",
    "file": "E01_assignment_R04.json",
-   "fingerprint": "096ba1b1bafe58467dcb6bfdef3a03115e88f5aeed8137fe101d2dcff447e517"
+   "fingerprint": "fbf7436a0f87e8bb60a6ee4606462b1e8c8492cd406315fe4bd5a45a3bfb41be"
   },
   {
    "enumerator_id": "E02",
    "available": true,
    "share": 0.25,
    "households": 12,
+   "platform_id": "CATI02",
    "file": "E02_assignment_R04.json",
-   "fingerprint": "10927e5d82a063a7b9c6e1d2da340fd0b7713cdd242d3ba47684c83fcd1c7fb4"
+   "fingerprint": "0cbd8b234d097686e6f0c94361b47042770cc88272623a0c304b0cb20b90e920"
   },
   {
    "enumerator_id": "E03",
    "available": true,
    "share": 0.25,
    "households": 25,
+   "platform_id": "CATI03",
    "file": "E03_assignment_R04.json",
-   "fingerprint": "1da780758246ac8982e5cf751417731b2541578801a9737462a534af31d5e710"
+   "fingerprint": "63b88abc0545012aefc4986a4535359aab213f44e282e235b901fcedc8cbe3f0"
   },
   {
    "enumerator_id": "E07",
    "available": true,
    "share": 0.25,
    "households": 35,
+   "platform_id": "CATI07",
    "file": "E07_assignment_R04.json",
-   "fingerprint": "bf4bb404e1cc0534fea7f358759c7184fb1a30965edfdc6696183a6c2d4a1995"
+   "fingerprint": "9905caee2f877235511aec9008f06e299ed1dd9f81a8f99877b7e4a46f93b2e6"
   }
  ],
  "households": [
@@ -943,5 +947,5 @@
    "stratum": "2"
   }
  ],
- "fingerprint": "8c0e047d03cf5081e8abd0979994e4b0fa0a99d9ac8bb3a418adb0abdbb201cb"
+ "fingerprint": "92fbeb3c35efd610c4a2f4cc24e80f8d38efccd4e40666f84a50d9df77ca8fad"
 }

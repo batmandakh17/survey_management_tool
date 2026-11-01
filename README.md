@@ -75,27 +75,33 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
 11. **Save the session.** "Save leader session" keeps the inputs, the imports and your decisions in one file,
     optionally protected with a passphrase. "Close" with unsaved changes offers to save first.
 
-## Try it with KoBoToolbox, Survey Solutions and a calling service
+## Try it with KoBoToolbox, a call-center system, Survey Solutions and a calling service
 
-For a team whose enumerators record calls in KoBoToolbox or Survey Solutions instead of this tool's enumerator
-view, the leader view reads the platforms' exports and writes the files they take in (`formats/kobo/README.md`,
-`formats/suso/README.md`). With the same session as above, after the manifest is open:
+For a team that interviews in KoBoToolbox or Survey Solutions, or whose call-center system dials and logs the
+calls, the leader view reads the platform's export and writes the list the platform takes in. The layouts are those
+of two L2 programs' real files (`formats/kobo/README.md`, `formats/cati/README.md`). With the same session as
+above, after the manifest is open:
 
-1. **The form.** `formats/kobo/rtm_call_record.xlsx` is the KoBoToolbox call-record form (one submission per
-   call, with the willingness to take part); `formats/suso/README.md` specifies the same questionnaire for Survey
-   Solutions Designer.
-2. **What the platform takes in.** On the Call log tab, *households.csv* is the form's media file and
-   *assignments.tab* the Survey Solutions assignments upload, both written from the current manifest and the
-   household list (step 1 must be open). After moving households during the round, write them again.
-3. **What comes back.** On the Import tab, under *Add platform files*, add `samples/kobo/rtm_call_record_2026-11-06.csv`
-   (KoBo's export of the three enumerators' 342 records up to 6 November, the same calls as `exports_R05/`): the tool
-   splits it by enumerator and merges it as it merges a CSV export, with the same dials and completes per enumerator.
-   Remove it and add `samples/suso/rtm_call_record_export.zip` instead: the browser opens the zip and joins the
-   calls roster to its main file.
-4. **The calling service.** Add `samples/calls/service_calls_2026-11-06.csv`, a Twilio-style call log of the same
-   calls: the tool matches each service call to a recorded call by the household's number and a start within three
-   minutes, fills the call ends the enumerators left blank, lists the three calls nobody recorded under "Needs your
-   decision", and counts the two calls to numbers outside the list.
+1. **A form that records each call attempt** (the Philippines program's layout). On the Import tab, under *Add
+   platform files*, add `samples/kobo/L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv`: 340
+   submissions by three interviewers (the same calls as `exports_R05/`), one per attempt, with the result in the
+   form's ten codes. The tool recognises the columns, reads each interviewer's code as the tool's enumerator ID
+   through the manifest, and merges it as a CSV export: the same dials and completes per enumerator.
+2. **A call-center system's log** (the Tajikistan program's layout). Remove the file and add
+   `samples/cati/l2demo_calllog_2026-11-06.csv`: cumulative across rounds, with the number dialed and the system's
+   status codes. Only the round's rows are read; the numbers become the household's slot (the household list must be
+   open). Then add `…_interviews_…csv`, the interview form's export: the tool checks the interviews against the
+   logged calls and lists two interviews without a completed call and two completed calls without an interview
+   under "Needs your decision".
+3. **Any other table.** Save the log with other column names and add it: the Import tab asks which column plays
+   each role and what each code means, keeps the mapping in the session, and merges the file.
+4. **What the platform takes in.** On the Call log tab: *choices_households.csv* (the form's choices list, with the
+   interviewer's code for a `choice_filter`), *cati_assignments.csv* (the call-center system's table),
+   *households.csv* (the tool's own form's media file) and *assignments.tab* (Survey Solutions), all from the
+   current manifest. After moving households during the round, write them again.
+5. **The calling service.** Add `samples/calls/service_calls_2026-11-06.csv`, a Twilio-style call log of the same
+   calls: matched to the recorded calls by number and time; the three calls nobody recorded are listed.
+
 
 ## Try the enumerator view
 
@@ -122,7 +128,7 @@ view, the leader view reads the platforms' exports and writes the files they tak
 | `samples/round05/E01_…`, `E02_assignment_R05.json` | The other enumerators' assignments; opening one as an update to E07's session is refused. A revised file the leader view writes after moving households opens as an update to the enumerator's session |
 | `samples/past/E07_2026-10-21.csv` and `.json` | E07's round-4 export, for the performance view |
 | `samples/rtmtools_export/` | A real `rtmsample draw` run with reserves (`selection.csv`, its manifest, and the do-file that made it), for the leader's Step 3 |
-| `samples/kobo/`, `samples/suso/`, `samples/calls/` | The round-5 household file and the enumerators' records as KoBoToolbox and Survey Solutions exports, and the calling service's log of the same calls |
+| `samples/kobo/`, `samples/cati/`, `samples/suso/`, `samples/calls/` | The round-5 calls in the L2PHL and L2Taj layouts, the lists the tool writes for the platforms, the tool's own form's files, Survey Solutions and calling-service exports, and the calling service's log of the same calls |
 
 ## Folder
 
@@ -132,7 +138,7 @@ view, the leader view reads the platforms' exports and writes the files they tak
 | `src/` | `core.js` (log, scheduler, files), `enum_view.js` (enumerator view), `leader_core.js` (rules, planning, merge), `leader_stats.js` (analytics), `leader_risk.js` (risk models), `leader_view.js` (leader view), `app.css`, `shell.html`, `holidays_data.js` |
 | `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally), `risk_models.json` and `validation.json` (coefficients and aggregates only), `coef_significance.py` and `coefficients.json` (each coefficient's household-clustered standard error, z and p), `make_card.py` and `MODEL_CARD.md` |
 | `holidays/make_holidays.py` | Writes the bundled holiday table (Python package `holidays`, 2025–2030) |
-| `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox call-record form and `formats/suso/` its Survey Solutions specification |
+| `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox layouts, `formats/cati/` the call-center logs and `formats/suso/` the Survey Solutions specification |
 | `samples/` | The synthetic program and the scripts that make it |
 | `tests/` | Browser tests of both views, the risk models, the merge batch and the other rules, the format checker and the rtmtools import; reference implementations of the handbook's rules and of the models; the usability walkthrough and its screens |
 | (not in this repository) | The task team's design document, open items, validation and usability reports, and the notes on how the handbook defines each measure the analytics show |

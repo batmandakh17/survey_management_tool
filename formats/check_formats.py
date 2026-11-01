@@ -178,9 +178,31 @@ def other_csv(header, rows, errs, warns):
     if joined is not None:
         hk = [c.strip() for c in header[0].split(";")]
         if "_uuid" in hk and "hhid" in hk and "result" in hk:
-            n = len([l for l in rows]) if rows else None
             warns.append("a KoBoToolbox export of the call-record form: holds the numbers the form pulled in; for the leader's Import tab, never for the common folder")
             return "KoBoToolbox call-record export"
+        if "_uuid" in hk and "hhid" in hk and "int_id" in hk and "X15" in hk:
+            warns.append("a KoBoToolbox export in the L2PHL layout (one submission per call attempt): for the leader's Import tab, never for the common folder")
+            return "KoBoToolbox export, L2PHL layout"
+        if "_uuid" in hk and "hhid" in hk and "ocode" in hk and "agreement" in hk:
+            warns.append("a KoBoToolbox export of an interview form (L2Taj layout): for the leader's Import tab, never for the common folder")
+            return "KoBoToolbox interview export, L2Taj layout"
+        if {"operator_id", "hh_id", "dialing_phone", "status", "start_time"} <= set(hk):
+            warns.append("a call-center system's call log (L2Taj layout): holds phone numbers; for the leader's Import tab only, never re-exported")
+            return "call-center system log, L2Taj layout"
+        if {"callid", "hhid", "operator", "dialing_phone", "status", "start_time"} <= set(hk):
+            warns.append("a call-center system's call log (L2CU layout): holds phone numbers; for the leader's Import tab only, never re-exported")
+            return "call-center system log, L2CU layout"
+        if hk[:3] == ["hhid", "operator", "enumerator_id"] and "date_nextcall" in hk and "replacement_for" in hk:
+            warns.append("the call-center system's assignment table: holds phone numbers; it goes to the system only")
+            return "call-center assignment table"
+    if h[:4] == ["list_name", "name", "label", "filter_int_id"]:
+        bad = [r for r in rows if r.get("list_name") != "SN"]
+        if bad:
+            errs.append(f"{len(bad)} row(s) whose list_name is not SN")
+        ids = [r["name"] for r in rows]
+        if len(ids) != len(set(ids)):
+            errs.append("a household appears twice in the choices list")
+        return f"KoBo choices list of households, {len(rows)} rows"
     if h[:3] == ["name", "label", "hhid"] and "enumerator_id" in h and "kind" in h:
         bad = [r for r in rows if r.get("kind") not in ("main", "replacement")]
         if bad:
