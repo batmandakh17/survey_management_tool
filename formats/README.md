@@ -332,26 +332,21 @@ read as each category, and a summary of the backtests. It holds coefficients and
 - **One passphrase per enumerator** when assignment files are protected (D11), made by the tool and shown
   once, so that one enumerator's passphrase never opens another's file.
 
-## Files of KoBoToolbox, a call-center system, Survey Solutions and a calling service (1 November 2026)
+## Files of KoBoToolbox, Survey Solutions and a calling service (1 November 2026)
 
-For a team that interviews in KoBoToolbox or Survey Solutions, or whose call-center system dials and logs the
-calls, rather than recording calls in this tool's enumerator view (proposal K; `formats/kobo/README.md`,
-`formats/cati/README.md` and `formats/suso/README.md` have the layouts and the daily cycle). Two of the layouts are
-those of L2 programs' real files, against which the tool was checked.
+For a team that records its calls in KoBoToolbox (or Survey Solutions) rather than in this tool's enumerator view
+(proposal K; `formats/kobo/README.md` and `formats/suso/README.md` have the layouts and the daily cycle). The
+worked example is the L2PHL form, which records every call attempt in KoBoToolbox; the tool was checked against
+that program's real export.
 
 | File | Direction | Written or read as |
 |---|---|---|
 | KoBoToolbox export, L2PHL layout | KoBoToolbox → Import tab | The interview form submitted once per call attempt: `start`, `end`, `int_id`, `hhid`, `Z8`, `X15` (ten result codes), `X16`, `_uuid`, `_submission_time`; recognised by `_uuid`, `hhid`, `int_id`, `X15`; split by interviewer and merged as a CSV export of each |
 | `choices_households.csv` | Leader view → the form's choices sheet | The sample list of that form: `list_name` (SN), `name`, `label`, `filter_int_id` (the enumerator's platform code), `enumerator_id`, `kind`, `replaces`, `rank`. No phone numbers |
-| KoBoToolbox export, L2CU layout (also L2Taj) | KoBoToolbox → Import tab | An interview form that records no attempts: `hhid`, `ecode`, `start`, `end`, `agreement`, `refuse_text`, `round`; recognised by `_uuid`, `hhid`, `ecode`, `agreement` (L2Taj: `ocode`, `refusal`); checked against the call-center log, or read alone as completes and refusals |
-| Call-center log, L2CU layout | The system → Import tab | `callid; hhid; operator; round; dialing_phone; start_time; end_time; comment; NT_comment; IS_comment; status; mood; qconnect; callplace`, semicolon-separated; the rows of the round, under the tool's IDs (operator codes matched across punctuation), the number dialed as the household's slot. Has phone numbers |
-| Call-center sample table, L2CU layout | The system → Import tab | `…; hhid; catiid; date_nextcall; …; agreement; …; round; …; operator; replaced_by; replacement_for; …; date_schedule`: the system's assignment, checked against the manifest (another operator, a replacement activated) |
-| Call-center log, L2Taj layout | The system → Import tab | `operator_id; hh_id; round; dialing_phone; start_time; end_time; comment; NT_comment; IS_comment; status; id`, cumulative; read the same way with its own codes. Has phone numbers |
-| `cati_assignments.csv` | Leader view → the call-center system | `hhid; catiid; operator; enumerator_id; round; date_nextcall; hour_nextcall; date_schedule; hhcategory; replacement_for; rank; respondent_phone; phone_second; phone_member; psu; stratum` (the L2CU sample table's and baseline's names), one row per household and unused replacement. Has phone numbers |
 | `households.csv` and the export of `rtm_call_record` | Leader view → KoBo media; KoBoToolbox → Import tab | The tool's own call-record form: the media file (`name`, `label`, `hhid`, `enumerator_id`, numbers, plan, `kind`, `replaces`, `rank`) and its export (`_uuid`, `hhid`, `result`, `enumerator_id`, …). Both have phone numbers |
 | `assignments.tab` and the Survey Solutions export | Leader view → Survey Solutions; Survey Solutions → Import tab | The assignments upload (identifying variables, `_responsible`, `_quantity`) and the export zip or its `.tab` files, joined by `interview__id` |
 | Calling service log | The service → Import tab | A CSV with the number called, the start, the end or duration and the status (Twilio's Call resource names); matched to the recorded calls by number and time, never re-exported |
-| Any other table | → Import tab | Mapped once on the Import tab (roles and result codes); the mapping is saved in the leader's session (`settings.profiles`) and reused |
+| Any other form | → Import tab | One row per call attempt; mapped once on the Import tab (roles and result codes); the mapping is saved in the leader's session (`settings.profiles`) and reused |
 
 The manifest's `enumerators[].platform_id` carries each enumerator's code in the platform, so that platform files
 are read under the tool's enumerator ID and the files written for the platform carry the code.

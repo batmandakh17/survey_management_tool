@@ -436,9 +436,8 @@
       kobo: () => ['households.csv', L.koboHouseholds(M, derived().hh.households, st.plan ? st.plan.plans : null)],
       suso: () => ['assignments.tab', L.susoAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null)],
       choices: () => ['choices_households.csv', L.koboChoices(M, derived().hh.households)],
-      cati: () => ['cati_assignments.csv', L.catiAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null)],
     };
-    if (['kobo', 'suso', 'choices', 'cati'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: the platform files need the contacts.', 'warn');
+    if (['kobo', 'suso', 'choices'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: the platform files need the contacts.', 'warn');
     const [name, text] = files[what]();
     sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : name.endsWith('.tab') ? 'text/tab-separated-values' : 'application/json');
     logEv('exported', { file: name });
@@ -700,7 +699,7 @@
       ${st.team.map((t, i) => `<tr><td class="id">${esc(t.id)}</td><td><input type="checkbox" data-lteam="${i}" data-f="available" ${t.available ? 'checked' : ''}></td><td><input class="tiny" type="number" min="0" step="any" data-lteam="${i}" data-f="share" value="${t.share}"></td><td><input class="small" data-lpid="${i}" value="${esc(t.platform_id || '')}" placeholder="CATI01"></td>${st.criteria.map(c => `<td><input class="small" data-lattr="${i}" data-c="${esc(c)}" value="${esc((t.attrs || {})[c] || '')}" placeholder="${esc(exampleOf(c) || 'values')}"></td>`).join('')}<td class="num">${lastCount(t.id) || '–'}</td><td><button class="link" data-lact="delenum" data-i="${i}">remove</button></td></tr>`).join('')}
       </tbody></table>
       <div class="row3"><label>Add an enumerator ID <input id="lenum-id" placeholder="E08"></label><button class="subtle" data-lact="addenum">Add</button></div>
-      <p class="muted small">The platform code is the enumerator's ID in the program's data-collection platform or call-center system (an interviewer code, an operator code), when it differs from their ID here: platform files are then read under the tool's ID, and the files written for the platform carry the code.</p>
+      <p class="muted small">The platform code is the enumerator's ID in the program's data-collection platform (the interviewer code in the KoBoToolbox form), when it differs from their ID here: platform files are then read under the tool's ID, and the files written for the platform carry the code.</p>
       <p class="muted small">An enumerator marked away keeps their history; their households are dealt to the others with reason "enumerator unavailable" (Section 3.5.3's forced change).</p></section>`;
     const rules = [
       ['keep_same', 'Keep the same enumerator <span class="tag">default</span>', 'The handbook’s stated default (Section 3.5.3 and its rule-of-thumb box): keep the same enumerator, rotate a planned share of households each round, and switch the enumerator for a household that becomes hard to reach. The rotation lets enumerator effects be measured and diluted (Section 3.2).'],
@@ -788,8 +787,8 @@
         <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
         <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
         <p class="muted">No export added yet. The merge checks every file against this round's manifest (${R.plural(st.manifest.households.length, 'household')}, ${R.plural(st.manifest.enumerators.length, 'enumerator')}); an enumerator whose export has not arrived is reported once you add the others.</p>
-        <h4>Or from KoBoToolbox, a call-center system, Survey Solutions or a calling service</h4>
-        <p class="muted small">A KoBoToolbox export of a form that records each call attempt (the L2PHL form's layout, or the tool's own call-record form) or of an interview form (the L2CU or L2Taj layout), a call-center system's call log and sample table (the L2CU layout, or the L2Taj log), a Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files), or a calling service's call log (the number called, the start, the end or duration and the status, as Twilio's). Each is cumulative: add the latest download, and the tool splits it by enumerator and merges it as it merges the enumerators' CSV exports. A file with other columns is mapped here once and read from then on.</p>
+        <h4>Or from KoBoToolbox</h4>
+        <p class="muted small">The KoBoToolbox export of a form that records each call attempt: the L2PHL form's layout, or the tool's own call-record form. The export is cumulative: add the latest download, and the tool splits it by enumerator and merges it as it merges the enumerators' CSV exports. A form with other columns is mapped here once and read from then on. A Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files) and a calling service's call log (the number called, the start, the end or duration and the status, as Twilio's) are read here too.</p>
         <label class="btn subtle">Add platform files<input type="file" id="lf-platform" accept=".csv,.tab,.zip,.txt" multiple></label></section>`;
     }
     const open = G.issues.filter(i => i.status === 'open' && i.severity === 'action');
@@ -800,13 +799,11 @@
       <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
       ${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}
       ${sealed.map(x => `<div class="alert info">${esc(x.f.name)} is a protected contacts file. <button class="subtle" data-lact="opensealed" data-i="${x.i}">Open with its passphrase</button></div>`).join('')}
-      <h4>Or from KoBoToolbox, a call-center system, Survey Solutions or a calling service</h4>
-      <p class="muted small">A KoBoToolbox export of a form that records each call attempt (the L2PHL form's layout, or the tool's own call-record form) or of an interview form (the L2CU or L2Taj layout), a call-center system's call log and sample table (the L2CU layout, or the L2Taj log), a Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files), or a calling service's call log (the number called, the start, the end or duration and the status, as Twilio's). Each is cumulative: add the latest download, and the tool splits it by enumerator and merges it as it merges the enumerators' CSV exports. A file with other columns is mapped here once and read from then on.</p>
+      <h4>Or from KoBoToolbox</h4>
+      <p class="muted small">The KoBoToolbox export of a form that records each call attempt: the L2PHL form's layout, or the tool's own call-record form. The export is cumulative: add the latest download, and the tool splits it by enumerator and merges it as it merges the enumerators' CSV exports. A form with other columns is mapped here once and read from then on. A Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files) and a calling service's call log (the number called, the start, the end or duration and the status, as Twilio's) are read here too.</p>
       <label class="btn subtle">Add platform files<input type="file" id="lf-platform" accept=".csv,.tab,.zip,.txt" multiple></label>
       ${noHH ? '<p class="alert warn">A calling service log was added, but the household list is not open: the numbers cannot be matched. Open it on the Prepare tab (step 1).</p>' : ''}
       ${G.unmapped && G.unmapped.length ? mappingCard(G.unmapped[0]) : ''}
-      ${G.sampleStats ? `<div class="alert info"><b>The system's sample table against the manifest:</b> ${R.plural(G.sampleStats.rows, 'household')} of this round, ${G.sampleStats.with_operator} with an operator; ${G.sampleStats.differing} with another operator than the manifest (listed below if any), ${G.sampleStats.activated} replacements activated in the system, ${G.sampleStats.unknown} not in the manifest.</div>` : ''}
-      ${G.ivStats ? `<div class="alert info"><b>Questionnaire against the call log:</b> ${R.plural(G.ivStats.interviews, 'interview record')}, ${G.ivStats.agreed} with consent; ${G.ivStats.matched} matched a completed call within three hours, ${G.ivStats.unlogged} had none and ${G.ivStats.without} completed calls have no interview (listed below if any).</div>` : ''}
       ${svc ? `<div class="alert info"><b>Calling service log:</b> ${R.plural(svc.calls, 'call')}, ${svc.panel} to the panel's numbers; ${svc.matched} matched a recorded call (${svc.filled} call ends filled from the service), ${svc.unlogged} had no record within three minutes (listed below if any), ${svc.unknown} went to numbers not in the list. ${svc.unmatched_dials} of ${svc.dials} recorded calls have no service call.</div>` : ''}</section>
       ${open.length ? `<section class="lcard"><h3>Needs your decision <span class="count warn">${open.length}</span></h3>${open.map(issueCard).join('')}</section>` : (st.imports.length ? '<p class="alert ok">No merge question is open.</p>' : '')}
       ${G.files.length ? `<section class="lcard"><h3>Files</h3><table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th>Exported</th><th class="num">Events or rows</th><th>Used</th></tr></thead><tbody>
@@ -820,10 +817,10 @@
   }
   // an unknown table: the leader says which column plays each role and what each code means (proposal K.2)
   function mappingCard(f) {
-    if (!ui.map || ui.map.file !== f.name) ui.map = { file: f.name, header: f.header, kind: 'calls', name: '', columns: L.guessColumns(f.header, 'calls'), codes: {} };
-    const m = ui.map, roles = L.ROLES[m.kind];
+    if (!ui.map || ui.map.file !== f.name) ui.map = { file: f.name, header: f.header, kind: 'calls', name: '', columns: L.guessColumns(f.header), codes: {} };
+    const m = ui.map, roles = L.ROLES.calls;
     const opt = sel => `<option value="">–</option>${f.header.map(c => `<option value="${esc(c)}" ${sel === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}`;
-    const rc = m.kind === 'calls' ? m.columns.result : m.columns.consent;
+    const rc = m.columns.result;
     const counts = new Map();
     if (rc) f.rows.forEach(r => { const v = String(r[rc] == null ? '' : r[rc]).trim(); counts.set(v, (counts.get(v) || 0) + 1); });
     const vals = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40);
@@ -831,9 +828,8 @@
     const missing = roles.filter(r => r[2] && !m.columns[r[0]]).map(r => r[1]);
     const unmappedCodes = vals.filter(([v]) => !m.codes[v]).length;
     return `<section class="lcard" id="lmap"><h3>Map the columns of ${esc(f.name)}</h3>
-      <p class="muted small">${R.plural(f.rows.length, 'row')}, ${f.header.length} columns, which match none of the known layouts. Say which column plays each role and what each result code means. The mapping is kept in your session and used for every later file with these columns.</p>
-      <div class="row3"><label>Name of this layout <input data-lprof="name" value="${esc(m.name)}" placeholder="Our call-center log"></label>
-        <label>One row is <select data-lprof="kind"><option value="calls" ${m.kind === 'calls' ? 'selected' : ''}>one call attempt</option><option value="interviews" ${m.kind === 'interviews' ? 'selected' : ''}>one interview (no attempts recorded)</option></select></label></div>
+      <p class="muted small">${R.plural(f.rows.length, 'row')}, ${f.header.length} columns, which match none of the known layouts. Each row should be one call attempt. Say which column plays each role and what each result code means. The mapping is kept in your session and used for every later file with these columns.</p>
+      <div class="row3"><label>Name of this layout <input data-lprof="name" value="${esc(m.name)}" placeholder="Our call-record form"></label></div>
       <table class="grid small"><thead><tr><th>Role</th><th>Column in the file</th></tr></thead><tbody>${roles.map(([k, lab, req]) => `<tr><td>${esc(lab)}${req ? ' <b class="warn">*</b>' : ''}</td><td><select data-lprof="col:${k}">${opt(m.columns[k] || '')}</select></td></tr>`).join('')}</tbody></table>
       ${rc ? `<h4>What each value of <code>${esc(rc)}</code> means</h4><table class="grid small"><thead><tr><th>Value</th><th class="num">Rows</th><th>Result in the tool</th></tr></thead><tbody>${vals.map(([v, n]) => `<tr><td class="id">${esc(v) || '(empty)'}</td><td class="num">${n}</td><td><select data-lprof="code:${esc(v)}">${statusOpts(v)}</select></td></tr>`).join('')}</tbody></table>
       <p class="muted small">A value left unmapped is read as "other", with the value in the note.</p>` : ''}
@@ -933,10 +929,10 @@
         <button class="subtle" data-lact="export" data-what="interviews">interviews.csv</button><button class="subtle" data-lact="export" data-what="outcomes">outcome_codes.csv</button>
         <button class="subtle" data-lact="export" data-what="calendar">calendar.csv</button><button class="subtle" data-lact="export" data-what="manifest">Manifest</button></div>
       <p class="muted small">The merged call log has the harmonized dial-table columns of the enumerators' exports, the dial number counted per household across enumerators; the handbook's analysis scripts read it as a program's log, and the leader view reads it back as an earlier round. <code>interviews.csv</code> has one row per household for the Section 4.2 round template; <code>outcome_codes.csv</code> lists the codes and meanings to copy into the template's configuration.</p>
-      <h4>For a team that records calls in KoBoToolbox, Survey Solutions or a call-center system</h4>
+      <h4>For a team that records calls in KoBoToolbox (or Survey Solutions)</h4>
       <div class="btnrow"><button class="subtle" data-lact="export" data-what="choices">choices_households.csv (KoBoToolbox choices list)</button><button class="subtle" data-lact="export" data-what="kobo">households.csv (KoBoToolbox media file)</button>
-        <button class="subtle" data-lact="export" data-what="cati">cati_assignments.csv (call-center system)</button><button class="subtle" data-lact="export" data-what="suso">assignments.tab (Survey Solutions)</button> <span class="tag warn">all but the choices list have phone numbers</span></div>
-      <p class="muted small">From the current manifest, so after moving households during the round they are written again. <code>choices_households.csv</code> is the sample list of a form that picks the household from its choices sheet (the L2PHL layout: <code>list_name</code> SN, the ID, and the enumerator's platform code in <code>filter_int_id</code>); paste it into the form's choices sheet and redeploy. <code>households.csv</code> is the media file of a form that pulls the household's details from an external file (the tool's own call-record form). <code>cati_assignments.csv</code> is the assignment table for a call-center system that dials and logs the calls: household, operator, the planned first dial, the numbers and the replacements. <code>assignments.tab</code> goes to Survey Solutions under Survey Setup › Questionnaires › Upload assignments.</p></section>
+        <button class="subtle" data-lact="export" data-what="suso">assignments.tab (Survey Solutions)</button> <span class="tag warn">all but the choices list have phone numbers</span></div>
+      <p class="muted small">From the current manifest, so after moving households during the round they are written again. <code>choices_households.csv</code> is the sample list of a form that picks the household from its choices sheet (the L2PHL layout: <code>list_name</code> SN, the ID, and the enumerator's platform code in <code>filter_int_id</code>); paste it into the form's choices sheet and redeploy. <code>households.csv</code> is the media file of a form that pulls the household's details from an external file (the tool's own call-record form). <code>assignments.tab</code> goes to Survey Solutions under Survey Setup › Questionnaires › Upload assignments.</p></section>
       <section class="lcard"><h3>Merged call log <span class="count">${G.dials.length}</span></h3>
       <div class="filters"><select data-lset="__logEnum"><option value="">every enumerator</option>${[...G.perEnum.keys()].sort().map(e => `<option ${ui.logEnum === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select>
         <select data-lset="__logStatus"><option value="">every result</option>${R.STATUS.map(s => `<option value="${s.code}" ${ui.logStatus === s.code ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select>
@@ -1208,7 +1204,7 @@
     if (t.dataset.lmove !== undefined) return reassign(t.dataset.lmove, t.value);
     if (t.dataset.lcrit !== undefined) { const c = t.dataset.lcrit; st.criteria = t.checked ? [...new Set(st.criteria.concat(c))] : st.criteria.filter(x => x !== c); logEv('criteria_changed', { criteria: st.criteria }); stale(); return render(); }
     if (t.dataset.lpid !== undefined) { const x = st.team[+t.dataset.lpid]; x.platform_id = t.value.trim(); logEv('platform_code', { id: x.id, platform_id: x.platform_id }); filesStale(); return render(); }
-    if (t.dataset.lprof !== undefined) { const k = t.dataset.lprof, m = ui.map; if (!m) return; if (k === 'name') m.name = t.value; else if (k === 'kind') { m.kind = t.value; m.columns = L.guessColumns(m.header, m.kind); m.codes = {}; } else if (k.startsWith('col:')) { m.columns[k.slice(4)] = t.value; if (k === 'col:result' || k === 'col:consent') m.codes = {}; } else if (k.startsWith('code:')) m.codes[k.slice(5)] = t.value; return render(); }
+    if (t.dataset.lprof !== undefined) { const k = t.dataset.lprof, m = ui.map; if (!m) return; if (k === 'name') m.name = t.value; else if (k.startsWith('col:')) { m.columns[k.slice(4)] = t.value; if (k === 'col:result' || k === 'col:consent') m.codes = {}; } else if (k.startsWith('code:')) m.codes[k.slice(5)] = t.value; return render(); }
     if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
     if (t.dataset.lmovesel !== undefined) { const i = +t.dataset.lmovesel; if (!ui.moves) return; if (t.checked) ui.moves.picked.add(i); else ui.moves.picked.delete(i); return render(); }
     if (t.dataset.lset !== undefined) {

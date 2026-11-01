@@ -735,23 +735,15 @@
     return null;
   };
   // ---- profiles (proposal K.2): how a platform file's columns and codes map onto the harmonized dial table (A.4) ----
-  // kind 'calls': one row per call attempt (a KoBoToolbox form that records each attempt, or a call-center system's log);
-  // kind 'interviews': one row per interview of a questionnaire that records no attempts (checked against the call log,
-  // or, without one, read as the completes and refusals). The two layouts shipped are those of L2 programs' real files.
+  // one row per call attempt, as in a KoBoToolbox form that records each attempt; besides the tool's own form, the layout
+  // shipped is that of an L2 program's real form, L2PHL's, which records each call attempt in the form itself
   L.ROLES = {
-    sample: [['hhid', 'Household ID', 1], ['enumerator', 'Operator or interviewer code', 1], ['replaced_by', 'Replacement activated for this household'], ['replacement_for', 'The household this one replaces'], ['next_call', 'Next call planned'], ['consent', 'Agreement'], ['round', 'Round']],
     calls: [['hhid', 'Household ID', 1], ['enumerator', 'Enumerator: the platform\'s code or the tool\'s ID', 1], ['start', 'Call start', 1], ['result', 'Result of the call', 1],
       ['end', 'Call end'], ['attempt', 'Attempt number'], ['callback', 'Callback agreed'], ['phone', 'Number dialed'], ['phone_slot', 'Which number (1 to 3)'], ['round', 'Round'],
       ['id', 'Record ID'], ['logged_at', 'Submitted at'], ['note', 'Note']],
-    interviews: [['hhid', 'Household ID', 1], ['enumerator', 'Enumerator: the platform\'s code or the tool\'s ID', 1], ['start', 'Interview start', 1], ['consent', 'Consent or agreement', 1],
-      ['end', 'Interview end'], ['refusal', 'Refusal reason'], ['round', 'Round'], ['id', 'Record ID'], ['logged_at', 'Submitted at'], ['note', 'Note']],
   };
   const PHL_LABELS = { 1: 'Complete', 2: 'Partially complete, no more callback', 3: 'Partially complete, scheduled another call', 4: 'Not yet started, with scheduled callback', 5: 'Refused',
     6: 'Nobody answering / just ringing', 7: 'Number does not exist / not ringing', 8: 'Phone turned off / not in service', 9: 'Don\'t know the household', 10: 'Reference person can\'t connect to the household' };
-  const TAJ_LABELS = { SCS: 'Successful (interview completed)', NOA: 'No answer', NOT: 'No time', NWR: 'Non-working number', WNM: 'Wrong number', OOS: 'Out of service', ITR: 'Interrupted survey',
-    RFS: 'Refused', PWI: 'Code without a label in the files seen: confirm with the program', BLN: 'Code without a label in the files seen: confirm with the program' };
-  const UZ_LABELS = { CS: 'Completed successfully', NA: 'No answer', NT: 'No time', NWN: 'Non-working number', WN: 'Wrong number', OSA: 'Out of service area', IS: 'Interrupted survey',
-    BS: 'Busy', HU: 'Hangup', NC: 'No call' };
   L.PROFILES = [
     { id: 'rtm_kobo', name: 'RTM call record (KoBoToolbox form)', kind: 'calls', detect: ['_uuid', 'hhid', 'result', 'enumerator_id'],
       columns: { hhid: 'hhid', enumerator: 'enumerator_id', start: 'call_start', end: 'call_end', result: 'result', callback: 'appointment', phone_slot: 'phone_slot', round: 'round', id: '_uuid', logged_at: '_submission_time', note: 'note' },
@@ -761,25 +753,6 @@
       columns: { hhid: 'hhid', enumerator: 'int_id', start: 'start', end: 'end', result: 'X15', attempt: 'Z8', id: '_uuid', logged_at: '_submission_time', note: 'X16' },
       codes: { 1: 'COMPLETE', 2: 'COMPLETE', 3: 'PARTIAL', 4: 'APPOINTMENT', 5: 'REFUSAL_SOFT', 6: 'NO_ANSWER', 7: 'DEAD_NUMBER', 8: 'SWITCHED_OFF', 9: 'WRONG_NUMBER', 10: 'OTHER' }, labels: PHL_LABELS,
       about: 'Every call attempt is one submission of the interview form: the interviewer\'s ID, the household from the sample list, the attempt number, whether someone answered, and in the closing block the result of the call (X15). The program counts a partially completed interview with no further callback as complete, so code 2 maps to a complete too.' },
-    { id: 'cati_log_uz', name: 'Call-center system log (L2CU layout)', kind: 'calls', detect: ['callid', 'hhid', 'operator', 'dialing_phone', 'status', 'start_time'],
-      columns: { hhid: 'hhid', enumerator: 'operator', start: 'start_time', end: 'end_time', result: 'status', phone: 'dialing_phone', round: 'round', id: 'callid', note: 'comment' },
-      codes: { CS: 'COMPLETE', NA: 'NO_ANSWER', NT: 'NOT_AVAILABLE', NWN: 'DEAD_NUMBER', WN: 'WRONG_NUMBER', OSA: 'SWITCHED_OFF', IS: 'PARTIAL', BS: 'BUSY', HU: 'OTHER', NC: 'NONE' }, labels: UZ_LABELS,
-      about: 'The call-center system dials and logs every attempt: operator, household, number dialed, start, end and a status code, exported each day as a semicolon-separated table with the program\'s sample table and baseline. The codes are labelled in the program\'s own files; "no call" is not a dial.' },
-    { id: 'cati_sample_uz', name: 'Call-center system sample table (L2CU layout)', kind: 'sample', detect: ['hhid', 'catiid', 'date_nextcall', 'replaced_by', 'replacement_for'],
-      columns: { hhid: 'hhid', enumerator: 'catiid', replaced_by: 'replaced_by', replacement_for: 'replacement_for', next_call: 'date_nextcall', consent: 'agreement', round: 'round' },
-      about: 'The system\'s own view of the assignment: one row per household with the operator it is with, the next call planned, the agreement and the replacement links. Read against the manifest: a household the system has with another operator, and a replacement the system activated, are reported.' },
-    { id: 'uz_kobo', name: 'L2CU interview form (KoBoToolbox)', kind: 'interviews', detect: ['_uuid', 'hhid', 'ecode', 'agreement'],
-      columns: { hhid: 'hhid', enumerator: 'ecode', start: 'start', end: 'end', consent: 'agreement', refusal: 'refuse_text', round: 'round', id: '_uuid', logged_at: '_submission_time' },
-      codes: { 1: 'COMPLETE', 2: 'REFUSAL_SOFT' }, labels: { 1: 'Agreed to take part', 2: 'Did not agree' },
-      about: 'One submission per interview: the household and operator from the code the call-center system shows on the operator\'s screen, the operator\'s code, the start and end, and whether the household agreed. The form records no attempts, so with the system\'s log added the interviews are checked against the logged calls; without it they are read as the completes and refusals.' },
-    { id: 'cati_log', name: 'Call-center system log (L2Taj layout)', kind: 'calls', detect: ['operator_id', 'hh_id', 'dialing_phone', 'status', 'start_time'],
-      columns: { hhid: 'hh_id', enumerator: 'operator_id', start: 'start_time', end: 'end_time', result: 'status', phone: 'dialing_phone', round: 'round', id: 'id', note: 'comment' },
-      codes: { SCS: 'COMPLETE', NOA: 'NO_ANSWER', NOT: 'NOT_AVAILABLE', NWR: 'DEAD_NUMBER', WNM: 'WRONG_NUMBER', OOS: 'SWITCHED_OFF', ITR: 'PARTIAL', RFS: 'REFUSAL_SOFT', PWI: 'OTHER', BLN: 'OTHER' }, labels: TAJ_LABELS,
-      about: 'The same kind of log from another program\'s system, cumulative across rounds; two of its ten codes have no label in the files seen and map to "other" until the program says what they mean.' },
-    { id: 'taj_kobo', name: 'L2Taj interview form (KoBoToolbox)', kind: 'interviews', detect: ['_uuid', 'hhid', 'ocode', 'agreement'],
-      columns: { hhid: 'hhid', enumerator: 'ocode', start: 'start', end: 'end', consent: 'agreement', refusal: 'refusal', round: 'round', id: '_uuid', logged_at: '_submission_time' },
-      codes: { 1: 'COMPLETE', 2: 'REFUSAL_SOFT' }, labels: { 1: 'Agreed to take part', 2: 'Did not agree' },
-      about: 'One submission per interview: the household from a code the call-center system shows on the operator\'s screen, the operator, the start and end, and whether the household agreed. The form records no attempts, so with the system\'s log added the interviews are checked against the logged calls; without it they are read as the completes and refusals.' },
   ];
   L.profileFor = (header, custom) => {
     const h = new Set(header.map(c => String(c).trim()));
@@ -787,12 +760,11 @@
     return (custom || []).find(fits) || L.PROFILES.find(fits) || null;
   };
   // a guess at the roles of an unknown file's columns, for the leader to correct
-  L.guessColumns = (header, kind) => {
+  L.guessColumns = header => {
     const n = header.map(normCol), find = (...keys) => { for (const k of keys) { const i = n.indexOf(k); if (i >= 0) return header[i]; } for (const k of keys) { const i = n.findIndex(x => x.includes(k)); if (i >= 0) return header[i]; } return ''; };
-    const o = { hhid: find('hhid', 'hhid', 'householdid', 'household', 'hh'), enumerator: find('enumeratorid', 'operatorid', 'operator', 'interviewerid', 'intid', 'ocode', 'ecode', 'catiid', 'enumerator', 'interviewer', 'caller'),
+    const o = { hhid: find('hhid', 'hhid', 'householdid', 'household', 'hh'), enumerator: find('enumeratorid', 'operatorid', 'operator', 'interviewerid', 'intid', 'enumerator', 'interviewer', 'caller'),
       start: find('callstart', 'starttime', 'start', 'callstart'), end: find('callend', 'endtime', 'end'), round: find('round'), id: find('uuid', 'id', 'callid', 'recordid', 'sid'), logged_at: find('submissiontime', 'submitted', 'logged'), note: find('note', 'comment', 'remarks') };
-    if (kind === 'interviews') Object.assign(o, { consent: find('agreement', 'consent', 'agree'), refusal: find('refusal', 'refuse') });
-    else Object.assign(o, { result: find('result', 'status', 'calloutcome', 'outcome', 'disposition'), attempt: find('attempt', 'calltry', 'try'), callback: find('appointment', 'callback', 'nextcall'), phone: find('dialingphone', 'phonedialed', 'numberdialed', 'phone', 'number'), phone_slot: find('phoneslot', 'slot') });
+    Object.assign(o, { result: find('result', 'status', 'calloutcome', 'outcome', 'disposition'), attempt: find('attempt', 'calltry', 'try'), callback: find('appointment', 'callback', 'nextcall'), phone: find('dialingphone', 'phonedialed', 'numberdialed', 'phone', 'number'), phone_slot: find('phoneslot', 'slot') });
     return o;
   };
   // 'YYYY-MM-DDTHH:MM:SS(.sss)?(Z|+HH:MM)?' or 'YYYY-MM-DD HH:MM:SS' into the harmonized wall time and offset
@@ -828,9 +800,9 @@
   // a row of a platform file as the standard call record the form reader takes (the roles, the codes mapped, the extras of the tool's own form)
   const stdRecord = (prof, r, M) => {
     const c = prof.columns || {}, x = prof.extras || {}, g = k => (k && r[k] !== undefined && r[k] !== null ? String(r[k]).trim() : '');
-    const raw = g(c.result !== undefined ? c.result : c.consent), status = codeStatus(prof, raw);
+    const raw = g(c.result), status = codeStatus(prof, raw);
     const label = prof.labels && prof.labels[raw] !== undefined ? prof.labels[raw] : '';
-    const note = [g(c.note), status === 'OTHER' && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : '', prof.kind === 'interviews' && c.refusal && g(c.refusal) ? `refusal: ${g(c.refusal)}` : ''].filter(Boolean).join(' · ');
+    const note = [g(c.note), status === 'OTHER' && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : ''].filter(Boolean).join(' · ');
     return { hhid: g(c.hhid), enumerator: g(c.enumerator), call_start: g(c.start), call_end: g(c.end), result: status, raw, appointment: g(c.callback), phone: g(c.phone), phone_slot: g(c.phone_slot),
       round: g(c.round), attempt: g(c.attempt), id: g(c.id), logged_at: g(c.logged_at), note,
       willing: g(x.willing), action: g(x.action), target_hhid: g(x.target_hhid), replaces: g(x.replaces), program: g(x.program) || M.program };
@@ -877,7 +849,7 @@
     return raw => pmap.get(codeKey(raw)) || String(raw || '').trim();
   };
   L.expandForms = (imports, M, opts) => {
-    const out = [], extra = [], service = [], interviews = [], samples = [];
+    const out = [], extra = [], service = [];
     const stamp = v => { const p = isoParts(v); return p.wall ? Date.parse(p.wall.replace(' ', 'T') + (p.off || '')) || 0 : 0; };
     const enumOf = L.enumMapper(M);
     const slots = slotIndex(opts && opts.households);
@@ -902,11 +874,12 @@
       return wall.replace(' ', 'T') + (en.off || st_.off || (wall && tz ? offsetAt(wall, tz) : ''));
     };
     const mains = imports.filter(f => f.kind === 'suso_main'), callsFiles = imports.filter(f => f.kind === 'suso_calls');
-    const hasCalls = imports.some(f => f.kind === 'platform' && f.profile.kind === 'calls') || callsFiles.length > 0;
     const folder = n => (n.includes('/') ? n.slice(0, n.lastIndexOf('/') + 1) : '');
     for (const f of imports) {
       if (f.kind === 'platform') {
         const prof = f.profile, roundCol = (prof.columns || {}).round;
+        // a layout of another kind (an interview form without its attempts, saved by an earlier version) is not read
+        if (prof.kind !== 'calls') { extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: the tool reads platform files with one row per call attempt' }); continue; }
         let otherRound = 0, noSlot = 0, noId = 0;
         const recs = [];
         f.rows.forEach((r0, i) => {
@@ -920,23 +893,8 @@
           recs.push({ r, e, eid, loggedAt, when: Date.parse(loggedAt) || stamp(r.call_end) || stamp(r.call_start) });
         });
         const left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : ''].filter(Boolean);
-        if (prof.kind === 'sample') {
-          const rows = f.rows.map(r0 => { const c = prof.columns, g = k => (c[k] && r0[c[k]] != null ? String(r0[c[k]]).trim() : ''); return { hhid: g('hhid'), e: enumOf(g('enumerator')), raw: g('enumerator'), replaced_by: g('replaced_by'), replacement_for: g('replacement_for'), next_call: g('next_call'), consent: g('consent'), round: g('round') }; })
-            .filter(r => r.hhid && (!r.round || +r.round === +M.round));
-          samples.push({ file: f, rows });
-          extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(rows.length, 'household')} of this round, checked against the manifest` });
-          continue;
-        }
-        if (prof.kind === 'calls') {
-          const parts = emit(f, prof.id, recs);
-          extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
-        } else if (hasCalls) {
-          interviews.push({ file: f, recs });
-          extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'interview')}, checked against the logged calls${left.length ? `; ${left.join('; ')}` : ''}` });
-        } else {
-          const parts = emit(f, prof.id, recs);
-          extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'interview')} read as completes and refusals (no call log added), split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
-        }
+        const parts = emit(f, prof.id, recs);
+        extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
       } else if (f.kind === 'suso_calls') {
         const main = mains.find(m => folder(m.name) === folder(f.name)) || mains[0];
         if (!main) { extra.push({ name: f.name, kind: 'Survey Solutions roster', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: its main file (interview__id, hhid, enumerator_id) was not added' }); continue; }
@@ -964,94 +922,7 @@
         extra.push({ name: f.name, kind: 'table, columns unknown', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged until its columns are mapped (Import tab)' });
       } else out.push(f);
     }
-    return { imports: out, extra, service, interviews, samples };
-  };
-  // the call-center system's sample table against the manifest (proposal K.3): the operator the system has a household with,
-  // and the replacements the system activated; nothing is changed, what differs is reported
-  L.applySampleTable = (samples, M, issue, activatedBy, assignedTo, replOf) => {
-    if (!samples.length) return null;
-    const stats = { files: samples.length, rows: 0, with_operator: 0, differing: 0, activated: 0, unknown: 0 };
-    const seen = new Set();
-    for (const { file, rows } of samples) {
-      for (const r of rows) {
-        if (seen.has(r.hhid)) continue;
-        seen.add(r.hhid); stats.rows++;
-        if (r.replaced_by && !activatedBy.has(r.replaced_by) && (assignedTo.has(r.hhid) || replOf.has(r.replaced_by))) {
-          activatedBy.set(r.replaced_by, { e: assignedTo.get(r.hhid) || r.e, main: r.hhid, at: '', implied: true, via: 'sample' }); stats.activated++;
-          issue({ key: `system_replacement:${r.hhid}:${r.replaced_by}`, type: 'system_replacement', severity: 'info', file: file.name, hhid: r.replaced_by,
-            detail: `The call-center system has activated ${r.replaced_by} as the replacement of ${r.hhid}; it is counted as activated for ${assignedTo.get(r.hhid) || r.e}.` });
-        }
-        if (!r.raw) continue;
-        stats.with_operator++;
-        const mine = assignedTo.get(r.hhid) || (replOf.has(r.hhid) ? assignedTo.get(replOf.get(r.hhid)) : undefined);
-        if (mine === undefined) { stats.unknown++; continue; }
-        if (mine === r.e) continue;
-        stats.differing++;
-        issue({ key: `system_assignment:${r.hhid}`, type: 'system_assignment', severity: 'action', file: file.name, hhid: r.hhid, enumerator: mine,
-          detail: `The call-center system has ${r.hhid} with ${r.raw}${r.e !== r.raw ? ` (${r.e})` : ''}, the manifest with ${mine}. If the system is right, move the household on the Progress tab and write the files again; if the manifest is right, correct the system.`,
-          choices: [{ value: 'acknowledged', label: 'Noted' }] });
-      }
-    }
-    if (stats.unknown) issue({ key: `system_unknown:${samples.map(x => x.file.sha).join('+')}`, type: 'system_unknown', severity: 'info', file: samples.map(x => x.file.name).join(', '),
-      detail: `${R.plural(stats.unknown, 'household')} the system has with an operator ${stats.unknown === 1 ? 'is' : 'are'} not in this round's manifest.` });
-    return stats;
-  };
-  // interview records against the logged calls (proposal K.3): each interview should have a completed call of the same household
-  // within three hours of its start (an interview resumed in a later call still matches), and each completed call an interview;
-  // what does not match is listed for the leader
-  const IV_WINDOW_MS = 180 * 60000;
-  L.reconcileInterviews = (G, interviews, issue, M) => {
-    const stats = { files: interviews.length, interviews: 0, agreed: 0, matched: 0, unlogged: 0, counted: 0, without: 0, lengthened: 0 };
-    if (!interviews.length) return null;
-    const byHH = new Map();
-    G.dials.forEach(d => { if (!byHH.has(d.hhid)) byHH.set(d.hhid, []); byHH.get(d.hhid).push(d); });
-    const added = [];
-    for (const { file, recs } of interviews) {
-      for (const x of recs) {
-        stats.interviews++;
-        if (x.r.result !== 'COMPLETE') continue;             // a refusal recorded in the questionnaire is not a call to match
-        stats.agreed++;
-        const t0 = Date.parse(x.r.call_start.replace(' ', 'T')) || Date.parse(isoParts(x.r.call_start).wall.replace(' ', 'T'));
-        let best = null, bd = IV_WINDOW_MS + 1;
-        for (const d of byHH.get(x.r.hhid) || []) {
-          if (d._iv || d.status !== 'COMPLETE') continue;
-          const dt = Math.abs(Date.parse(d.ts) - t0);
-          if (dt < bd) { bd = dt; best = d; }
-        }
-        if (best) {
-          best._iv = x; stats.matched++;
-          // the questionnaire is the better witness of the interview's length: a call the system closed early, or without an end, takes the interview's end
-          const ivEnd = x.r.call_end ? Date.parse(isoParts(x.r.call_end).wall.replace(' ', 'T') + (isoParts(x.r.call_end).off || best.ts.slice(19))) : NaN;
-          if (!isNaN(ivEnd) && (!best.end_ts || ivEnd > Date.parse(best.end_ts)) && ivEnd > Date.parse(best.ts)) {
-            const was = best.dur_min;
-            best.end_ts = R.localISO(new Date(ivEnd)); best.dur_min = Math.max(0, (ivEnd - Date.parse(best.ts)) / 60000);
-            if (was === null || was === undefined || was < R.MIN_COMPLETE_MIN) { best.note = [best.note, 'end from the questionnaire'].filter(Boolean).join(' · '); stats.lengthened++; }
-          }
-          continue;
-        }
-        stats.unlogged++;
-        const dec = issue({ key: `interview_unlogged:${x.eid}`, type: 'interview_unlogged', severity: 'action', file: file.name, hhid: x.r.hhid, enumerator: x.e,
-          detail: `The questionnaire has an interview of ${x.r.hhid} by ${x.e} starting ${(isoParts(x.r.call_start).wall || '?').slice(0, 16)}, but the call log has no completed call to that household within three hours.`,
-          choices: [{ value: 'count', label: 'Count it as a complete' }, { value: 'acknowledged', label: 'Noted: not counted' }] });
-        if (dec === 'count') {
-          stats.counted++;
-          const fr = formRecord(M, 'interview', x.r, x.e, x.eid, x.loggedAt);
-          if (fr.dial) { fr.dial.dur_min = fr.dial.end_ts ? Math.max(0, (Date.parse(fr.dial.end_ts) - Date.parse(fr.dial.ts)) / 60000) : null; fr.dial.source = x.e; fr.dial.note = [fr.dial.note, 'counted from the questionnaire'].filter(Boolean).join(' · '); added.push(fr.dial); }
-        }
-      }
-    }
-    for (const d of G.dials) {
-      if (d.status !== 'COMPLETE' || d._iv || !d.event_id) continue;
-      stats.without++;
-      const dec = issue({ key: `complete_without_interview:${d.event_id}`, type: 'complete_without_interview', severity: 'action', hhid: d.hhid, enumerator: d.source, event_id: d.event_id,
-        detail: `${d.source}'s call log codes a completed call on ${d.hhid} at ${(d.ts || '').slice(0, 16).replace('T', ' ')}, but the questionnaire has no interview of that household near that time.`,
-        choices: [{ value: 'accept', label: 'Keep it as a complete' }, { value: 'exclude', label: 'Not an interview: count it as other' }] });
-      if (dec === 'exclude') { d.status = 'OTHER'; d.is_cmp_code = 0; d.note = [d.note, 'no interview in the questionnaire'].filter(Boolean).join(' · '); }
-    }
-    if (added.length) { G.dials.push(...added); G.dials.sort((a, b) => cmpStr(a.hhid, b.hhid) || (Date.parse(a.ts) - Date.parse(b.ts))); const n = {}; G.dials.forEach(d => { n[d.hhid] = (n[d.hhid] || 0) + 1; d.attempt = n[d.hhid]; }); }
-    issue({ key: 'interviews:' + interviews.map(x => x.file.sha).join('+'), type: 'interviews_checked', severity: 'info', file: interviews.map(x => x.file.name).join(', '),
-      detail: `${R.plural(stats.interviews, 'interview record')}, ${stats.agreed} with consent: ${stats.matched} matched a completed call within three hours${stats.lengthened ? ` (${stats.lengthened} short or open-ended calls took the interview's end)` : ''}, ${stats.unlogged} had none${stats.counted ? ` (${stats.counted} counted on your decision)` : ''}; ${stats.without} completed calls have no interview.` });
-    return stats;
+    return { imports: out, extra, service };
   };
   // the calling service's log against the merged dials: by the household's number and a start within three minutes;
   // a missing call end is filled from the service; what does not match is reported (numbers never leave this computer)
@@ -1147,25 +1018,6 @@
       (h.replacements || []).forEach((id, i) => rows.push({ list_name: 'SN', name: id, label: `${id} (replacement ${i + 1} for ${h.hhid})`, filter_int_id: pid.get(h.enumerator_id) || h.enumerator_id, enumerator_id: h.enumerator_id, kind: 'replacement', replaces: h.hhid, rank: i + 1 }));
     }
     return R.toCSV(rows, L.CHOICE_COLS);
-  };
-  // the assignment table a call-center system loads, in the names of the L2CU system's sample table where they exist (the numbers in its baseline's names): one row per household, semicolon-separated
-  L.CATI_COLS = ['hhid', 'catiid', 'operator', 'enumerator_id', 'round', 'date_nextcall', 'hour_nextcall', 'date_schedule', 'hhcategory', 'replacement_for', 'rank', 'respondent_phone', 'phone_second', 'phone_member', 'psu', 'stratum'];
-  L.catiAssignments = (M, Hl, plans) => {
-    const pid = new Map(M.enumerators.map(e => [e.enumerator_id, e.platform_id || e.enumerator_id]));
-    const cell = v => String(v == null ? '' : v).replace(/[;\r\n]+/g, ' ');
-    const lines = [L.CATI_COLS.join(';')];
-    const push = (h, hhid, H, pl, repFor, rank) => {
-      const ph = s => ((H.phones || []).find(p => p.slot === s) || {}).number || '';
-      const code = pid.get(h.enumerator_id) || h.enumerator_id, day = pl.first_dial_date ? `${pl.first_dial_date} 00:00:00` : '';
-      const row = { hhid, catiid: code, operator: code, enumerator_id: h.enumerator_id, round: M.round, date_nextcall: day, hour_nextcall: Number.isInteger(pl.target_hour) ? pl.target_hour : '', date_schedule: day,
-        hhcategory: repFor ? 2 : 1, replacement_for: repFor, rank, respondent_phone: ph(1), phone_second: ph(2), phone_member: ph(3), psu: h.psu || '', stratum: h.stratum || '' };
-      lines.push(L.CATI_COLS.map(c => cell(row[c])).join(';'));
-    };
-    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
-      push(h, h.hhid, Hl.get(h.hhid) || {}, planOf(plans, h.hhid), '', '');
-      (h.replacements || []).forEach((id, i) => push(h, id, Hl.get(id) || {}, {}, h.hhid, i + 1));
-    }
-    return lines.join('\n') + '\n';
   };
   // a zip archive (a Survey Solutions export) as its text members: the same reader as the workbook's
   L.readZip = async buf => {
@@ -1382,8 +1234,6 @@
     for (const [e, x] of perEnum) x.dials.filter(d => d.replaces && !activatedBy.has(d.hhid)).forEach(d => activatedBy.set(d.hhid, { e, main: d.replaces, at: d.logged_at }));
     // a platform's record carries no activation: the first dial on a reserve listed in the manifest activates it for its enumerator
     for (const [e, x] of perEnum) x.dials.filter(d => replOf.has(d.hhid) && !activatedBy.has(d.hhid) && assignedTo.get(replOf.get(d.hhid)) === e).forEach(d => activatedBy.set(d.hhid, { e, main: replOf.get(d.hhid), at: d.logged_at, implied: true }));
-    // the call-center system's sample table: its replacements and its view of who has which household (proposal K.3)
-    const sampleStats = L.applySampleTable(ex.samples || [], M, issue, activatedBy, assignedTo, replOf);
     const mine = (e, h) => assignedTo.get(h) === e || (replOf.has(h) && assignedTo.get(replOf.get(h)) === e) || (activatedBy.has(h) && activatedBy.get(h).e === e);
     for (const [e, x] of perEnum) {
       const byHH = new Map();
@@ -1438,9 +1288,6 @@
     const actions = [];
     for (const [e, x] of perEnum) x.actions.forEach(a => { if (!excludedEvents.has(a.event_id) && !excludedDials.has(a.event_id)) actions.push(Object.assign({ program: M.program, round: M.round }, a, { source: e })); });
     actions.sort((a, b) => cmpStr(a.logged_at, b.logged_at) || cmpStr(a.event_id, b.event_id));
-    // a questionnaire's interviews against the logged calls (proposal K.3), before the completes are counted
-    const Gp = { dials: all };
-    const ivStats = L.reconcileInterviews(Gp, ex.interviews, issue, M);
     // two completes for one household
     const counted = new Map(), conflictHH = new Set();
     const byHH = new Map();
@@ -1478,7 +1325,7 @@
       if (!okNum || !okLog) issue({ key: `contact:${u.event_id}`, type: 'contact_mismatch', severity: 'info', file: f.name, hhid: u.hhid, enumerator: f.enumerator_id,
         detail: `The number for ${u.hhid}, slot ${u.slot}, does not match the digest ${okNum ? 'in the call log' : 'beside it'}.` });
     });
-    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), service: ex.service, ivStats, sampleStats, unmapped };
+    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), service: ex.service, unmapped };
   };
 
   // ---- cases and progress: one line per household of the round (manifest households and activated replacements) ----
