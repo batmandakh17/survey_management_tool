@@ -193,6 +193,21 @@ def main():
         b.click('[data-act="close"]'); b.wait("APP.modal")
         crop("e27_close", ["document.querySelector('.modal')"], pad=0, scroll=False, inside=True)
         b.click('[data-act="closemodal"]')
+        # the enumerator's own changes (3 November 2026): moving a household's next call, and time off
+        hm_ = b.js("APP.C.list.find(c => c.open && c.n === 0 && !c.appointment && c.h.plan && c.h.plan.first_dial_date > '2026-10-28' && c.h.plan.first_dial_date <= RTM.selfRules(APP.S.assignment).first_calls_by).hhid")
+        b.js(f"APP.sel = {json.dumps(hm_)}; APP.render(); true"); b.wait(f"APP.sel === {json.dumps(hm_)}")
+        b.click('[data-act="plan"]'); b.wait("!!document.querySelector('#planform')")
+        b.js("document.querySelector('#planform [name=when]').value = '2026-10-29T19:00'; document.querySelector('#planform [name=reason]').value = 'TOLD'; document.querySelector('#planform [name=note]').value = 'a neighbour says after work'; true")
+        crop("e30_move_call", ["document.querySelector('.drawer .next')", "document.querySelector('.drawer .callbox')"], hls=["document.querySelector('[data-act=\"saveplan\"]')"], inside=True)
+        b.click('[data-act="saveplan"]'); time.sleep(0.2)
+        b.click('[data-act="closehh"]'); time.sleep(0.1)
+        b.click('[data-act="tab"][data-t="calendar"]'); time.sleep(0.2)
+        b.js("document.querySelector('#offform [name=date]').value = '2026-10-30'; document.querySelector('#offform [name=part]').value = 'morning'; true")
+        b.click('[data-act="saveoff"]'); time.sleep(0.3)
+        if b.js("!!APP.modal"):
+            b.click('[data-act="modalok"]'); time.sleep(0.3)
+        crop("e31_time_off", ["document.querySelector('.offcard')", "document.querySelector('.month')"], hls=["document.querySelector('.cell.myoff')"], max_h=900)
+        b.click('[data-act="tab"][data-t="today"]'); time.sleep(0.2)
         # on a phone
         viewport(390, 844, dsf=2, mobile=True)
         b.js("window.scrollTo(0, 0); true"); time.sleep(0.2)
@@ -224,6 +239,12 @@ def main():
         crop("l05_replacements", ["__card('3 ·')"])
         setv('[data-lset="cal.window_start"]', "2026-10-26"); setv('[data-lset="cal.window_end"]', "2026-11-20")
         crop("l06_calendar", ["__card('4 ·')"])
+        # the contact protocol (3 November 2026): three calls a day, three hours apart, over five working days, at varied times of day
+        setv('[data-lset="cal.protocol.per_day"]', "3"); setv('[data-lset="cal.protocol.gap_hours"]', "3"); setv('[data-lset="cal.protocol.days"]', "5"); tick('[data-lset="cal.protocol.vary_times"]', True)
+        _h4 = "[...document.querySelectorAll('h4')].find(x => /Contact protocol/.test(x.innerText))"
+        crop("l06b_protocol", [_h4, f"(() => {{ let e = {_h4}; for (let i = 0; i < 4 && e.nextElementSibling; i++) e = e.nextElementSibling; return e; }})()"],
+             hls=["document.querySelector('[data-lset=\"cal.protocol.per_day\"]')"])
+        setv('[data-lset="cal.protocol.per_day"]', ""); setv('[data-lset="cal.protocol.gap_hours"]', "2"); setv('[data-lset="cal.protocol.days"]', ""); tick('[data-lset="cal.protocol.vary_times"]', False)
         team = b.js("LEAD.state().team.map(t => t.id)")
         tick(f'[data-lteam="{team.index("E03")}"][data-f="available"]', False)
         # the matching criterion of 31 October 2026: two PSUs of the sample speak Kazakh; E01 speaks it
@@ -305,11 +326,11 @@ def main():
         b.set_files("#lf-hh", [os.path.join(S, "leader", "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
         b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
         b.set_files("#lf-manifest", [os.path.join(S, "leader", "L2MN-DEMO_R05_manifest.json")]); b.wait("!!LEAD.state().manifest")
+        b.click('[data-lact="tab"][data-t="platform"]'); time.sleep(0.3)
+        crop("l32_platform_files", ["__card('1 · The form')", "__card('2 · Before the round')"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"choices\"]')"], max_h=900)
         b.set_files("#lf-platform", [os.path.join(S, "kobo", "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")])
         b.wait("LEAD.state().imports.length === 1"); time.sleep(0.5)
-        crop("l30_platform_import", ["__card('Add exports from the common folder')", "__card('^Files')"], hls=["document.querySelector('#lf-platform').parentElement"], max_h=900)
-        b.click('[data-lact="tab"][data-t="calllog"]'); time.sleep(0.3)
-        crop("l32_platform_files", ["__card(\"The round's files\")"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"choices\"]')"], max_h=600)
+        crop("l30_platform_import", ["__card('3 · Each day')"], hls=["document.querySelector('#lf-platform').parentElement"], max_h=900)
         # a form with unknown columns: the mapping card (the round's calls under other column names and result codes)
         import csv as _csv
         unk = os.path.join(WORK, "our_call_record.csv")
@@ -320,7 +341,6 @@ def main():
             w_ = _csv.writer(f_); w_.writerow(["op", "household", "t0", "t1", "res", "rid"])
             for r_ in rows_:
                 w_.writerow(["CATI-" + r_["operator"].lstrip("E"), r_["hhid"], r_["ts"], r_["end_ts"], own_[r_["status"]], r_["event_id"]])
-        b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
         b.set_files("#lf-platform", [unk]); b.wait("!!document.querySelector('#lmap')")
         b.js("""(() => { const sel = (k, v) => { const s = document.querySelector(`[data-lprof="${k}"]`); if (!s) return; s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); };

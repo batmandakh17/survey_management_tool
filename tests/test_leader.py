@@ -184,6 +184,22 @@ def main():
         A = {e: json.load(open(os.path.join(DL, f"{e}_assignment_R05.json"), encoding="utf-8")) for e in ("E01", "E02", "E07")}
         M = json.load(open(os.path.join(DL, "L2MN-DEMO_R05_manifest.json"), encoding="utf-8"))
         hl = list(csv.DictReader(open(os.path.join(S, "household_list.csv"), encoding="utf-8")))
+        ss = {e: a["calendar"].get("self_scheduling") for e, a in A.items()}
+        check("the files carry what enumerators may change themselves: by default moving a call and marking time off, first calls held to the plan's first-call period, whose last day is the last first-dial day",
+              all(v == {"reschedule": True, "availability": True, "push_first_calls": False, "first_calls_by": first_part[-1]} for v in ss.values()) and M["calendar"]["self_scheduling"] == ss["E07"], [ss, first_part[-1]])
+        tick('[data-lset="cal.self.push_first_calls"]', True)
+        flip = b.js("[LEAD.ui.ready === null, !!LEAD.state().plan, LEAD.state().events.slice(-1)[0].what]")
+        check("changing what enumerators may change sets the written files aside, keeps the assignment, and is logged", flip == [True, True, "self_scheduling_set"], flip)
+        tick('[data-lset="cal.self.push_first_calls"]', False)
+        check("the files carry the contact protocol; by default the earlier rule (two hours apart, no daily or day limit)",
+              all(a["calendar"].get("contact_protocol") == {"gap_hours": 2, "vary_times": False} for a in A.values()) and M["calendar"]["contact_protocol"] == {"gap_hours": 2, "vary_times": False}, [a["calendar"].get("contact_protocol") for a in A.values()])
+        setv('[data-lset="cal.protocol.per_day"]', "3"); setv('[data-lset="cal.protocol.days"]', "5"); tick('[data-lset="cal.protocol.vary_times"]', True)
+        ptx = b.js("document.querySelector('.panel').innerText")
+        proto_ev = b.js("LEAD.state().events.slice(-3).map(e => [e.what, e.setting, e.value])")
+        check("step 4 sets the contact protocol: 3 calls a day over 5 working days is 15 calls, set against the dial cap; each change is logged and sets the written files aside",
+              "3 a day over 5 working days is 15 calls" in ptx and b.js("LEAD.ui.ready === null && !!LEAD.state().plan") and [x[0] for x in proto_ev] == ["contact_protocol_set"] * 3
+              and b.js("JSON.stringify(LEAD.state().cal.protocol)") == json.dumps({"per_day": 3, "gap_hours": 2, "days": 5, "vary_times": True}, separators=(",", ":")), [proto_ev, b.js("JSON.stringify(LEAD.state().cal.protocol)")])
+        setv('[data-lset="cal.protocol.per_day"]', ""); setv('[data-lset="cal.protocol.days"]', ""); tick('[data-lset="cal.protocol.vary_times"]', False)
         phones_of = {r["hhid"]: {r[k] for k in ("phone_1", "phone_2", "phone_3") if r.get(k)} for r in hl}
         leak = []
         for e, a in A.items():
@@ -635,6 +651,29 @@ def main():
         txt = b.js("document.querySelector('.panel').innerText")
         check("the Progress tab shows each enumerator's pace and capacity for the working days left, and who is short or has spare days",
               "Move waiting households" in txt and "Completes per day" in txt and "7 working days left" in txt, txt[:200])
+        # E07's export with their own changes (3 November 2026): two calls moved (one a first call moved later), and time off: one day and an afternoon ahead, one day already past
+        selfx = b.js("""(() => { const st = LEAD.state(), f = st.imports.find(x => /E07_2026-11-06\\.json$/.test(x.name)), j = JSON.parse(f.text);
+            const S = { assignment: { program: j.program, round: j.round, enumerator_id: j.enumerator_id }, events: j.events, genesis: j.chain_genesis };
+            RTM.setNow('2026-11-06T17:00:00+08:00');
+            const open = [...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E07' && c.state === 'not_started').map(c => c.hhid);
+            RTM.append(S, 'plan', { hhid: open[0], at: '2026-11-09T18:00:00+08:00', reason: 'TOLD', was: '2026-11-02T18:00:00+08:00', first: 1 });
+            RTM.append(S, 'plan', { hhid: open[1], at: '2026-11-07T12:00:00+08:00', reason: 'WORKLOAD', was: '2026-11-07T17:00:00+08:00', first: 1 });
+            RTM.append(S, 'availability', { date: '2026-11-05', part: 'day' });
+            RTM.append(S, 'availability', { date: '2026-11-16', part: 'day' });
+            RTM.append(S, 'availability', { date: '2026-11-17', part: 'afternoon' });
+            RTM.setNow('2026-11-13T09:00:00+08:00');
+            j.events = S.events.map(RTM.exportEvent); j.event_count = j.events.length; j.last_hash = j.events[j.events.length - 1].hash;
+            f.orig = f.text; f.text = JSON.stringify(j); LEAD.refresh();
+            const g = LEAD.merged(), r = g.P.list.find(x => x.enumerator_id === 'E07'), pace = LCORE.pace(st.manifest, g.C, g.P, RTM.now()).rows;
+            return { row: [r.moved_by_them, r.first_later, r.days_off], left: Object.fromEntries(pace.map(x => [x.enumerator_id, x.days_left])),
+              cap: (x => [x.capacity, x.pace * 5.5])(pace.find(x => x.enumerator_id === 'E07')), chain: g.G.issues.filter(i => i.type === 'chain_broken').length }; })()""")
+        b.click('[data-lact="tab"][data-t="progress"]'); time.sleep(0.2)
+        ptxt = b.js("document.querySelector('.panel').innerText")
+        check("the leader reads each enumerator's own changes from their JSON export: calls they moved, first calls moved later, days off (a half day counts half), shown on the Progress tab",
+              selfx["row"] == [2, 1, 2.5] and selfx["chain"] == 0 and "Calls they moved" in ptxt and "First calls moved later" in ptxt and "Days off marked" in ptxt, [selfx, ptxt[:300]])
+        check("the pace counts only the days each enumerator works: E07's day and afternoon off ahead leave 5.5 of the 7 working days (the day off already past does not count); the others keep 7",
+              selfx["left"] == {"E01": 7, "E02": 7, "E07": 5.5} and abs(selfx["cap"][0] - selfx["cap"][1]) < 1e-9 and "1.5 days off ahead" in ptxt, [selfx, ptxt[:400]])
+        b.js("(() => { const f = LEAD.state().imports.find(x => x.orig); f.text = f.orig; delete f.orig; LEAD.refresh(); return true; })()")
         man = json.load(open(MANIFEST, encoding="utf-8"))
         hold = {h["hhid"]: h["enumerator_id"] for h in man["households"]}
         py_pace = ref_stats.pace_by_enumerator(exp_calls, exp_acts, man, days_left=7)
@@ -819,11 +858,9 @@ def main():
         check("a household moved back to its first enumerator: their dial while the other held it is still flagged as a double call; dials before the move and after the return are theirs",
               [t for t, _, _ in g11["iss"]] == ["after_move"] and g11["iss"][0][1] == "E07" and "1 dial" in g11["iss"][0][2] and "moved to E02 on 2026-11-13 09:00" in g11["iss"][0][2] and g11["holder"] == "E07" and g11["kept"] == [True, True, True], g11)
 
-        # ================= E. exports of KoBoToolbox, Survey Solutions and a calling service (proposal K) =================
-        # the same round-5 calls as the enumerators' exports, in the three platforms' layouts (samples/kobo, samples/suso, samples/calls)
+        # ================= E. exports of KoBoToolbox (proposal K) =================
+        # the same round-5 calls as the enumerators' exports, in the form's layouts (samples/kobo)
         KOBO = os.path.join(ROOT, "samples", "kobo", "rtm_call_record_2026-11-06.csv")
-        SUSO_ZIP = os.path.join(ROOT, "samples", "suso", "rtm_call_record_export.zip")
-        SVC = os.path.join(ROOT, "samples", "calls", "service_calls_2026-11-06.csv")
         exp_dials = {}
         for r in csv.DictReader(io.StringIO(exp_calls)):
             exp_dials[r["operator"]] = exp_dials.get(r["operator"], 0) + 1
@@ -842,7 +879,11 @@ def main():
         b.click('[data-lact="tab"][data-t="import"]')
         b.set_files("#lf-manifest", [MANIFEST]); b.wait("!!LEAD.state().manifest")
         txt = b.js("document.querySelector('.panel').innerText")
-        check("the Import tab offers a second way in: the KoBoToolbox form's export (and a Survey Solutions export or a calling service's log)", "Or from KoBoToolbox" in txt and "Survey Solutions export" in txt and b.js("!!document.querySelector('#lf-platform')"))
+        check("the Import tab takes the enumerators' own exports and points a KoBo team to the KoBoToolbox tab", "KoBoToolbox" in txt and not b.js("!!document.querySelector('#lf-platform')"), txt[:300])
+        b.click('[data-lact="tab"][data-t="platform"]'); time.sleep(0.3)
+        txt = b.js("document.querySelector('.panel').innerText")
+        check("the KoBoToolbox tab walks the round's cycle: the form and the codes, the list out, the export in each day, after moves, the records to look at",
+              all(h in txt for h in ("1 · The form", "2 · Before the round", "3 · Each day", "4 · After moves", "5 · Records to look at")) and b.js("!!document.querySelector('#lf-platform') && !!document.querySelector('[data-lpcode=\"E07\"]')"), txt[:300])
         b.set_files("#lf-platform", [KOBO]); b.wait("LEAD.state().imports.length === 1")
         k = merged_now()
         check("a KoBoToolbox export (one submission per call, semicolon CSV) is recognised, split by enumerator and merged as unverified CSV exports",
@@ -859,26 +900,6 @@ def main():
         willing = [r for r in kobo_rows if r["willing"] == "later"]
         check("the willingness to take part travels into the merged log's note",
               willing and b.js(f"LEAD.merged().G.dials.filter(d => (d.note || '').includes('willing: later')).length") == len([r for r in willing if r["result"] != "NONE"]), len(willing))
-        # the calling service's log fills the blanks and reports what nobody recorded
-        b.set_files("#lf-platform", [SVC]); b.wait("LEAD.state().imports.length === 2")
-        s = merged_now()
-        svc_rows = list(csv.DictReader(open(SVC, encoding="utf-8")))
-        check("the calling service's log (Twilio's call fields) is matched to the recorded calls by number and time; calls to numbers outside the list are counted apart",
-              s["svc"] and s["svc"]["calls"] == len(svc_rows) and s["svc"]["unknown"] == 2 and s["svc"]["matched"] + s["svc"]["unlogged"] + s["svc"]["unknown"] == len(svc_rows), s["svc"])
-        check("service calls that nobody recorded are listed for the leader; the matched ones fill the missing call ends",
-              3 <= s["svc"]["unlogged"] <= 6 and sum(1 for i in s["issues"] if i[0] == "unlogged_call") == s["svc"]["unlogged"] and s["svc"]["filled"] >= 1 and s["nodur"] == blank_ends - s["svc"]["filled"], s["svc"])
-        check("filled call ends change no complete (completes keep their own length)", s["completes"] == py_cmp)
-        b.shot(os.path.join(SCREENS, "leader_11_platform.png"), full=True)
-        # the Survey Solutions export: the zip is opened in the browser, the roster joined with its main file
-        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
-        b.set_files("#lf-platform", [SUSO_ZIP]); b.wait("LEAD.state().imports.length === 2")
-        u = merged_now()
-        check("a Survey Solutions export zip is opened in the browser: its main file and the calls roster are joined by interview__id and split by enumerator",
-              any("joined with" in f[4] and "split into 3 exports" in f[4] for f in u["files"]) and sorted(f[2] for f in u["files"] if f[1] == "Survey Solutions records") == ["E01", "E02", "E07"], u["files"])
-        check("a roster without its main file is reported, not merged",
-              b.js(f"""(() => {{ const st = LEAD.state(), calls = st.imports.find(f => f.name.endsWith('calls.tab'));
-                  const G = LCORE.merge(st.manifest, [LCORE.readImport(calls.name, calls.text)], new Map(), RTM.now());
-                  return G.files.length === 1 && G.files[0].use.startsWith('not merged') && G.dials.length === 0; }})()"""))
         # ---- the layout of an L2 program's real form (proposal K.2): the L2PHL form's export, one submission per call attempt ----
         PHL = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
@@ -888,6 +909,31 @@ def main():
               any(f[1].startswith("L2PHL") for f in q["files"]) and sorted(f[2] for f in q["files"] if f[1] == "platform records") == ["E01", "E02", "E07"], q["files"])
         check("it gives the same dials and completes per enumerator as the enumerators' own exports (X15 code 1 is a complete)", q["dials"] == exp_dials and q["completes"] == py_cmp, [q["dials"], exp_dials, q["completes"], py_cmp])
         check("no merge question is open for it", not any(i[1] == "open" and i[4] == "action" for i in q["issues"]), [i for i in q["issues"] if i[1] == "open"])
+        # the program's own rule (its processing keeps x15 == 1 & z9 == 1): a complete needs consent; code 2, a break-off with no more callback, closes the case
+        phl_rows = list(csv.DictReader(open(PHL, encoding="utf-8"), delimiter=";"))
+        import datetime as _dt
+        _mins = lambda r: (_dt.datetime.fromisoformat(r["end"]) - _dt.datetime.fromisoformat(r["start"])).total_seconds() / 60 if r["start"] and r["end"] else 0
+        cmp_rows = [r for r in phl_rows if r["X15"] == "1" and _mins(r) >= 4]
+        by_hh = {}
+        for r in cmp_rows: by_hh.setdefault(r["hhid"], []).append(r)
+        n_cmp = {}
+        for r in phl_rows:
+            if r["X15"] == "1": n_cmp[r["hhid"]] = n_cmp.get(r["hhid"], 0) + 1
+        solo = [rs[0] for h, rs in sorted(by_hh.items()) if len(rs) == 1 and n_cmp[h] == 1][:2]
+        alt = []
+        for r in phl_rows:
+            r2 = dict(r)
+            if r["_uuid"] == solo[0]["_uuid"]: r2["Z9"] = "2"
+            if r["_uuid"] == solo[1]["_uuid"]: r2["X15"] = "2"
+            alt.append(r2)
+        buf_ = io.StringIO(); w_ = csv.DictWriter(buf_, fieldnames=list(phl_rows[0].keys()), delimiter=";", lineterminator="\n"); w_.writeheader(); w_.writerows(alt)
+        cz = b.js(f"""(() => {{ const st = LEAD.state(), rec = LCORE.readImport('alt/' + {json.dumps(os.path.basename(PHL))}, {json.dumps(buf_.getvalue())}, st.profiles);
+            const G = LCORE.merge(st.manifest, [rec], new Map(), RTM.now()), C = LCORE.cases(st.manifest, G);
+            const d = id => G.dials.find(x => x.event_id === id) || {{}};
+            return {{ n: C.size, done: [...C.values()].filter(c => c.state === 'complete').length, a: [d({json.dumps(solo[0]["_uuid"])}).status, d({json.dumps(solo[0]["_uuid"])}).note || ''],
+              b: [d({json.dumps(solo[1]["_uuid"])}).status, d({json.dumps(solo[1]["_uuid"])}).note || ''] }}; }})()""")
+        check("in the L2PHL layout a complete needs consent (Z9 = 1) and code 2 (partially complete, no more callback) closes the case as a firm refusal, as the program's own processing and protocol do; both keep the form's meaning in the note",
+              cz["done"] == sum(q["completes"].values()) - 2 and cz["a"][0] == "OTHER" and "without consent" in cz["a"][1] and cz["b"][0] == "REFUSAL_HARD" and "no more callback" in cz["b"][1], [cz, q["completes"]])
         # a form with unknown columns is mapped once, in the Import tab: the same calls under other names and codes, the interviewer code
         # written CATI-07, local times without an offset, and the number dialed instead of the slot
         hl_rows = {r["hhid"]: r for r in csv.DictReader(open(os.path.join(S, "household_list.csv"), encoding="utf-8"))}
@@ -916,24 +962,37 @@ def main():
         check("the number dialed becomes the household's slot, from the household list, and is not kept; the round's time zone supplies the missing offsets",
               slots[1] == n_num and n_num > 0 and slots[2] == slots[0], [slots, n_num])
         b.shot(os.path.join(SCREENS, "leader_12_mapping.png"), full=True)
-        check("the Survey Solutions export gives the same dials and completes per enumerator as the KoBo one", u["dials"] == exp_dials and u["completes"] == py_cmp, [u["dials"], u["completes"]])
-        # the platform files the leader hands to the platforms, from the manifest
-        b.click('[data-lact="tab"][data-t="calllog"]')
+        # the records to look at in the platform (K.8): every dial behind a merge question, with the platform's record ID
+        rv = b.js(f"""(() => {{ const st = LEAD.state(), orig = st.imports.find(f => f.name.endsWith('unknown_log.csv'));
+            const rows = orig.text.split('\\n'), r1 = rows.slice(1).find(r => {{ const f = r.split(','); return f[4] === 'C' && Date.parse(f[3]) - Date.parse(f[2]) >= 180000; }});
+            const extra = r1.split(',').map((v, i) => i === 2 ? '2026-11-06 19:00:00' : i === 3 ? '2026-11-06 19:20:00' : i === 5 ? 'dup-record-0001' : v).join(',');
+            const recs = [LCORE.readImport('dup/unknown_log.csv', orig.text + extra + '\\n', st.profiles)];
+            const G = LCORE.merge(st.manifest, recs, new Map(), RTM.now());
+            const R_ = LCORE.reviewRows(G); return {{ hh: r1.split(',')[1], n: R_.length, rows: R_.filter(r => r.issue === 'two_completes').map(r => [r.hhid, r.record_id, r.result, r.status]) }}; }})()""")
+        check("the review list names every dial behind a merge question with the form's own record ID (here a second complete added to the mapped file: both completes listed, open)",
+              rv["n"] >= 2 and len(rv["rows"]) == 2 and all(r[0] == rv["hh"] and r[2] == "COMPLETE" and r[3] == "open" for r in rv["rows"]) and any(r[1] == "dup-record-0001" for r in rv["rows"]), rv)
+        # the files the leader hands to the form, from the manifest: on the KoBoToolbox tab, step 2
+        b.click('[data-lact="tab"][data-t="platform"]'); time.sleep(0.2)
         before = snapshot()
-        b.click('[data-lact="export"][data-what="kobo"]'); b.click('[data-lact="export"][data-what="suso"]')
+        b.click('[data-lact="export"][data-what="kobo"]')
         b.click('[data-lact="export"][data-what="choices"]')
-        fk = wait_new("households*.csv", before); fs = wait_new("assignments*.tab", before); fc = wait_new("choices_households*.csv", before)
+        fk = wait_new("households*.csv", before); fc = wait_new("choices_households*.csv", before)
         hk = list(csv.DictReader(open(fk, encoding="utf-8")))
         sample_hk = {r["hhid"]: r for r in csv.DictReader(open(os.path.join(ROOT, "samples", "kobo", "households.csv"), encoding="utf-8"))}
         same = all(r["hhid"] in sample_hk and all(r[c] == sample_hk[r["hhid"]][c] for c in ("enumerator_id", "phone_1", "phone_2", "phone_3", "kind", "replaces", "rank", "program", "round")) for r in hk)
         check("households.csv for the KoBo form: one row per household and reserve, with the enumerator, numbers and replacement links of the manifest (the sample file, apart from the plan)",
               len(hk) == len(sample_hk) and same and "name" in hk[0] and "label" in hk[0], [len(hk), len(sample_hk)])
-        ta = [l.split("\t") for l in open(fs, encoding="utf-8").read().rstrip("\n").split("\n")]
-        check("assignments.tab for Survey Solutions: the manifest's households with _responsible and _quantity",
-              ta[0][-2:] == ["_responsible", "_quantity"] and len(ta) - 1 == len(man["households"]) and all(r[-1] == "1" and r[-2] in ("E01", "E02", "E07") for r in ta[1:]), [ta[0], len(ta)])
         ch = list(csv.DictReader(open(fc, encoding="utf-8")))
         check("choices_households.csv (the L2PHL form's SN list): one row per household and reserve, the enumerator's platform code in filter_int_id",
               len(ch) == len(sample_hk) and all(r["list_name"] == "SN" and r["filter_int_id"] == "CATI" + sample_hk[r["name"]]["enumerator_id"][1:] for r in ch), [len(ch), ch[:1]])
+        # a code typed on the Platform tab overrides the manifest's, for reading and for writing
+        b.js("""(() => { const el = document.querySelector('[data-lpcode="E07"]'); el.value = 'INT-07'; el.dispatchEvent(new Event('change', {bubbles: true})); return true; })()""")
+        before = snapshot(); b.click('[data-lact="export"][data-what="choices"]'); fc2 = wait_new("choices_households*.csv", before)
+        ch2 = list(csv.DictReader(open(fc2, encoding="utf-8")))
+        check("a code typed on the KoBoToolbox tab overrides the manifest's: the list carries it, and the form's records under it are read as that enumerator",
+              all(r["filter_int_id"] == "INT-07" for r in ch2 if r["enumerator_id"] == "E07") and b.js("LCORE.enumMapper(LEAD.state().manifest, LEAD.state().platform.codes)('int07')") == "E07"
+              and b.js("LCORE.enumMapper(LEAD.state().manifest, LEAD.state().platform.codes)('CATI07')") == "E07", [r for r in ch2 if r["enumerator_id"] == "E07"][:1])
+        b.js("""(() => { const el = document.querySelector('[data-lpcode="E07"]'); el.value = ''; el.dispatchEvent(new Event('change', {bubbles: true})); return true; })()""")
 
         # phone width
         b.ws.call("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=2, mobile=True)

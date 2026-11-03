@@ -1,6 +1,6 @@
 {
  "schema": "rtm-roundmanifest-1.0",
- "tool_version": "0.3.3",
+ "tool_version": "0.3.7",
  "program": "L2MN-DEMO",
  "country": "MN",
  "round": 3,
@@ -39,7 +39,17 @@
   "time_zone": "Asia/Ulaanbaatar",
   "holidays": [],
   "dial_cap": 8,
-  "day_list": 6
+  "day_list": 6,
+  "self_scheduling": {
+   "reschedule": true,
+   "availability": true,
+   "push_first_calls": false,
+   "first_calls_by": "2026-09-11"
+  },
+  "contact_protocol": {
+   "gap_hours": 2,
+   "vary_times": false
+  }
  },
  "away": [
   "E02"
@@ -52,7 +62,7 @@
    "households": 33,
    "platform_id": "CATI01",
    "file": "E01_assignment_R03.json",
-   "fingerprint": "550449f21b92b6a7cb649fcf810d00f92d8d5cb4a1dec8525566af7a5dd5ae6b"
+   "fingerprint": "5a828ea040f6d9f585e5d1ed8bbcec0619a50868de162cf03e85d100efed7c04"
   },
   {
    "enumerator_id": "E03",
@@ -61,7 +71,7 @@
    "households": 35,
    "platform_id": "CATI03",
    "file": "E03_assignment_R03.json",
-   "fingerprint": "a9370a5f561b5602bdc800e3c1255b9c25945ad325c11d3c6dfcff0b3d48b137"
+   "fingerprint": "51abf33bd74f4ad93dae8b4152a03886766c8981de301646e8427916835460d2"
   },
   {
    "enumerator_id": "E07",
@@ -70,7 +80,7 @@
    "households": 37,
    "platform_id": "CATI07",
    "file": "E07_assignment_R03.json",
-   "fingerprint": "0cb27526d9309f4574f0e93b17144eff8179c5e7c29d7dbf2bc32d208ab4d4e0"
+   "fingerprint": "e738cf30390d818f3eb0d6bdb808a33cb1dbfff1c5c38b4f333b26c360f49401"
   }
  ],
  "households": [
@@ -958,5 +968,5 @@
    "stratum": "2"
   }
  ],
- "fingerprint": "38864840877d71929f9cbf8150541a80a31f2b4150d443e00f7a673336e32ad0"
+ "fingerprint": "96d2375fdca96f72f82ed60c7fe083e83dc8372eb99812a7eb14e6b0592153ed"
 }

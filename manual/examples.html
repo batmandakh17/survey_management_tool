@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RTM interview tool: worked examples</title>
+<style>
+  @page { size: A4; margin: 18mm 17mm 20mm 17mm; }
+  :root { --ink: #1d232b; --muted: #5b6573; --accent: #1c5cab; --soft: #eef3fa; --line: #d9dee5; --warn: #8a5a00; --warn-bg: #fff4d6; --hl: #e8590c; }
+  * { box-sizing: border-box; }
+  html { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.45; }
+  body { margin: 0; }
+  h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
+  h2.part { font-size: 22pt; color: var(--accent); margin: 0 0 6mm; break-before: page; }
+  h2.part small { display: block; font-size: 11pt; color: var(--muted); font-weight: 500; margin-top: 2mm; }
+  h3 { font-size: 13.5pt; margin: 7mm 0 2mm; padding-top: 2mm; border-top: 1px solid var(--line); break-after: avoid; }
+  h3 .num { color: var(--accent); margin-right: 2mm; }
+  h4 { font-size: 11pt; margin: 4mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.4mm; }
+  ol, ul { margin: 0 0 2.4mm; padding-left: 6mm; }
+  li { margin-bottom: 1mm; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 9pt; background: #f1f3f6; padding: 0 1mm; border-radius: 1mm; }
+  b.ui { font-weight: 600; color: #11365f; }
+  .lead { font-size: 11.5pt; color: var(--muted); }
+  figure { margin: 3mm 0 4mm; break-inside: avoid; text-align: center; }
+  figure img { border: 1px solid var(--line); border-radius: 2mm; max-width: 100%; }
+  figure img.w100 { width: 100%; } figure img.w80 { width: 80%; } figure img.w65 { width: 65%; } figure img.w55 { width: 55%; } figure img.w45 { width: 45%; }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1.5mm; text-align: left; }
+  figcaption b { color: var(--ink); }
+  .pair { display: flex; gap: 4mm; align-items: flex-start; justify-content: center; }
+  .pair figure { flex: 1; }
+  .note { background: var(--soft); border-left: 3px solid var(--accent); padding: 2.5mm 3.5mm; margin: 3mm 0; border-radius: 1mm; break-inside: avoid; }
+  .task { break-inside: avoid-page; }
+  .task p.sit { margin-top: 1mm; }
+  .task p.rec { color: var(--muted); font-size: 9.8pt; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 4mm; font-size: 9.5pt; }
+  th, td { border-bottom: 1px solid var(--line); padding: 1.4mm 2mm; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  tr { break-inside: avoid; }
+  .cover { height: 245mm; display: flex; flex-direction: column; justify-content: space-between; }
+  .cover h1 { font-size: 30pt; color: var(--accent); margin-top: 18mm; }
+  .cover .sub { font-size: 14pt; color: var(--muted); margin-top: 4mm; }
+  .cover .meta { font-size: 10pt; color: var(--muted); }
+  .cover img { width: 100%; border: 1px solid var(--line); border-radius: 2mm; }
+  .toc { columns: 2; column-gap: 8mm; font-size: 9.6pt; }
+  .toc div { break-inside: avoid; margin-bottom: 0.8mm; }
+  .toc .p { font-weight: 700; margin-top: 2mm; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- ======================================================== cover -->
+<section class="cover">
+  <div>
+    <h1>RTM interview tool: worked examples</h1>
+    <div class="sub">Fifty-two situations from a phone panel round, and what to do in the tool for each<br>For enumerators, team leaders, and teams that interview in KoBoToolbox</div>
+  </div>
+  <img src="img/l28_moves.png" alt="Moving waiting households during the round">
+  <div class="meta">Tool version 0.3.7 · Examples of 3 November 2026 · Companion to the user manual, whose part and section numbers are given in brackets<br>
+    Real-Time Monitoring (RTM) Handbook task team. Every picture shows the synthetic practice program “L2MN-DEMO”,
+    round 5, 26 October to 20 November 2026: no real household, name or phone number appears anywhere in it.</div>
+</section>
+
+<!-- ======================================================== contents -->
+<h2 class="part">Contents<small>Each example gives the situation, the steps in the tool, a picture of the screen, and what the tool records.</small></h2>
+<div class="toc">
+  <div class="p">Part 1 · The enumerator, on the phone</div>
+  <div>E1 Who do I call first this morning?</div><div>E2 Why is this household on my list?</div><div>E3 Nobody answers</div>
+  <div>E4 “Call me back this evening”</div><div>E5 “Call me back on Saturday evening”</div><div>E6 The number is dead</div>
+  <div>E7 No number works</div><div>E8 The household refuses firmly</div><div>E9 The respondent gives a new number</div>
+  <div>E10 I logged the wrong result</div><div>E11 I called earlier and forgot to log it</div><div>E12 The interview took two minutes</div>
+  <div>E13 The household should be left alone this round</div><div>E14 The leader sent me an updated file</div><div>E15 I received a household someone else started</div>
+  <div>E16 End of the day: save and export</div><div>E17 How am I doing compared with last round?</div><div>E18 Is tomorrow a working day?</div>
+  <div>E19 Working from a phone</div><div>E20 My file asks for a passphrase</div><div>E21 A neighbour says when to call</div><div>E22 I am off on Friday morning</div>
+  <div class="p">Part 2 · The team leader</div>
+  <div>L1 Start the round</div><div>L2 Set the calendar, with a holiday in the window</div><div>L3 An enumerator is away this round</div>
+  <div>L4 Two areas speak another language</div><div>L5 Choose the rule and the rotation share</div><div>L6 Check the loads before writing anything</div>
+  <div>L7 Keep one household with a particular enumerator</div><div>L8 Set the day list</div><div>L9 Write the files, protected</div>
+  <div>L10 Stop for today, continue tomorrow</div><div>L11 Import the exports and settle the questions</div><div>L12 An export has not arrived</div>
+  <div>L13 Two enumerators completed the same household</div><div>L14 A respondent's new number reaches the list</div><div>L15 How far are we?</div>
+  <div>L16 Someone will not finish; someone has spare days</div><div>L17 An enumerator finished early</div><div>L18 An enumerator fell ill</div>
+  <div>L19 A new enumerator starts on Monday</div><div>L20 Give out the revised files</div><div>L21 A call made after the move</div>
+  <div>L22 End of the round: the files for next round</div><div>L23 Who is likely to drop out?</div><div>L24 How did earlier rounds go?</div>
+  <div>L25 Let enumerators adjust their own schedule</div><div>L26 Three calls a day over five days</div>
+  <div class="p">Part 3 · With KoBoToolbox</div>
+  <div>K1 The team interviews in the Philippines-style form</div><div>K2 Each day: the form's export</div><div>K3 Our form has other column names</div>
+  <div>K4 After moves, the form must follow</div><div>K5 A submission to look at in KoBoToolbox</div>
+</div>
+<div class="note"><b>How to read an example.</b> Each one is written for the person at the keyboard. <b class="ui">Words in this style</b> are
+buttons or fields on the screen. The round in every picture is the practice round of the user manual: enumerator E07 with 38 households,
+leader L01 with three enumerators, and the files of <code>samples/</code>. Nothing here needs a server or an internet connection.</div>
+
+<!-- ======================================================== Part 1 -->
+<h2 class="part">Part 1 · The enumerator, on the phone<small>Twenty-two situations in a calling day, from the first call to the export</small></h2>
+
+<section class="task">
+<h3><span class="num">E1</span>Who do I call first this morning?</h3>
+<p class="sit"><b>Situation.</b> It is 10 a.m. on a working day. You have 38 households this round and want to start without thinking about the order.</p>
+<ol><li>Open the tool and choose <b class="ui">Open my assignment file</b> (the first day) or <b class="ui">Continue a saved session</b> (every later day).</li>
+<li>Stay on the <b class="ui">Today</b> tab. The left column, <b>Due now</b>, is the order to call: callbacks booked for this hour first, then the households planned for today at their target hour.</li>
+<li>When the column empties, the next columns fill it: <b>Later today</b> and households pulled forward from later days, so that unanswered calls never leave you idle.</li></ol>
+<figure><img class="w100" src="img/e03_today.png"><figcaption><b>Figure E1.</b> The Today tab after opening the assignment: the summary, the tabs and the day's columns (manual A3).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Nothing yet: looking never changes the log.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E2</span>Why is this household on my list?</h3>
+<p class="sit"><b>Situation.</b> A household you have never called appears in your list, planned for Thursday at 20:00.</p>
+<ol><li>Click the household's card. The panel opens with its contact and the plan.</li>
+<li>Open <b class="ui">Why is this household with me?</b> It gives the reason of the assignment (kept from last round, rotated, matched by language, moved from an enumerator who is away), the last interview and who made it, and why the first dial is planned at that hour.</li></ol>
+<figure><img class="w100" src="img/e07_why.png"><figcaption><b>Figure E2.</b> The reasons, opened (manual A7).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Nothing. The reasons were written into your assignment file by the leader's rule.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E3</span>Nobody answers</h3>
+<p class="sit"><b>Situation.</b> The phone rings and nobody picks up.</p>
+<ol><li>In the household's panel, press <b class="ui">Start call</b> beside the number, and <b class="ui">End call</b> when you give up.</li>
+<li>Choose <b class="ui">No answer</b> and save. No other field is needed.</li>
+<li>Close the panel: the household has left <b>Due now</b> and sits in <b>Later today</b>, to be tried again after the other calls.</li></ol>
+<figure><img class="w100" src="img/x02_no_answer.png"><figcaption><b>Figure E3a.</b> The household's panel after a no-answer: the call is in “Calls this round”.</figcaption></figure>
+<figure><img class="w100" src="img/x02b_no_answer_queue.png"><figcaption><b>Figure E3b.</b> Back on Today, the household (outlined) waits in “Later today”.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> One dial with its start, end, the number used and the result, counted toward the household's dial cap.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E4</span>“Call me back this evening”</h3>
+<p class="sit"><b>Situation.</b> The respondent answers but is at work and asks you to call at half past six.</p>
+<ol><li>End the call, choose <b class="ui">Appointment booked</b> and enter the time in the callback field; a missing time is outlined and named before you can save.</li>
+<li>Save. The household moves to <b>Later today</b> under 18:30, and at that hour it is first in <b>Due now</b>.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/e11_missing_time.png"><figcaption><b>Figure E4a.</b> The callback time is required for an appointment (manual A11).</figcaption></figure>
+<figure><img class="w100" src="img/e12_callback.png"><figcaption><b>Figure E4b.</b> The booked callback at 18:30 (manual A12).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> The dial with the result “appointment” and the agreed time. If the household is later moved to another enumerator, the time goes with it (L20).</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E5</span>“Call me back on Saturday evening”</h3>
+<p class="sit"><b>Situation.</b> The respondent is travelling and asks for Saturday at six.</p>
+<ol><li>As in E4, with the Saturday date and time.</li>
+<li>Open the <b class="ui">Calendar</b> tab: Saturday shows the callback. On Saturday the household appears in <b>Due now</b> at 18:00, before anything planned.</li></ol>
+<figure><img class="w100" src="img/x05_callback_saturday.png"><figcaption><b>Figure E5.</b> The calendar with a callback booked for Saturday 31 October. The 10 November holiday is hatched.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The same as E4. A callback outside the round window is refused when you save it.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E6</span>The number is dead</h3>
+<p class="sit"><b>Situation.</b> The first number gives “not in service”. The household has a second number.</p>
+<ol><li>End the call and choose <b class="ui">Number not in service</b>. The first number is marked, and the second is now the one to try.</li>
+<li>Press <b class="ui">Start call</b> beside the second number.</li></ol>
+<figure><img class="w100" src="img/x03_dead_number.png"><figcaption><b>Figure E6.</b> After a dead number: the first number carries its last result, the next one is ready.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The dial on number 1 with the result; the leader's merge later shows which numbers of a household are no longer working.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E7</span>No number works</h3>
+<p class="sit"><b>Situation.</b> Every number of the household is dead or wrong.</p>
+<ol><li>Log each number's result as in E6.</li>
+<li>When no working number is left, the <b>Replacements</b> section offers <b class="ui">Activate the next replacement</b>, if the program allows replacements after “no working number” and the household has one.</li>
+<li>Confirm. The replacement household appears in your list with the reason; the original stays in the list, read-only, as “replaced”.</li></ol>
+<figure><img class="w100" src="img/x04_all_dead.png"><figcaption><b>Figure E7.</b> Every number dead: the replacement can be activated.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The dials, and an action “activate replacement” with the reason “no working number”, which the leader's merge reads to count the household as replaced.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E8</span>The household refuses firmly</h3>
+<p class="sit"><b>Situation.</b> The respondent says never to call again.</p>
+<ol><li>End the call and choose <b class="ui">Refusal, firm</b>. A soft refusal (“not now”) is a different result and leaves the household open.</li>
+<li>The household is closed for the round. If the program allows a replacement after a hard refusal, <b class="ui">Activate the next replacement</b> appears; confirm it with the reason.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/e19_replacement.png"><figcaption><b>Figure E8a.</b> After a hard refusal (manual A19).</figcaption></figure>
+<figure><img class="w100" src="img/e20_replacement_confirm.png"><figcaption><b>Figure E8b.</b> Confirming the replacement (manual A20).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> The dial with the hard refusal; the household is never proposed for a move to another enumerator, and next round the leader's rule can mark it hard to reach.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E9</span>The respondent gives a new number</h3>
+<p class="sit"><b>Situation.</b> The respondent answers on the second number and says the first one is gone; here is the new one.</p>
+<ol><li>In the panel's <b>Actions</b>, press <b class="ui">Add or correct a number</b>, enter the number and which slot it replaces, and save.</li>
+<li>From now on your list calls the new number. The change travels to the leader in a separate contacts file at export (E16), never through the common folder.</li></ol>
+<figure><img class="w100" src="img/e18_number.png"><figcaption><b>Figure E9.</b> Adding or correcting a phone number (manual A18).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> A contact update, with the number's digest in the log and the number itself only in the contacts file, which the leader moves into the household list for the next round (L14).</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E10</span>I logged the wrong result</h3>
+<p class="sit"><b>Situation.</b> You saved “no answer” but the respondent had in fact booked a callback.</p>
+<ol><li>In <b>Calls this round</b>, press <b class="ui">Correct or void</b> on the call.</li>
+<li>Change the result and the time, and save; or tick the box to void the call entirely, with a note.</li></ol>
+<figure><img class="w100" src="img/e15_correct.png"><figcaption><b>Figure E10.</b> Correcting a logged call; the tick box voids it instead (manual A15).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> A correction event pointing at the original, which stays in the log: the leader sees both and the counts use the corrected one.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E11</span>I called earlier and forgot to log it</h3>
+<p class="sit"><b>Situation.</b> You called a household an hour ago from the office phone while the tool was closed.</p>
+<ol><li>Open the household and press <b class="ui">Log a call made earlier</b>.</li>
+<li>Enter the start and end times and the result, and save.</li></ol>
+<figure><img class="w100" src="img/e14_logged_later.png"><figcaption><b>Figure E11.</b> Logging a call made earlier (manual A14).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The dial with the times you gave, and the time you logged it. The leader's merge flags a call logged long before it started.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E12</span>The interview took two minutes</h3>
+<p class="sit"><b>Situation.</b> You saved a complete, but the call lasted two minutes.</p>
+<ol><li>The panel warns: a complete under three minutes does not count for the round (Box 3.0).</li>
+<li>If the time is wrong, correct it (E10). If the interview really was that short, call again and complete it.</li></ol>
+<figure><img class="w100" src="img/e13_short_complete.png"><figcaption><b>Figure E12.</b> A complete that lasted two minutes (manual A13).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The dial as saved. The leader's progress shows the household as “complete under 3 min”, not as complete.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E13</span>The household should be left alone this round</h3>
+<p class="sit"><b>Situation.</b> A family member says the respondent is in hospital for the rest of the month. It is not a refusal.</p>
+<ol><li>In <b>Actions</b>, press <b class="ui">Release</b> and give the reason.</li>
+<li>The household leaves your day's lists for this round and stays in the panel for next round. The release can be undone.</li>
+<li>If the household should leave the panel for good, use <b class="ui">Request removal</b> instead: the leader decides.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/e16_actions.png"><figcaption><b>Figure E13a.</b> A household's actions (manual A16).</figcaption></figure>
+<figure><img class="w100" src="img/e17_release.png"><figcaption><b>Figure E13b.</b> Releasing a household for the round (manual A17).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> An action with its reason; the leader's progress counts the household as released, not as a miss.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E14</span>The leader sent me an updated file</h3>
+<p class="sit"><b>Situation.</b> Part-way through the round the leader moved some of your households to a colleague, and the leader's folder has a new assignment file for you.</p>
+<ol><li>With your session open, choose <b class="ui">Load updated assignment</b> and pick the new file. Your log is kept.</li>
+<li>The summary counts the households no longer assigned to you and those that arrived. A household that left stays visible, read-only, with a notice: do not call it again.</li>
+<li>An older file than the one you have is refused.</li></ol>
+<figure><img class="w100" src="img/x06_update_loaded.png"><figcaption><b>Figure E14a.</b> After loading the updated file: the summary counts two households no longer assigned.</figcaption></figure>
+<figure><img class="w100" src="img/x07_moved_away.png"><figcaption><b>Figure E14b.</b> A household that left: read-only, with the notice; its calls stay in the log.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> An “assignment updated” event with the file's revision. Any dial you make on a household that left is flagged in the leader's merge as a double call.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E15</span>I received a household someone else started</h3>
+<p class="sit"><b>Situation.</b> One of the households that arrived with the updated file was already called twice by its previous enumerator, who booked a callback.</p>
+<ol><li>Open the household. The panel shows who had it, how many dials they made, the last result and the booked callback.</li>
+<li>The callback is due at its time, as if you had booked it; the earlier dials count toward the cap.</li></ol>
+<figure><img class="w100" src="img/x08_received.png"><figcaption><b>Figure E15.</b> A household received from E07: the handover facts.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Your own dials from now on. The previous dials stay in the previous enumerator's log, and the leader's merge joins the two.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E16</span>End of the day: save and export</h3>
+<p class="sit"><b>Situation.</b> It is 7 p.m. The leader wants everyone's calls in the common folder.</p>
+<ol><li>Press <b class="ui">Save session</b>: the session file stays in your own folder and holds the contacts.</li>
+<li>Press <b class="ui">Export log</b>: the JSON and the CSV go to the common folder. A contacts file appears only if you changed a number (E9), and goes to the leader directly.</li>
+<li><b class="ui">Close session</b>. If anything is unsaved, the tool says so first.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/e25_saved.png"><figcaption><b>Figure E16a.</b> The line under the buttons after saving (manual A25).</figcaption></figure>
+<figure><img class="w100" src="img/e26_export.png"><figcaption><b>Figure E16b.</b> The export window (manual A27).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> The export time in the log. Every export is the whole round so far, so the leader can use the newest one alone.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E17</span>How am I doing compared with last round?</h3>
+<p class="sit"><b>Situation.</b> You want to know your completes per day and whether this round is going as the last one did.</p>
+<ol><li>Open <b class="ui">My performance</b>. This round's figures are there already.</li>
+<li>Press <b class="ui">Load earlier logs</b> and pick your own exports of earlier rounds: they appear beside this round.</li></ol>
+<figure><img class="w100" src="img/e23_performance.png"><figcaption><b>Figure E17.</b> My performance, with round 4 loaded (manual A23).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Nothing. The figures are computed from your logs on the spot; nobody else's log is shown.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E18</span>Is tomorrow a working day?</h3>
+<p class="sit"><b>Situation.</b> Next Tuesday is a public holiday and you are not sure whether calls are planned.</p>
+<ol><li>Open the <b class="ui">Calendar</b> tab. Days the call center does not work are hatched; the plan puts no first dial on them, but a callback a respondent asks for can still be booked.</li></ol>
+<figure><img class="w100" src="img/e22_calendar.png"><figcaption><b>Figure E18.</b> The calendar, with the 10 November holiday hatched (manual A22).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Nothing. The calendar comes from the leader's round settings in your file.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E19</span>Working from a phone</h3>
+<p class="sit"><b>Situation.</b> You are calling from a mobile and want the list on the same screen.</p>
+<ol><li>Open the same file on the phone's browser. The columns stack, the household opens full-screen, and every button is the same.</li></ol>
+<div class="pair">
+<figure><img class="w65" src="img/e28_phone_today.png"><figcaption><b>Figure E19a.</b> Today, on a phone (manual A28).</figcaption></figure>
+<figure><img class="w65" src="img/e29_phone_household.png"><figcaption><b>Figure E19b.</b> A household, on a phone (manual A29).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> The same log. Save the session to a file you can move back to the laptop.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E20</span>My file asks for a passphrase</h3>
+<p class="sit"><b>Situation.</b> The leader protected the assignment files and gave you a passphrase on a slip.</p>
+<ol><li>Open the file; type the passphrase. It is never stored: you need it each time you open the protected file, not for your saved session.</li></ol>
+<figure><img class="w80" src="img/e02_passphrase.png"><figcaption><b>Figure E20.</b> A protected assignment file asks for its passphrase (manual A2).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Nothing about the passphrase. A wrong one simply does not open the file.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E21</span>A neighbour says when to call</h3>
+<p class="sit"><b>Situation.</b> You reached a neighbour on a household's second number. The family works in the fields all day and answers after seven in the evening. Its first call is planned for tomorrow at ten.</p>
+<ol><li>Open the household. Under <b>Next</b>, click <b class="ui">Move the next call</b>.</li>
+<li>Choose tomorrow at 19:00, the reason <b>Someone said when to call</b>, and a short note. <b class="ui">Save the new time</b>.</li>
+<li>The household's next call now reads <b>Moved by you</b>; <b class="ui">Undo my change</b> takes it back. Your next dial ends the change.</li></ol>
+<figure><img class="w100" src="img/e30_move_call.png"><figcaption><b>Figure E21.</b> Moving a household's next call, with the reason (manual A23).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> A “moved call” event with the new time, the time it replaced and the reason. Your leader counts it. A first call cannot go past the round's first-call period unless the leader allows it, and a respondent's own callback is changed on its call instead.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">E22</span>I am off on Friday morning</h3>
+<p class="sit"><b>Situation.</b> You have a medical appointment on Friday morning and will start calling at one.</p>
+<ol><li>Open the <b class="ui">Calendar</b> tab. Under <b>My time off</b>, choose Friday and <b>the morning, until 13:00</b>, and click <b class="ui">Mark as off</b>.</li>
+<li>If a respondent booked a callback that morning, the tool names the household first: call it earlier or rebook it. Otherwise the calls planned that morning move to the afternoon.</li></ol>
+<figure><img class="w100" src="img/e31_time_off.png"><figcaption><b>Figure E22.</b> A morning off, marked on the calendar (manual A24).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> A “time off” event. When your export arrives, your leader sees it, and the round's pace counts only the days you work. <b class="ui">I will work after all</b> takes it back.</p>
+</section>
+
+<!-- ======================================================== Part 2 -->
+<h2 class="part">Part 2 · The team leader<small>Twenty-six situations from the week before the round to its close</small></h2>
+
+<section class="task">
+<h3><span class="num">L1</span>Start the round</h3>
+<p class="sit"><b>Situation.</b> Round 5 starts in a week. You have the household list, the merged logs of rounds 1 to 4, and the sampling tool's selection file with the reserves.</p>
+<ol><li>On the start page enter your ID, the program code, the country and the round, and press <b class="ui">Start</b>.</li>
+<li>On the <b class="ui">Prepare round</b> tab, step 1: open the household list (CSV or Excel). The tool counts active, removed and reserve households.</li>
+<li>Step 2: add the earlier rounds' merged logs and manifests. Step 3: open the replacement list.</li></ol>
+<figure><img class="w100" src="img/l03_households.png"><figcaption><b>Figure L1a.</b> The household list, read (manual B3).</figcaption></figure>
+<div class="pair">
+<figure><img class="w100" src="img/l04_history.png"><figcaption><b>Figure L1b.</b> Four earlier rounds, read (manual B4).</figcaption></figure>
+<figure><img class="w100" src="img/l05_replacements.png"><figcaption><b>Figure L1c.</b> The replacement list, read (manual B5).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> Each file opened, in the leader's own log. The household list stays on your computer; it never goes to the common folder.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L2</span>Set the calendar, with a holiday in the window</h3>
+<p class="sit"><b>Situation.</b> The round runs from 26 October to 20 November; the call center works Monday to Saturday, 9 to 21; 10 November is a public holiday.</p>
+<ol><li>Step 4: enter the first and last day, the dial cap, the working weekdays and the call hours. The holidays inside the window come from the bundled table; tick one if the center works that day, or add a day off of your own.</li>
+<li>In a country with Ramadan in the window, enter the hour the fast is broken: no first dial is planned in that hour.</li></ol>
+<figure><img class="w100" src="img/l06_calendar.png"><figcaption><b>Figure L2.</b> The round calendar: 22 working days, the 10 November holiday listed (manual B6).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The calendar in every assignment file and in the manifest, so the enumerators' calendars and the leader's pace figures agree.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L3</span>An enumerator is away this round</h3>
+<p class="sit"><b>Situation.</b> E03 is on leave for the whole round. Their households must go to the others, and E03 must keep their history for round 6.</p>
+<ol><li>Step 5: untick <b class="ui">Available this round</b> for E03. Do not remove them.</li>
+<li>When the rule is applied, E03's households are dealt to the others with the reason “enumerator away”.</li></ol>
+<figure><img class="w100" src="img/l07_team.png"><figcaption><b>Figure L3.</b> The team, with E03 unticked (manual B7).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The reason on each moved household, in its file and the manifest, so that the program can tell forced changes from rotation.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L4</span>Two areas speak another language</h3>
+<p class="sit"><b>Situation.</b> Two PSUs of the sample speak Kazakh; only E01 does. Those households must not go to E02 or E07.</p>
+<ol><li>Step 5: tick <b class="ui">language</b> under “Match households to enumerators by”, and enter each enumerator's languages (E01: mn kk; the others: mn).</li>
+<li>Apply the rule. A household goes only to an enumerator whose values include its own; step 7 counts the households moved to match, and lists any household no enumerator matches.</li></ol>
+<figure><img class="w100" src="img/l09_check.png"><figcaption><b>Figure L4.</b> The check with the language criterion: the “matched” column (manual B9).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The criteria and each enumerator's values in the manifest and the files, and on each household whether it is matched.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L5</span>Choose the rule and the rotation share</h3>
+<p class="sit"><b>Situation.</b> The program keeps the same enumerator and rotates a tenth of the households each round.</p>
+<ol><li>Step 6: keep <b class="ui">Keep the same enumerator</b> and enter the rotation share, 10. There is no default: the share is the program's judgment.</li>
+<li>Press <b class="ui">Apply the rule</b>. Households new to the panel are dealt at random; a household that was hard to reach last round switches enumerator.</li></ol>
+<figure><img class="w100" src="img/l08_rule.png"><figcaption><b>Figure L5.</b> The rules, with the rotation share entered (manual B8).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The rule, the share and the seed in every file: the same inputs and seed give the same assignment again.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L6</span>Check the loads before writing anything</h3>
+<p class="sit"><b>Situation.</b> You want to see who gets how many households and expected dials before any file leaves your computer.</p>
+<ol><li>Step 7 appears once the rule is applied: households per enumerator by reason, by stratum, expected dials and the departure from each enumerator's target.</li>
+<li>If someone is outside the margin, press <b class="ui">Move kept households at random to balance</b>. Change the margin if the program's is different.</li></ol>
+<figure><img class="w100" src="img/l09_check.png"><figcaption><b>Figure L6.</b> The check before any file is written (manual B9).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The balancing moves with the reason “capacity”.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L7</span>Keep one household with a particular enumerator</h3>
+<p class="sit"><b>Situation.</b> One household knows E02 well and asked for them; the rule moved it elsewhere.</p>
+<ol><li>Step 7, open <b class="ui">Households: move one by hand</b>, find the household and choose E02 in its row.</li>
+<li>If E02 does not match the household's criteria, the tool says so and marks the household as not matched; it moves anyway.</li></ol>
+<figure><img class="w100" src="img/l10_by_hand.png"><figcaption><b>Figure L7.</b> Moving one household by hand (manual B10).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The reason “by hand” on that household and the previous enumerator.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L8</span>Set the day list</h3>
+<p class="sit"><b>Situation.</b> Enumerators should see about ten households a day, not the whole month.</p>
+<ol><li>Step 4, after the rule is applied: the tool shows the planned first dials per enumerator per working day and proposes one and a half times that as the day list. Enter your own number or leave it.</li></ol>
+<figure><img class="w100" src="img/l28_day_list.png"><figcaption><b>Figure L8.</b> The day list after the rule is applied (manual B6b).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The day list in every file; the enumerator's Today tab pulls households forward up to that number.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L9</span>Write the files, protected</h3>
+<p class="sit"><b>Situation.</b> The files hold phone numbers and travel through folders other people can see.</p>
+<ol><li>Step 8: tick <b class="ui">Protect each assignment file with its own passphrase</b> and press <b class="ui">Write the files</b>.</li>
+<li>Copy or download the passphrases now: they are shown once. Give each enumerator theirs privately (E20).</li>
+<li><b class="ui">Save all into a folder</b>, then put each file in its enumerator's own folder, never the common one. The manifest and the calendar row stay with you.</li></ol>
+<figure><img class="w100" src="img/l11_files.png"><figcaption><b>Figure L9.</b> Five files ready, the passphrases shown once (manual B11).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The files' fingerprints in the manifest, which the merge later checks every export against.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L10</span>Stop for today, continue tomorrow</h3>
+<p class="sit"><b>Situation.</b> The round is prepared but not written; you want to continue tomorrow, or import logs next week on another computer.</p>
+<ol><li>Press <b class="ui">Save leader session</b>; a passphrase is optional. The file holds the household list: keep it in your own folder.</li>
+<li>Tomorrow, <b class="ui">Continue a saved leader session</b>. Next week, to import logs only: start the round again and open its manifest on the <b class="ui">Import logs</b> tab.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/l16_save.png"><figcaption><b>Figure L10a.</b> Saving the leader session (manual B12).</figcaption></figure>
+<figure><img class="w100" src="img/l18_import_manifest.png"><figcaption><b>Figure L10b.</b> A session without a manifest asks for one (manual B14).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> The whole session with a checksum; a file changed outside the tool is refused.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L11</span>Import the exports and settle the questions</h3>
+<p class="sit"><b>Situation.</b> It is Saturday morning; the common folder has a week of exports from everyone.</p>
+<ol><li><b class="ui">Import logs</b> tab: <b class="ui">Add files</b>, all of them at once. The newest export of each enumerator is used; CSVs are checked against their JSON; chains are verified.</li>
+<li>Under <b class="ui">Needs your decision</b>, answer each question with a button and an optional note. Nothing is decided silently.</li>
+<li>The <b>Files</b> table says how each file was used; the <b>Merge report</b> lists everything, and can be downloaded.</li></ol>
+<figure><img class="w100" src="img/l19_import_add.png"><figcaption><b>Figure L11a.</b> Adding the exports (manual B15).</figcaption></figure>
+<figure><img class="w100" src="img/l21_files.png"><figcaption><b>Figure L11b.</b> The files of the batch and how each was used (manual B17).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Each decision with who made it and when, in the leader's log and the merge report.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L12</span>An export has not arrived</h3>
+<p class="sit"><b>Situation.</b> E07 forgot to export; the folder has E01's and E02's files only.</p>
+<ol><li>Import what is there. The merge raises “missing” for E07, and their households show as “not reported”, apart from completes and misses the other files reveal.</li>
+<li>Press <b class="ui">Noted</b>, ask E07 for the export, and add it when it comes: the question closes by itself.</li></ol>
+<figure><img class="w100" src="img/x10_missing_export.png"><figcaption><b>Figure L12.</b> No export from E07: their households are not reported until the file arrives.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The missing file as an open question; progress counts “not reported” apart from completes and misses, so the round's figures are not distorted.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L13</span>Two enumerators completed the same household</h3>
+<p class="sit"><b>Situation.</b> E01 interviewed a household that was assigned to E02, who had already completed it.</p>
+<ol><li>Two questions appear: dials by E01 on a household assigned to someone else, and two completes for one household.</li>
+<li>Confirm the first (E01 did call it) or mark it a mistyped ID; for the second, choose which complete counts, or count the first as a re-interview.</li></ol>
+<figure><img class="w100" src="img/l20_decisions.png"><figcaption><b>Figure L13.</b> The two questions (manual B16).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The decision; until it is made the household is left out of the completion counts and shown as “two completes”.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L14</span>A respondent's new number reaches the list</h3>
+<p class="sit"><b>Situation.</b> E07's contacts file reports a corrected number (E9).</p>
+<ol><li>Add the contacts file with the exports (it comes to you directly, not through the common folder). The merge checks the number against the digest in the log.</li>
+<li>Under <b class="ui">New or corrected phone numbers</b>, <b class="ui">Download contact updates</b> and move them into the household list for the next round.</li></ol>
+<figure><img class="w100" src="img/l23_numbers.png"><figcaption><b>Figure L14.</b> One contact update from the batch (manual B19).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The update with whether its digest matched; the revised files of L20 already carry the corrected number.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L15</span>How far are we?</h3>
+<p class="sit"><b>Situation.</b> Day 10 of 22. The program manager asks for the completion rate and who is behind.</p>
+<ol><li><b class="ui">Progress</b> tab: the team table gives households, completes, in progress, not started, dials, enumerator-days and completes per enumerator-day (Box 3.0).</li>
+<li>Below: completes by day of the window and by stratum, and every household with its state, filterable.</li></ol>
+<figure><img class="w100" src="img/l24_progress_team.png"><figcaption><b>Figure L15a.</b> The team's progress (manual B20).</figcaption></figure>
+<figure><img class="w100" src="img/l25_progress_chart.png"><figcaption><b>Figure L15b.</b> Completes by day and by stratum (manual B21).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Nothing; the figures follow the merge. The merged call log (L22) carries the same dials for the program's own analysis.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L16</span>Someone will not finish; someone has spare days</h3>
+<p class="sit"><b>Situation.</b> At E07's pace they will end the round with households never called, while E02 has days to spare.</p>
+<ol><li>Progress tab, <b>Move waiting households</b>: the pace table gives each enumerator's completes per day, what they can still complete in the days left, and how many short or spare. Only enumerators whose export is from today are judged, unless you tick the box.</li>
+<li>Press <b class="ui">Propose moves from the enumerators behind to those with spare days</b>: households not yet called move one at a time, latest-planned first, only to an enumerator who matches them, until nobody is more than half a household off.</li>
+<li>Untick any move you do not want, then write the files (L20).</li></ol>
+<figure><img class="w100" src="img/l28_moves.png"><figcaption><b>Figure L16.</b> Who is short and who has spare days, and the moves proposed (manual B22b).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The proposal in the leader's log; nothing changes until the files are written.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L17</span>An enumerator finished early</h3>
+<p class="sit"><b>Situation.</b> E02 has nothing left to call by day 12 and can take more.</p>
+<ol><li>On the same card: <b class="ui">Give</b> 5 households to E02, <b class="ui">Add to the list</b>. The households come from the enumerators furthest behind, then those with most waiting. An enumerator with nothing open is judged on any export, so E02 need not export today.</li>
+<li>If fewer than five can be given, the tool says why.</li></ol>
+<figure><img class="w100" src="img/x11_give_five.png"><figcaption><b>Figure L17.</b> Five households given to E02, from the enumerators behind.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The moves, once written, in the manifest with the time and your ID.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L18</span>An enumerator fell ill</h3>
+<p class="sit"><b>Situation.</b> E01 is off for the rest of the round. Their open households, some with booked callbacks, must be covered.</p>
+<ol><li>On the same card: <b class="ui">An enumerator is away</b>: E01, <b class="ui">Move all their open households to the others</b>. Booked callbacks go with their households; hard refusals stay; the receivers are those with spare days first, then the fewest open.</li>
+<li>The roster marks E01 away; nothing is proposed to them until you move a household back by hand.</li></ol>
+<figure><img class="w100" src="img/l28b_moves_cases.png"><figcaption><b>Figure L18.</b> E01 away: every open household of theirs in the list, tagged “away”, the booked callbacks shown (manual B22d). The list also shows a newcomer, E09, given four households (L19).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The moves, E01's “away since” in the roster, and each callback in the handover of the receiving file (E15).</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L19</span>A new enumerator starts on Monday</h3>
+<p class="sit"><b>Situation.</b> E09 joins the team mid-round and needs a first file with a few households.</p>
+<ol><li>On the same card, open <b class="ui">An enumerator joins the round</b>: ID, name, their code in the form if the team uses KoBoToolbox, and their values for the round's criteria. <b class="ui">Add</b>.</li>
+<li><b class="ui">Give</b> 4 households to E09 (L17), or move households to them by hand. Write the files: E09's first file carries each household's handover.</li></ol>
+<figure><img class="w100" src="img/l28b_moves_cases.png"><figcaption><b>Figure L19.</b> The newcomer E09 added and given four households, in the same list as E01's cover (manual B22d).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> E09 in the roster with the date they joined, their file at the manifest's next revision, and their values among the matching criteria.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L20</span>Give out the revised files</h3>
+<p class="sit"><b>Situation.</b> The list of moves is ready. The enumerators must get new files without losing their logs.</p>
+<ol><li>Press <b class="ui">Write the updated files</b>. Only the affected enumerators get a file, at the next revision; the manifest's new revision replaces yours.</li>
+<li>Give each file to its enumerator in their own folder. They open it with <b class="ui">Load updated assignment</b> (E14).</li></ol>
+<figure><img class="w100" src="img/x12_revised_files.png"><figcaption><b>Figure L20.</b> The revised files and the manifest's next revision, ready to give out.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Each move with its time in the manifest; each household's handover (previous enumerator, dials so far, last result, callback) in the receiving file; the previous file superseded.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L21</span>A call made after the move</h3>
+<p class="sit"><b>Situation.</b> E07 did not load the updated file in time and called a household that had moved to E02 the day before.</p>
+<ol><li>When E07's next export is imported, the merge raises “after move”: the dial is kept and flagged as a double call.</li>
+<li>Keep it or leave it out. The rule holds even if the household later comes back to E07: a dial made while someone else held it stays a double call.</li></ol>
+<figure><img class="w100" src="img/x13_after_move.png"><figcaption><b>Figure L21.</b> The question raised for a dial after the move.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The decision; the dial stays in the log either way, marked by the merge report.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L22</span>End of the round: the files for next round</h3>
+<p class="sit"><b>Situation.</b> The round closed on 20 November. Round 6 needs the history, and the program's round template needs one row per household.</p>
+<ol><li><b class="ui">Call log</b> tab: download the <b class="ui">Merged call log (CSV)</b>, the <b class="ui">Actions (CSV)</b> and the <b class="ui">Manifest</b>. Next round, open them on the Prepare tab, step 2 (L1).</li>
+<li>Download <b class="ui">interviews.csv</b> and <b class="ui">outcome_codes.csv</b> for the Section 4.2 template, and <b class="ui">calendar.csv</b> for its calendar.</li>
+<li>Settle every open question first: while questions are open, the files follow the current state.</li></ol>
+<figure><img class="w100" src="img/l27_calllog.png"><figcaption><b>Figure L22.</b> The round's files and the merged call log (manual B23).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Each export in the leader's log. The merged log has the harmonized dial-table columns, with the dial number counted per household across enumerators.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L23</span>Who is likely to drop out?</h3>
+<p class="sit"><b>Situation.</b> Before writing the files you want the households most likely to be missed called early in the window.</p>
+<ol><li><b class="ui">Risk lists</b> tab, with earlier rounds loaded: the dropout list ranks last round's respondents; the high tier gets an early first dial in the plan. Enumerators never see tiers.</li>
+<li>Once the program has outcomes from two rounds, press <b class="ui">Backtest on this program's own rounds</b> and switch versions only if the backtest says the change helps.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/l14_risk.png"><figcaption><b>Figure L23a.</b> The risk lists (manual B26).</figcaption></figure>
+<figure><img class="w100" src="img/l15_backtest.png"><figcaption><b>Figure L23b.</b> The own-round backtest (manual B27).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> The model version in use and when it was switched; the lists are for the leader only and are never written into assignment files.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L24</span>How did earlier rounds go?</h3>
+<p class="sit"><b>Situation.</b> The program manager asks for continuation, dials per complete and the best calling hours.</p>
+<ol><li><b class="ui">Analytics</b> tab, with earlier rounds loaded: continuation and retention, loss and returns, dials per complete and the hazard by dial, completes per enumerator-day, and when calls succeed, as the handbook defines them.</li></ol>
+<div class="pair">
+<figure><img class="w100" src="img/l12_analytics.png"><figcaption><b>Figure L24a.</b> Continuation and retention (manual B24).</figcaption></figure>
+<figure><img class="w100" src="img/l13_analytics_effort.png"><figcaption><b>Figure L24b.</b> Dials per complete and hazard by dial (manual B25).</figcaption></figure>
+</div>
+<p class="rec"><b>What the tool records.</b> Nothing; every figure is computed from the loaded logs, unweighted, as in the handbook.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L25</span>Let enumerators adjust their own schedule</h3>
+<p class="sit"><b>Situation.</b> Your enumerators often learn on the phone when a household is best called, and one of them will miss two days next week. You want them to adjust their own lists without asking you each time, and you want to see what they changed.</p>
+<ol><li>Prepare tab, step 4, <b>What enumerators may change themselves</b>: moving a household's next call and marking time off are on by default. Leave <b class="ui">also a first call past the first-call period</b> unticked to keep first calls early (Section 3.4).</li>
+<li>Write the files: the setting travels in them.</li>
+<li>After each import, the Progress tab's team table counts the calls each enumerator moved, the first calls they moved later, and the days off they marked. The pace counts only the days each one works, and names the time off still ahead.</li></ol>
+<figure><img class="w100" src="img/x14_self_changes.png"><figcaption><b>Figure L25.</b> The team table with E07's changes counted, and E07's pace with a day and a half off ahead.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The setting in every file and in the manifest; the changes themselves in each enumerator's log, read from their JSON export. A CSV export alone does not carry them.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">L26</span>Three calls a day over five days</h3>
+<p class="sit"><b>Situation.</b> Your program's protocol is to call each household up to three times a day, at different times of day, over five working days, and to replace a household nobody answered in that time. The tool's default plans a call two hours after an unanswered one, with no daily limit.</p>
+<ol><li>Prepare tab, step 4, <b>Contact protocol</b>: at most 3 calls a day, at least 3 hours apart, over at most 5 working days for a household never reached. Tick <b>Vary the time of day</b>. The step shows 15 calls against the dial cap; set the cap to 15 if it should stop there too.</li>
+<li>Step 3: tick <b>the dial cap or the contact protocol</b> among the cases after which a replacement is allowed.</li>
+<li>Write the files. Each enumerator's list now plans the next call by the protocol: three hours later on the same day while the day's calls last, then the next working day in the part of the day tried least. A household not reached by its fifth day shows <b>Protocol done</b> under “Needs your decision”, where its replacement can be activated.</li></ol>
+<figure><img class="w100" src="img/l06b_protocol.png"><figcaption><b>Figure L26.</b> The contact protocol in step 4 (manual B6a).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The protocol in every file and in the manifest; it carries over to the next round. A booked callback, and a call the enumerator moved themselves, are never limited by it.</p>
+</section>
+
+<!-- ======================================================== Part 3 -->
+<h2 class="part">Part 3 · With KoBoToolbox<small>Five situations for a team that records its calls in a KoBoToolbox form</small></h2>
+
+<section class="task">
+<h3><span class="num">K1</span>The team interviews in the Philippines-style form</h3>
+<p class="sit"><b>Situation.</b> Interviewers submit the interview form once per call attempt, and know themselves by codes such as CATI07. The form takes its sample list from its choices sheet.</p>
+<ol><li>Prepare the round as in L1 to L9; in step 5 enter each interviewer's code, or do it on the <b class="ui">KoBoToolbox</b> tab, step 1.</li>
+<li>Step 2: write <b class="ui">choices_households.csv</b>, paste it over the form's list and redeploy. With a choice filter on the code, each interviewer sees only their households.</li></ol>
+<figure><img class="w100" src="img/l32_platform_files.png"><figcaption><b>Figure K1.</b> The KoBoToolbox tab, steps 1 and 2 (manual C1).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The codes in the manifest (or in the session, if entered later), so that the form's records are read under the tool's IDs.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">K2</span>Each day: the form's export</h3>
+<p class="sit"><b>Situation.</b> The enumerators log nothing in the tool; every call attempt is a submission in KoBoToolbox.</p>
+<ol><li>Download the project's data (CSV with XML values and headers) and add it in step 3, <b class="ui">Add the form's export</b>. The export is cumulative: the latest download is enough.</li>
+<li>The tool splits it by interviewer and merges each part as an unverified export; progress, the call log and the analytics follow, and every merge question is raised where it applies.</li></ol>
+<figure><img class="w100" src="img/l30_platform_import.png"><figcaption><b>Figure K2.</b> Step 3 with the Philippines-layout export added (manual C2).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> Each submission as one dial, with the result mapped onto the tool's codes and the form's open and submit times as the call's start and end.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">K3</span>Our form has other column names</h3>
+<p class="sit"><b>Situation.</b> Your form records each attempt too, but its columns and result codes are its own.</p>
+<ol><li>Add the export. Step 3 shows a mapping card instead of merging: say which column plays each role (household, interviewer, start, result; the rest optional) and what each value of the result column means.</li>
+<li><b class="ui">Save the mapping and merge the file</b>. Every later file with the same columns is read without asking.</li></ol>
+<figure><img class="w100" src="img/l33_mapping.png"><figcaption><b>Figure K3.</b> The mapping card (manual C3).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The mapping in the leader's session.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">K4</span>After moves, the form must follow</h3>
+<p class="sit"><b>Situation.</b> You moved households on the Progress tab (L16 to L19). The interviewers' lists in the form are now wrong.</p>
+<ol><li>Step 4 of the KoBoToolbox tab: write <b class="ui">choices_households.csv again</b>, paste it over the form's list and redeploy. Batch the day's moves: a redeploy reaches the interviewers only when they reload the form.</li>
+<li>A call the previous interviewer makes on a moved household after that is flagged in the merge as a double call (L21).</li></ol>
+<figure><img class="w100" src="img/x20_kobo_review.png"><figcaption><b>Figure K4.</b> Step 4 after four moves: the list written again from the new manifest; above it a question of step 3, below it step 5 (K5).</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The moves in the manifest; the list reflects the current holder of every household.</p>
+</section>
+
+<section class="task">
+<h3><span class="num">K5</span>A submission to look at in KoBoToolbox</h3>
+<p class="sit"><b>Situation.</b> The merge found two completes for one household in the form's export. You want to check the submission in the project's table view.</p>
+<ol><li>Settle the question in step 3 as in L13.</li>
+<li>Step 5 lists every dial behind a merge question with the submission's <code>_uuid</code>; download the list and search the ID in KoBoToolbox, set its validation status or ask the interviewer.</li></ol>
+<figure><img class="w100" src="img/x20_kobo_review.png"><figcaption><b>Figure K5.</b> Step 3's question (two completes for one household) and step 5's list of the two submissions behind it, with their IDs.</figcaption></figure>
+<p class="rec"><b>What the tool records.</b> The decision; the review list is written from the current merge each time.</p>
+</section>
+
+</body>
+</html>

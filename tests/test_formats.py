@@ -58,10 +58,10 @@ clean = [os.path.join(S, d) for d in ("round05", "past", os.path.join("leader", 
     sorted(glob.glob(os.path.join(S, "leader", "*.*")))
 code, out = run(*clean)
 check("all sample files pass, the leader's inputs and outputs included", code == 0, out)
-# the files of KoBoToolbox, Survey Solutions and the calling service (proposal K)
-code, out = run(os.path.join(S, "kobo"), os.path.join(S, "calls"))
-check("the platform files are recognised and pass: the KoBo household file and choices list, the two KoBo exports (the tool's form and the L2PHL layout), the calling service's log",
-      code == 0 and out.count("OK") == 5 and out.count("holds") >= 2 and "L2PHL layout" in out, out)
+# the files of KoBoToolbox (proposal K)
+code, out = run(os.path.join(S, "kobo"))
+check("the KoBoToolbox files are recognised and pass: the household file and the choices list, the two exports (the tool's form and the L2PHL layout)",
+      code == 0 and out.count("OK") == 4 and out.count("holds") >= 2 and "L2PHL layout" in out, out)
 hh_bad = copy(os.path.join(S, "kobo", "households.csv"), "households_dup.csv")
 lines = open(hh_bad, encoding="utf-8").read().rstrip("\n").split("\n")
 open(hh_bad, "w", encoding="utf-8").write("\n".join(lines + [lines[1]]) + "\n")

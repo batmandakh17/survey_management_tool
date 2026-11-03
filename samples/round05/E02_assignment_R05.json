@@ -1,6 +1,6 @@
 {
  "schema": "rtm-assign-1.0",
- "tool_version": "0.3.3",
+ "tool_version": "0.3.7",
  "program": "L2MN-DEMO",
  "country": "MN",
  "round": 5,
@@ -48,7 +48,17 @@
    }
   ],
   "dial_cap": 8,
-  "day_list": 7
+  "day_list": 7,
+  "self_scheduling": {
+   "reschedule": true,
+   "availability": true,
+   "push_first_calls": false,
+   "first_calls_by": "2026-11-06"
+  },
+  "contact_protocol": {
+   "gap_hours": 2,
+   "vary_times": false
+  }
  },
  "households": [
   {
@@ -1095,5 +1105,5 @@
    }
   }
  ],
- "fingerprint": "f4c4b0f75219a172289980f954fa447433dc5f2d36192cb22f7500ce6a071a11"
+ "fingerprint": "e93dd869d18cd2ed7f000ab6ab17fdf06dc739cceb749221c03697774cf856d5"
 }

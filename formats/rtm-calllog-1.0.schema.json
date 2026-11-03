@@ -61,7 +61,7 @@
       "required": ["event_id", "type", "program", "round", "logged_by", "logged_at", "prev_hash", "hash"],
       "properties": {
         "event_id": { "$ref": "#/$defs/event_id" },
-        "type": { "enum": ["session", "dial", "action", "correction", "contact_update", "export"] },
+        "type": { "enum": ["session", "dial", "action", "correction", "contact_update", "export", "plan", "availability"] },
         "program": { "type": "string" },
         "round": { "type": "integer" },
         "logged_by": { "type": "string", "minLength": 1 },
@@ -110,7 +110,16 @@
           } } },
         { "if": { "properties": { "type": { "const": "export" } } }, "then": {
           "required": ["file_base", "event_count", "last_hash"],
-          "properties": { "file_base": { "type": "string" }, "event_count": { "type": "integer" }, "last_hash": { "$ref": "#/$defs/hash" }, "contacts_file": { "const": 1 } } } }
+          "properties": { "file_base": { "type": "string" }, "event_count": { "type": "integer" }, "last_hash": { "$ref": "#/$defs/hash" }, "contacts_file": { "const": 1 } } } },
+        { "if": { "properties": { "type": { "const": "plan" } } }, "then": {
+          "description": "The enumerator moved a household's next call (at, with a reason; was: the time it replaced; first: no dial yet), or undid that move (clear). A later dial ends it (3 November 2026).",
+          "required": ["hhid"], "oneOf": [{ "required": ["at", "reason"] }, { "required": ["clear"] }],
+          "properties": { "hhid": { "type": "string" }, "at": { "$ref": "#/$defs/instant" }, "clear": { "const": 1 }, "reason": { "enum": ["TOLD", "PATTERN", "WORKLOAD", "OTHER"] },
+            "note": { "type": "string" }, "was": { "$ref": "#/$defs/instant" }, "first": { "const": 1 } } } },
+        { "if": { "properties": { "type": { "const": "availability" } } }, "then": {
+          "description": "The enumerator marked a day or half day off (morning: until 13:00; afternoon: from 13:00), or cancelled it (3 November 2026).",
+          "required": ["date"], "oneOf": [{ "required": ["part"] }, { "required": ["cancel"] }],
+          "properties": { "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, "part": { "enum": ["day", "morning", "afternoon"] }, "cancel": { "const": 1 }, "note": { "type": "string" } } } }
       ]
     },
     "exported_event": {

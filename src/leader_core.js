@@ -563,7 +563,7 @@
         plans.set(id, { first_dial_date: date, target_hour: hour, order: i + 1 });
       });
     }
-    return { plans, best, firstDays: first.length, workingDays: days.length };
+    return { plans, best, firstDays: first.length, workingDays: days.length, firstCallsBy: first.length ? first[first.length - 1] : null };
   };
 
   // ---- the round files (A.3, A.6) ----
@@ -667,10 +667,9 @@
       return { name, sha, base, kind: 'unknown', problem: `its schema is "${o.schema || 'missing'}"` };
     }
     const head = (t.split(/\r?\n/)[0] || '').split(',');
-    // a platform file: a KoBoToolbox export, a Survey Solutions export (main file or the calls roster) or a calling service's call log (proposal K)
-    const P = L.parseDelimited(t), prof = L.profileFor(P.header, profiles), pk = prof ? null : L.platformKind(P.header);
+    // a platform file: a KoBoToolbox export of a form that records each call attempt (proposal K)
+    const P = L.parseDelimited(t), prof = L.profileFor(P.header, profiles);
     if (prof) return { name, sha, base, kind: 'platform', profile: prof, header: P.header, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '' };
-    if (pk) return { name, sha, base, kind: pk, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '' };
     if (head.join(',') === R.CSV_COLS.join(',')) {
       const rows = R.parseCSV(t);
       const ids = [...new Set(rows.map(r => r.logged_by || r.operator).filter(Boolean))];
@@ -682,7 +681,7 @@
     }
     // a table the tool does not know: the leader maps its columns on the Import tab (proposal K.2)
     if (P.header.length >= 4 && P.rows.length && !t.startsWith('{')) return { name, sha, base, kind: 'unmapped', header: P.header, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '', problem: 'a table whose columns are not known: map them on the Import tab' };
-    return { name, sha, base, kind: 'unknown', problem: 'not a call-log export, contacts file, manifest, platform export or call log' };
+    return { name, sha, base, kind: 'unknown', problem: 'not a call-log export, contacts file, manifest or KoBoToolbox export' };
   };
   // a CSV row back into a dial (the CSV holds dials with corrections applied, so no further correction is possible)
   const rowDial = r => {
@@ -702,7 +701,7 @@
   };
   L.qualifies = d => d.status === 'COMPLETE' && (d.dur_min === null || d.dur_min === undefined || d.dur_min >= R.MIN_COMPLETE_MIN);
 
-  // ---- exports of KoBoToolbox, Survey Solutions and a calling service (proposal K) ----
+  // ---- exports of KoBoToolbox (proposal K) ----
   // A delimited text (comma, semicolon or tab; quotes as in CSV) as rows of objects, the delimiter found from the header.
   const splitDelimited = (text, d) => {
     const rows = [], t = String(text).replace(/^\uFEFF/, '');
@@ -725,15 +724,7 @@
     const head = rows.length ? rows[0].map(h => h.trim()) : [];
     return { delimiter: d, header: head, rows: rows.slice(1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] === undefined ? '' : r[i]]))) };
   };
-  // the kind of a platform file, from its columns: a Survey Solutions export (main file or the calls roster) or a calling service's log
   const normCol = c => String(c).toLowerCase().replace(/[\s_]/g, '');
-  L.platformKind = header => {
-    const h = new Set(header.map(c => c.trim())), n = new Set(header.map(normCol));
-    if ((h.has('interview__id') || (h.has('Id') && h.has('ParentId1')) || h.has('calls__id')) && h.has('result') && (h.has('calls__id') || h.has('ParentId1'))) return 'suso_calls';
-    if ((h.has('interview__id') || h.has('Id')) && h.has('hhid') && !h.has('result')) return 'suso_main';
-    if ((n.has('sid') || n.has('callsid')) && n.has('to') && n.has('status') && (n.has('starttime') || n.has('datecreated'))) return 'service';
-    return null;
-  };
   // ---- profiles (proposal K.2): how a platform file's columns and codes map onto the harmonized dial table (A.4) ----
   // one row per call attempt, as in a KoBoToolbox form that records each attempt; besides the tool's own form, the layout
   // shipped is that of an L2 program's real form, L2PHL's, which records each call attempt in the form itself
@@ -751,8 +742,11 @@
       codes: Object.fromEntries(R.STATUS.map(s => [s.code, s.code]).concat([['NONE', 'NONE']])) },
     { id: 'phl_kobo', name: 'L2PHL interview form with its call record (KoBoToolbox)', kind: 'calls', detect: ['_uuid', 'hhid', 'int_id', 'X15'],
       columns: { hhid: 'hhid', enumerator: 'int_id', start: 'start', end: 'end', result: 'X15', attempt: 'Z8', id: '_uuid', logged_at: '_submission_time', note: 'X16' },
-      codes: { 1: 'COMPLETE', 2: 'COMPLETE', 3: 'PARTIAL', 4: 'APPOINTMENT', 5: 'REFUSAL_SOFT', 6: 'NO_ANSWER', 7: 'DEAD_NUMBER', 8: 'SWITCHED_OFF', 9: 'WRONG_NUMBER', 10: 'OTHER' }, labels: PHL_LABELS,
-      about: 'Every call attempt is one submission of the interview form: the interviewer\'s ID, the household from the sample list, the attempt number, whether someone answered, and in the closing block the result of the call (X15). The program counts a partially completed interview with no further callback as complete, so code 2 maps to a complete too.' },
+      // as the program's own processing: a complete is code 1 with consent (Z9 = 1); code 2, a break-off with no more callback, closes the case as the
+      // program's protocol does (a "dead call", replaced), so it maps to a firm refusal with the form's label kept in the note
+      codes: { 1: 'COMPLETE', 2: 'REFUSAL_HARD', 3: 'PARTIAL', 4: 'APPOINTMENT', 5: 'REFUSAL_SOFT', 6: 'NO_ANSWER', 7: 'DEAD_NUMBER', 8: 'SWITCHED_OFF', 9: 'WRONG_NUMBER', 10: 'OTHER' }, labels: PHL_LABELS,
+      consent: { column: 'Z9', yes: '1' }, keepLabel: ['2'],
+      about: 'Every call attempt is one submission of the interview form: the interviewer\'s ID, the household from the sample list, the attempt number, whether someone answered, consent (Z9), and in the closing block the result of the call (X15). As in the program\'s own processing, a complete is code 1 with consent; a partially completed interview with no further callback closes the case, as a firm refusal does.' },
   ];
   L.profileFor = (header, custom) => {
     const h = new Set(header.map(c => String(c).trim()));
@@ -800,9 +794,12 @@
   // a row of a platform file as the standard call record the form reader takes (the roles, the codes mapped, the extras of the tool's own form)
   const stdRecord = (prof, r, M) => {
     const c = prof.columns || {}, x = prof.extras || {}, g = k => (k && r[k] !== undefined && r[k] !== null ? String(r[k]).trim() : '');
-    const raw = g(c.result), status = codeStatus(prof, raw);
+    const raw = g(c.result);
+    let status = codeStatus(prof, raw), consentNote = '';
+    // a form that asks for consent: a complete-coded record without it is not a complete (the program's rule), and is shown for the leader to see
+    if (status === 'COMPLETE' && prof.consent) { const cv = g(prof.consent.column); if (cv !== prof.consent.yes) { status = 'OTHER'; consentNote = `complete-coded without consent (${prof.consent.column} ${cv || 'empty'})`; } }
     const label = prof.labels && prof.labels[raw] !== undefined ? prof.labels[raw] : '';
-    const note = [g(c.note), status === 'OTHER' && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : ''].filter(Boolean).join(' · ');
+    const note = [g(c.note), (status === 'OTHER' || (prof.keepLabel || []).includes(raw)) && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : '', consentNote].filter(Boolean).join(' · ');
     return { hhid: g(c.hhid), enumerator: g(c.enumerator), call_start: g(c.start), call_end: g(c.end), result: status, raw, appointment: g(c.callback), phone: g(c.phone), phone_slot: g(c.phone_slot),
       round: g(c.round), attempt: g(c.attempt), id: g(c.id), logged_at: g(c.logged_at), note,
       willing: g(x.willing), action: g(x.action), target_hhid: g(x.target_hhid), replaces: g(x.replaces), program: g(x.program) || M.program };
@@ -843,15 +840,18 @@
   };
   // the platform files among the imports become one cumulative "CSV export" per enumerator; the merge then treats them as section F treats a CSV without its JSON
   const codeKey = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
-  L.enumMapper = M => {
-    const pmap = new Map();
+  // the code each enumerator has in the platform: the session's (Platform tab) over the manifest's, else the ID itself
+  L.codeOf = (M, codes) => id => { const c = codes && codes[id]; if (c) return c; const e = (M.enumerators || []).find(x => x.enumerator_id === id); return (e && e.platform_id) || id; };
+  L.enumMapper = (M, codes) => {
+    const pmap = new Map(), codeOf = L.codeOf(M, codes);
     M.enumerators.forEach(e => { pmap.set(codeKey(e.enumerator_id), e.enumerator_id); if (e.platform_id) pmap.set(codeKey(e.platform_id), e.enumerator_id); });
+    M.enumerators.forEach(e => { const c = codeOf(e.enumerator_id); if (c) pmap.set(codeKey(c), e.enumerator_id); });   // the session's codes win
     return raw => pmap.get(codeKey(raw)) || String(raw || '').trim();
   };
   L.expandForms = (imports, M, opts) => {
-    const out = [], extra = [], service = [];
+    const out = [], extra = [];
     const stamp = v => { const p = isoParts(v); return p.wall ? Date.parse(p.wall.replace(' ', 'T') + (p.off || '')) || 0 : 0; };
-    const enumOf = L.enumMapper(M);
+    const enumOf = L.enumMapper(M, opts && opts.codes);
     const slots = slotIndex(opts && opts.households);
     const emit = (orig, src, recs) => {        // recs: [{r, e, eid, loggedAt, when}]
       const byE = new Map();
@@ -873,8 +873,6 @@
       const en = isoParts(r.call_end), st_ = isoParts(r.call_start), wall = en.wall || st_.wall || '';
       return wall.replace(' ', 'T') + (en.off || st_.off || (wall && tz ? offsetAt(wall, tz) : ''));
     };
-    const mains = imports.filter(f => f.kind === 'suso_main'), callsFiles = imports.filter(f => f.kind === 'suso_calls');
-    const folder = n => (n.includes('/') ? n.slice(0, n.lastIndexOf('/') + 1) : '');
     for (const f of imports) {
       if (f.kind === 'platform') {
         const prof = f.profile, roundCol = (prof.columns || {}).round;
@@ -895,87 +893,13 @@
         const left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : ''].filter(Boolean);
         const parts = emit(f, prof.id, recs);
         extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
-      } else if (f.kind === 'suso_calls') {
-        const main = mains.find(m => folder(m.name) === folder(f.name)) || mains[0];
-        if (!main) { extra.push({ name: f.name, kind: 'Survey Solutions roster', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: its main file (interview__id, hhid, enumerator_id) was not added' }); continue; }
-        const byInt = new Map(main.rows.map(r => [String(r.interview__id || r.Id || '').trim(), r]));
-        let orphans = 0;
-        const recs = [];
-        f.rows.forEach(r => {
-          const iid = String(r.interview__id || r.ParentId1 || '').trim(), m = byInt.get(iid);
-          if (!m) { orphans++; return; }
-          const row = Object.assign({}, m, r), cid = String(r.calls__id || r.Id || '').trim();
-          row.result = codeStatus({ codes: L.PROFILES[0].codes }, row.result);
-          const loggedAt = (isoParts(r.call_end).wall || isoParts(r.call_start).wall || '').replace(' ', 'T') + (isoParts(r.call_end).off || isoParts(r.call_start).off || '');
-          recs.push({ r: row, e: enumOf(m.enumerator_id), eid: `${iid}:${cid}`, loggedAt, when: stamp(r.call_end) || stamp(r.call_start) });
-        });
-        const parts = emit(f, 'suso', recs);
-        extra.push({ name: f.name, kind: 'Survey Solutions export', enumerator_id: '', exported_at: '', count: f.rows.length,
-          use: `${R.plural(f.rows.length, 'call record')} joined with ${main.name} (${R.plural(main.rows.length, 'interview')}), split into ${R.plural(parts, 'export')} by enumerator${orphans ? `; ${orphans} rows without their interview left out` : ''}` });
-      } else if (f.kind === 'suso_main') {
-        extra.push({ name: f.name, kind: 'Survey Solutions export', enumerator_id: '', exported_at: '', count: f.rows.length,
-          use: callsFiles.length ? 'the interviews: joined with the call records' : 'not merged: its roster file calls.tab (the call records) was not added' });
-      } else if (f.kind === 'service') {
-        service.push(f);
-        extra.push({ name: f.name, kind: 'calling service log', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'matched to the recorded calls after the merge (needs the household list)' });
       } else if (f.kind === 'unmapped') {
         extra.push({ name: f.name, kind: 'table, columns unknown', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged until its columns are mapped (Import tab)' });
       } else out.push(f);
     }
-    return { imports: out, extra, service };
+    return { imports: out, extra };
   };
-  // the calling service's log against the merged dials: by the household's number and a start within three minutes;
-  // a missing call end is filled from the service; what does not match is reported (numbers never leave this computer)
-  L.applyService = (G, services, Hl, resolutions) => {
-    const res = resolutions || new Map(), digits = s => String(s || '').replace(/\D/g, '');
-    const numIndex = new Map();
-    for (const h of Hl.values()) (h.phones || []).forEach(p => { const d = digits(p.number); if (!d) return; if (!numIndex.has(d)) numIndex.set(d, []); numIndex.get(d).push({ hhid: h.hhid, slot: p.slot }); });
-    const bySuffix = new Map();
-    for (const d of numIndex.keys()) { const k = d.slice(-8); if (!bySuffix.has(k)) bySuffix.set(k, []); bySuffix.get(k).push(d); }
-    const find = d => (d ? numIndex.get(d) || (bySuffix.get(d.slice(-8)) || []).flatMap(x => numIndex.get(x)) : []);
-    const dialsBy = new Map();
-    G.dials.forEach(d => { if (!dialsBy.has(d.hhid)) dialsBy.set(d.hhid, []); dialsBy.get(d.hhid).push(d); });
-    const stats = { files: services.length, calls: 0, panel: 0, matched: 0, filled: 0, unknown: 0, unlogged: 0, dials: G.dials.length, unmatched_dials: 0 };
-    for (const f of services) {
-      const g = (r, k) => { const key = Object.keys(r).find(c => normCol(c) === k); return key ? r[key] : ''; };
-      const calls = f.rows.map(r => {
-        const to = digits(g(r, 'to')), start = Date.parse(g(r, 'starttime') || g(r, 'datecreated')), end = Date.parse(g(r, 'endtime')), dur = parseFloat(g(r, 'duration'));
-        return { sid: g(r, 'sid') || g(r, 'callsid'), to, hh: find(to), start: isNaN(start) ? null : start, end: isNaN(end) ? null : end, dur: isNaN(dur) ? null : dur, status: String(g(r, 'status') || '').toLowerCase() };
-      }).filter(c => c.start !== null).sort((a, b) => a.start - b.start);
-      stats.calls += calls.length;
-      let unlogged = 0;
-      for (const c of calls) {
-        if (!c.hh.length) { stats.unknown++; continue; }
-        stats.panel++;
-        let best = null, bd = 180000 + 1;
-        for (const { hhid, slot } of c.hh) for (const d of dialsBy.get(hhid) || []) {
-          if (d._svc || (d.phone_slot && slot && +d.phone_slot !== +slot)) continue;
-          const dt = Math.abs(Date.parse(d.ts) - c.start);
-          if (dt < bd) { bd = dt; best = d; }
-        }
-        if (!best) {
-          unlogged++; stats.unlogged++;
-          const key = `unlogged_call:${c.sid || c.start}`;
-          const r = res.get(key);
-          G.issues.push(Object.assign({ key, type: 'unlogged_call', severity: 'action', file: f.name, hhid: c.hh[0].hhid,
-            detail: `The calling service shows a ${c.status || ''} call to ${c.hh[0].hhid} at ${R.localISO(new Date(c.start)).slice(0, 16).replace('T', ' ')} that nobody recorded within three minutes.`,
-            choices: [{ value: 'acknowledged', label: 'Noted' }] }, r ? { status: 'resolved', decision: r.decision, note: r.note, by: r.logged_by, at: r.logged_at } : { status: 'open' }));
-          continue;
-        }
-        best._svc = c; stats.matched++;
-        if (!best.end_ts && (c.end !== null || c.dur !== null)) {
-          const endMs = c.end !== null ? c.end : c.start + c.dur * 1000;
-          best.end_ts = R.localISO(new Date(endMs)); best.dur_min = Math.max(0, (endMs - Date.parse(best.ts)) / 60000); stats.filled++;
-        }
-      }
-      G.issues.push({ key: `service:${f.sha}`, type: 'service_log', severity: 'info', status: 'noted', file: f.name,
-        detail: `${R.plural(calls.length, 'call')} in the service log: ${stats.panel} to the panel's numbers, of which ${stats.matched} matched a recorded call and ${unlogged} had no record within three minutes; ${stats.unknown} to numbers not in the household list.` });
-    }
-    stats.unmatched_dials = G.dials.filter(d => !d._svc).length;
-    G.serviceStats = stats;
-    return stats;
-  };
-  // the two files the platforms take in (proposal K.3): the household file for the KoBo form's media, and the Survey Solutions assignments upload
+  // the file the tool's own KoBo form takes in (proposal K.3): the household file for the form's media
   const planOf = (plans, id) => (plans && plans.get && plans.get(id)) || {};
   L.KOBO_COLS = ['name', 'label', 'hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum', 'kind', 'replaces', 'rank'];
   const contactCols = H => { const o = {}; (H && H.phones || []).forEach(p => { if (p.slot >= 1 && p.slot <= 3) { o[`phone_${p.slot}`] = p.number || ''; o[`phone_${p.slot}_label`] = p.label || ''; } }); return o; };
@@ -993,25 +917,29 @@
     }
     return R.toCSV(rows, L.KOBO_COLS);
   };
-  L.SUSO_COLS = ['hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum',
-    'replacement_1', 'replacement_1_name', 'replacement_1_phone', 'replacement_2', 'replacement_2_name', 'replacement_2_phone', '_responsible', '_quantity'];
-  L.susoAssignments = (M, Hl, plans, logins) => {
-    const cell = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
-    const lines = [L.SUSO_COLS.join('\t')];
-    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
-      const H = Hl.get(h.hhid) || {}, pl = planOf(plans, h.hhid), reps = (h.replacements || []).slice(0, 2).map(id => Hl.get(id) || { hhid: id });
-      const row = Object.assign({ hhid: h.hhid, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: H.name || '', planned_date: pl.first_dial_date || '',
-        planned_hour: Number.isInteger(pl.target_hour) ? pl.target_hour : '', psu: h.psu || '', stratum: h.stratum || '',
-        _responsible: (logins && logins[h.enumerator_id]) || h.enumerator_id, _quantity: 1 }, contactCols(H));
-      reps.forEach((Rh, i) => { row[`replacement_${i + 1}`] = Rh.hhid || ''; row[`replacement_${i + 1}_name`] = Rh.name || ''; row[`replacement_${i + 1}_phone`] = ((Rh.phones || [])[0] || {}).number || ''; });
-      lines.push(L.SUSO_COLS.map(c => cell(row[c])).join('\t'));
+  // the records the leader should look at in the platform (K.8): every dial behind a merge question that needs or had a decision,
+  // with the platform's own record ID (the form's _uuid), so that the leader can find it in KoBoToolbox's table view
+  L.REVIEW_COLS = ['issue', 'status', 'decision', 'hhid', 'enumerator', 'record_id', 'call_start', 'result', 'minutes', 'detail'];
+  L.reviewRows = G => {
+    const out = [], seen = new Set();
+    const dialsOf = (h, e) => G.dials.filter(d => d.hhid === h && (!e || d.source === e));
+    for (const i of G.issues) {
+      if (i.severity !== 'action' || !i.hhid) continue;
+      let ds = i.event_id ? G.dials.filter(d => d.event_id === i.event_id) : dialsOf(i.hhid, i.type === 'two_completes' ? '' : i.enumerator);
+      if (i.type === 'two_completes') ds = ds.filter(L.qualifies);
+      if (!ds.length) ds = [null];
+      for (const d of ds) {
+        const key = `${i.key}|${d ? d.event_id : ''}`; if (seen.has(key)) continue; seen.add(key);
+        out.push({ issue: i.type, status: i.status, decision: i.decision || '', hhid: i.hhid, enumerator: d ? d.source : (i.enumerator || ''), record_id: d ? d.event_id : '',
+          call_start: d ? d.ts : '', result: d ? d.status : '', minutes: d && d.dur_min !== null && d.dur_min !== undefined ? (+d.dur_min).toFixed(1) : '', detail: i.detail });
+      }
     }
-    return lines.join('\n') + '\n';
+    return out;
   };
   // the household list as a KoBoToolbox choices list (the L2PHL form's layout: list_name SN, the ID as name and label, the interviewer's code in filter_int_id)
   L.CHOICE_COLS = ['list_name', 'name', 'label', 'filter_int_id', 'enumerator_id', 'kind', 'replaces', 'rank'];
-  L.koboChoices = (M, Hl) => {
-    const pid = new Map(M.enumerators.map(e => [e.enumerator_id, e.platform_id || e.enumerator_id]));
+  L.koboChoices = (M, Hl, codes) => {
+    const codeOf = L.codeOf(M, codes), pid = new Map(M.enumerators.map(e => [e.enumerator_id, codeOf(e.enumerator_id)]));
     const rows = [];
     for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
       rows.push({ list_name: 'SN', name: h.hhid, label: h.hhid, filter_int_id: pid.get(h.enumerator_id) || h.enumerator_id, enumerator_id: h.enumerator_id, kind: 'main', replaces: '', rank: '' });
@@ -1019,32 +947,6 @@
     }
     return R.toCSV(rows, L.CHOICE_COLS);
   };
-  // a zip archive (a Survey Solutions export) as its text members: the same reader as the workbook's
-  L.readZip = async buf => {
-    const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), dec = new TextDecoder('utf-8');
-    let eocd = -1;
-    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-    if (eocd < 0) throw new Error('This is not a zip archive.');
-    const n = dv.getUint16(eocd + 10, true), out = new Map();
-    let p = dv.getUint32(eocd + 16, true);
-    const entries = [];
-    for (let k = 0; k < n; k++) {
-      if (dv.getUint32(p, true) !== 0x02014b50) break;
-      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
-      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
-      entries.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, off });
-      p += 46 + nl + el + cl;
-    }
-    for (const e of entries) {
-      if (e.name.endsWith('/') || !/\.(tab|csv|txt|json)$/i.test(e.name)) continue;
-      const start = e.off + 30 + dv.getUint16(e.off + 26, true) + dv.getUint16(e.off + 28, true);
-      const data = u8.subarray(start, start + e.csize);
-      if (e.method === 0) out.set(e.name, dec.decode(data));
-      else if (e.method === 8 && typeof DecompressionStream !== 'undefined') out.set(e.name, dec.decode(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
-    }
-    return out;
-  };
-
   // ---- the merge (F): every situation gives a line in the merge report; nothing is resolved silently ----
   // resolutions: Map issue key -> {decision, note, logged_by, logged_at}
   L.merge = (M, imports, resolutions, now, opts) => {
@@ -1077,7 +979,7 @@
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
     for (const f of imports) {
-      const row = { name: f.name, kind: f.form ? (f.form === 'suso' || f.form === 'suso_calls' ? 'Survey Solutions records' : 'platform records') : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
+      const row = { name: f.name, kind: f.form ? 'platform records' : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
       files.push(row);
       if (seen.has(f.sha)) {
         row.use = 'duplicate, ignored';
@@ -1233,6 +1135,19 @@
         perEnum.set(e, { file: latest.f, dials, actions, contacts, events: null, unverified: true });
       }
     }
+    // the enumerators' own changes to their schedule (3 November 2026): calls they moved, and their time off; known only from a JSON export
+    const selfSched = new Map();
+    for (const [e, x] of perEnum) {
+      if (!x.events) { selfSched.set(e, { known: false }); continue; }
+      const plans = x.events.filter(ev => ev.type === 'plan' && !ev.clear), off = new Map();
+      x.events.filter(ev => ev.type === 'availability' && ev.date).forEach(ev => {
+        if (ev.cancel) { off.delete(ev.date); return; }
+        const had = off.get(ev.date);
+        off.set(ev.date, had && had !== ev.part && had !== 'day' && ev.part !== 'day' ? 'day' : ev.part === 'day' || had === 'day' ? 'day' : ev.part);
+      });
+      selfSched.set(e, { known: true, moved: plans.length, first_later: plans.filter(ev => ev.first && ev.was && (ev.at || '').slice(0, 10) > ev.was.slice(0, 10)).length,
+        reasons: plans.reduce((m, ev) => { m[ev.reason] = (m[ev.reason] || 0) + 1; return m; }, {}), off });
+    }
     // 3. households: dials outside the enumerator's assignment, two completes, implausible clocks
     const excludedDials = new Set();
     const activatedBy = new Map();
@@ -1335,7 +1250,7 @@
       if (!okNum || !okLog) issue({ key: `contact:${u.event_id}`, type: 'contact_mismatch', severity: 'info', file: f.name, hhid: u.hhid, enumerator: f.enumerator_id,
         detail: `The number for ${u.hhid}, slot ${u.slot}, does not match the digest ${okNum ? 'in the call log' : 'beside it'}.` });
     });
-    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), service: ex.service, unmapped };
+    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), unmapped, selfSched };
   };
 
   // ---- cases and progress: one line per household of the round (manifest households and activated replacements) ----
@@ -1372,14 +1287,19 @@
   L.progress = (M, C, G) => {
     const tz = M.calendar.time_zone;
     const rows = new Map();
-    const row = e => { if (!rows.has(e)) rows.set(e, { enumerator_id: e, households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, days: new Set(), last_export: '' }); return rows.get(e); };
+    const row = e => { if (!rows.has(e)) rows.set(e, { enumerator_id: e, households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, days: new Set(), last_export: '', moved_by_them: 0, first_later: 0, days_off: 0, off: [] }); return rows.get(e); };
     M.enumerators.forEach(e => row(e.enumerator_id));
     for (const c of C.values()) { const r = row(c.enumerator_id); r.households++; r[c.state]++; }
     G.dials.forEach(d => { const r = row(d.source); r.dials++; r.days.add(R.partsIn(new Date(Date.parse(d.ts)), tz).key); });
     for (const [e, x] of G.perEnum) row(e).last_export = x.file.exported_at || '';
+    for (const [e, ss] of (G.selfSched || new Map())) {
+      if (!ss.known) continue;
+      const r = row(e); r.moved_by_them = ss.moved; r.first_later = ss.first_later; r.off = [...ss.off].sort();
+      r.days_off = r.off.reduce((a, [, part]) => a + (part === 'day' ? 1 : 0.5), 0);
+    }
     const list = [...rows.values()].sort((a, b) => cmpStr(a.enumerator_id, b.enumerator_id));
     list.forEach(r => { r.enumerator_days = r.days.size; delete r.days; r.completes_per_day = r.enumerator_days ? r.complete / r.enumerator_days : null; });
-    const tot = { enumerator_id: 'All', households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, enumerator_days: 0 };
+    const tot = { enumerator_id: 'All', households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, enumerator_days: 0, moved_by_them: 0, first_later: 0, days_off: 0 };
     list.forEach(r => Object.keys(tot).forEach(k => { if (k !== 'enumerator_id') tot[k] += r[k]; }));
     tot.completes_per_day = tot.enumerator_days ? tot.complete / tot.enumerator_days : null;
     // completes by day of the window, and by stratum
@@ -1405,10 +1325,12 @@
     const left = R.workingDaysLeft(cal, today);
     const rows = P.list.map(r => {
       const open = r.not_started + r.in_progress, exportDay = r.last_export ? r.last_export.slice(0, 10) : '';
+      const offAhead = (r.off || []).filter(([k]) => k >= today && k <= cal.end && cal.isWorking(k)).reduce((a, [, part]) => a + (part === 'day' ? 1 : 0.5), 0);
+      const leftE = Math.max(0, left - offAhead);
       const known = r.enumerator_days >= 2 && r.completes_per_day !== null;
       const row = { enumerator_id: r.enumerator_id, households: r.households, complete: r.complete, open, waiting: r.not_started, in_progress: r.in_progress,
-        pace: r.completes_per_day, enumerator_days: r.enumerator_days, days_left: left, export_at: r.last_export || '', export_day: exportDay, fresh: exportDay === today, known };
-      row.capacity = known ? r.completes_per_day * left : null;
+        pace: r.completes_per_day, enumerator_days: r.enumerator_days, days_left: leftE, off_ahead: offAhead, export_at: r.last_export || '', export_day: exportDay, fresh: exportDay === today, known };
+      row.capacity = known ? r.completes_per_day * leftE : null;
       row.need = known ? open - row.capacity : null;
       row.projected = known ? Math.min(r.households, r.complete + Math.floor(row.capacity + 1e-9)) : null;
       // an enumerator who left during the round is judged no more; one with nothing open is judged on any export (nothing can have changed)

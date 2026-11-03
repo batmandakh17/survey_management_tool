@@ -62,6 +62,14 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
      from those furthest behind. "An enumerator is away: E01" moves every open household of E01 to the others,
      booked callbacks included, and marks E01 away in the roster. "An enumerator joins the round" adds E09 with
      a platform code; give them households the same way, and the next write includes their first file.
+   - **The contact protocol.** On the Prepare tab, step 4, set at most 3 calls a day, 3 hours apart, over 5 working
+     days for a household never reached, and tick "Vary the time of day": the step shows 15 calls against the dial
+     cap, and the enumerator's list then plans each next call by that protocol.
+   - **What enumerators change themselves.** In the enumerator view, a household's panel has "Move the next
+     call" (a new time with a reason; a first call stays inside the round's first-call period) and the Calendar
+     tab has "My time off" (a day or half day; the calls planned then move to the next working time). The leader
+     allows either on the Prepare tab, step 4, and the Progress tab counts what each enumerator changed; the pace
+     counts only the days each one works.
 8. **Try the merge questions.** Add the files in `merge_cases/`, one folder at a time: a duplicate, an
    earlier export, a file from another round, a file edited after export, a CSV without its JSON (E02's later
    export that evening, whose JSON did not arrive, used as unverified), and a conflict where E01 logs a
@@ -84,23 +92,25 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
 The worked example is the Philippines program (L2PHL). Its interview form in KoBoToolbox records every call
 attempt, so the round's call log needs nothing but the form: the tool prepares the assignment and writes the
 form's list of households, KoBoToolbox collects the calls, and the tool reads the form's export back
-(`formats/kobo/README.md`). With the same session as above, after the manifest is open:
+(`formats/kobo/README.md`). Everything that crosses the boundary sits on the **KoBoToolbox** tab, which walks the
+round's cycle in five steps: the interviewers' codes in the form, the list going out, the export coming in each
+day, the list again after moves, and the records to look at in KoBoToolbox. With the same session as above, after
+the manifest is open:
 
-1. **The form's export.** On the Import tab, under *Add platform files*, add
+1. **The form's export.** On the KoBoToolbox tab, step 3, add
    `samples/kobo/L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv`: 340 submissions by three
    interviewers (the same calls as `exports_R05/`), one per attempt, with the result in the form's ten codes. The
    tool recognises the columns, reads each interviewer's code as the tool's enumerator ID through the manifest, and
    merges it as a CSV export: the same dials and completes per enumerator.
-2. **A form with other columns.** Save the export with other column names and add it: the Import tab asks which
+2. **A form with other columns.** Save the export with other column names and add it: step 3 asks which
    column plays each role and what each code means, keeps the mapping in the session, and merges the file.
-3. **What the form takes in.** On the Call log tab, *choices_households.csv* is the form's choices list of
+3. **What the form takes in.** Step 2 writes *choices_households.csv*, the form's choices list of
    households, with each interviewer's code in `filter_int_id`, the column the L2PHL form already has for a
    `choice_filter`: pasted into the form's choices sheet, it shows each interviewer only their own households.
    *households.csv* is the media file of the tool's own call-record form (`formats/kobo/rtm_call_record.xlsx`).
-   Both come from the current manifest; after moving households during the round, write them again.
-
-The leader view also reads a Survey Solutions export and a calling service's call log, and writes the Survey
-Solutions assignments upload (`formats/suso/README.md`; samples in `samples/suso/` and `samples/calls/`).
+   Both come from the current manifest; after moving households during the round, step 4 writes them again.
+4. **Records to look at.** Step 5 lists every dial behind a merge question with the submission's `_uuid`, for the
+   project's table view.
 
 ## Try the enumerator view
 
@@ -127,7 +137,7 @@ Solutions assignments upload (`formats/suso/README.md`; samples in `samples/suso
 | `samples/round05/E01_…`, `E02_assignment_R05.json` | The other enumerators' assignments; opening one as an update to E07's session is refused. A revised file the leader view writes after moving households opens as an update to the enumerator's session |
 | `samples/past/E07_2026-10-21.csv` and `.json` | E07's round-4 export, for the performance view |
 | `samples/rtmtools_export/` | A real `rtmsample draw` run with reserves (`selection.csv`, its manifest, and the do-file that made it), for the leader's Step 3 |
-| `samples/kobo/`, `samples/suso/`, `samples/calls/` | The round-5 calls in the L2PHL form's layout and in the tool's own form, the lists the tool writes for the form, and the same calls as a Survey Solutions export and a calling service's log |
+| `samples/kobo/` | The round-5 calls in the L2PHL form's layout and in the tool's own form, and the lists the tool writes for the form |
 
 ## Folder
 
@@ -137,7 +147,8 @@ Solutions assignments upload (`formats/suso/README.md`; samples in `samples/suso
 | `src/` | `core.js` (log, scheduler, files), `enum_view.js` (enumerator view), `leader_core.js` (rules, planning, merge), `leader_stats.js` (analytics), `leader_risk.js` (risk models), `leader_view.js` (leader view), `app.css`, `shell.html`, `holidays_data.js` |
 | `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally), `risk_models.json` and `validation.json` (coefficients and aggregates only), `coef_significance.py` and `coefficients.json` (each coefficient's household-clustered standard error, z and p), `make_card.py` and `MODEL_CARD.md` |
 | `holidays/make_holidays.py` | Writes the bundled holiday table (Python package `holidays`, 2025–2030) |
-| `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox layouts and `formats/suso/` the Survey Solutions specification |
+| `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox layouts |
+| `manual/` | The user manual (`manual.html`, `RTM_interview_tool_manual.pdf`) and the worked examples (`examples.html`, `RTM_interview_tool_examples.pdf`: 48 situations from a round, each with the steps in the tool and a picture); `make_screens.py` and `make_examples.py` take the pictures on the synthetic samples, `make_pdf.py` prints either page |
 | `samples/` | The synthetic program and the scripts that make it |
 | `tests/` | Browser tests of both views, the risk models, the merge batch and the other rules, the format checker and the rtmtools import; reference implementations of the handbook's rules and of the models; the usability walkthrough and its screens |
 | (not in this repository) | The task team's design document, open items, validation and usability reports, and the notes on how the handbook defines each measure the analytics show |
@@ -155,6 +166,8 @@ python3 tests/test_formats.py              # the format checker on good and dama
 python3 tests/test_rtmtools_import.py      # a real rtmtools replacement list through both views
 python3 tests/make_validation_report.py    # writes VALIDATION.md from the results (the report itself is not kept in the repository)
 python3 tests/usability_walkthrough.py 6   # screens for a usability pass, into tests/screens/usability_r6/
+python3 manual/make_screens.py             # the manual's pictures; then python3 manual/make_pdf.py
+python3 manual/make_examples.py            # the worked examples' pictures; then python3 manual/make_pdf.py examples.html RTM_interview_tool_examples.pdf 9353
 python3 formats/check_formats.py samples   # check any files or folders
 ```
 

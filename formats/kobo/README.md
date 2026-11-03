@@ -6,7 +6,7 @@ file in each direction: the project's data export comes in, and a list of househ
 is the Philippines program's form, which records every call attempt, so the round's call log needs nothing but
 KoBoToolbox; the tool was checked against that program's real export (aggregates at the end). The tool's own
 call-record form is the template for a team without a form (section 2), and any other form that records each
-attempt is mapped once on the Import tab (section 3).
+attempt is mapped once on the Platform tab (section 3).
 
 ## 1. A form that records every call attempt: the L2PHL layout
 
@@ -24,7 +24,7 @@ result of the call (`X15`, ten codes) and remarks (`X16`). KoBo's metadata give 
 | Role | Column | Read as |
 |---|---|---|
 | Household | `hhid` | `hhid` |
-| Enumerator | `int_id` | the tool's ID, through the platform code the leader gave each enumerator (Prepare tab, step 5); an unknown code is kept as it is |
+| Enumerator | `int_id` | the tool's ID, through the platform code the leader gave each enumerator (Platform tab, step 1, or Prepare tab, step 5); an unknown code is kept as it is |
 | Call start, end | `start`, `end` | `ts`, `end_ts` (the form's open and submit times, with their offset) |
 | Result | `X15` | `status`, by the map below |
 | Attempt | `Z8` | kept for reference; the merge numbers the dials itself |
@@ -33,8 +33,8 @@ result of the call (`X15`, ten codes) and remarks (`X16`). KoBo's metadata give 
 
 | `X15` | Meaning in the form | Status in the tool |
 |---|---|---|
-| 1 | Complete | `COMPLETE` |
-| 2 | Partially complete, no more callback | `COMPLETE` (the program counts it as done) |
+| 1 | Complete | `COMPLETE`, when consent was given (`Z9` = 1); without it `OTHER`, noted |
+| 2 | Partially complete, no more callback | `REFUSAL_HARD`, the form's label in the note: the case is closed, as the program's protocol closes it |
 | 3 | Partially complete, scheduled another call | `PARTIAL` |
 | 4 | Not yet started, with scheduled callback | `APPOINTMENT` |
 | 5 | Refused | `REFUSAL_SOFT` |
@@ -50,10 +50,11 @@ rule of the merge applied. A complete needs a call of three minutes or more (Box
 open to its submit time.
 
 **The list the tool writes back: `choices_households.csv`.** The form takes its households from the choices sheet,
-so the leader view (Call log tab) writes the list in that sheet's layout: `list_name` (`SN`), `name` and `label`
+so the leader view (Platform tab, step 2) writes the list in that sheet's layout: `list_name` (`SN`), `name` and `label`
 (the household ID; a replacement's label says which household it replaces), `filter_int_id` (the enumerator's
 platform code), and for reference `enumerator_id`, `kind`, `replaces`, `rank`. Paste the rows into the choices
-sheet in place of the old SN list and redeploy; after moving households during the round, write and paste it again.
+sheet in place of the old SN list and redeploy; after moving households during the round, step 4 writes it again, to
+paste and redeploy once more (batch the day's moves: a redeploy reaches the interviewers only when they reload the form).
 With `choice_filter` set to `filter_int_id = ${int_id}` on the `hhid` question, each interviewer sees only their own
 households; the Philippines form's choices sheet already has the `filter_int_id` column. The list has no phone
 numbers.
@@ -72,7 +73,7 @@ Enketo version; where it is not honoured, the enumerator searches by ID. It has 
 
 ## 3. Any other form
 
-A file whose columns match none of the layouts above, one row per call attempt, opens a mapping card on the Import tab: the leader says which
+A file whose columns match none of the layouts above, one row per call attempt, opens a mapping card on the Platform tab, step 3: the leader says which
 column plays each role (household, enumerator, start, result, and optionally end, attempt, callback, number
 dialed, round, record ID, submission time, note), and what each value of the result column means, chosen from the
 tool's codes (the card lists the values with their counts). The mapping is saved in the leader's session and used
@@ -81,8 +82,10 @@ for every later file with the same columns. A value left unmapped is read as `OT
 ## 4. Platform codes
 
 Where the form knows enumerators by another code than the tool's ID (the L2PHL form's `int_id`, for example),
-the leader enters it on the Prepare tab, step 5, *Platform code*. It is written into the manifest (`platform_id`)
-and into the files for the platform, and every platform file is read under the tool's ID. Codes match regardless
+the leader enters it on the Platform tab, step 1, or on the Prepare tab, step 5, *Platform code* (the same column).
+Entered before the files are written, it goes into the manifest (`platform_id`); entered later, it is kept in the
+session and overrides the manifest's. It is written into the files for the platform, and every platform file is read
+under the tool's ID. Codes match regardless
 of case and punctuation, so `CATI07`, `CATI-07` and `cati_07` are one enumerator.
 
 ## 5. Samples

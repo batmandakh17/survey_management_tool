@@ -338,24 +338,32 @@ read as each category, and a summary of the backtests. It holds coefficients and
 - **One passphrase per enumerator** when assignment files are protected (D11), made by the tool and shown
   once, so that one enumerator's passphrase never opens another's file.
 
-## Files of KoBoToolbox, Survey Solutions and a calling service (1 November 2026)
+## Files of KoBoToolbox (1 November 2026; KoBoToolbox only since 3 November 2026)
 
-For a team that records its calls in KoBoToolbox (or Survey Solutions) rather than in this tool's enumerator view
-(proposal K; `formats/kobo/README.md` and `formats/suso/README.md` have the layouts and the daily cycle). The
+For a team that records its calls in a KoBoToolbox form rather than in this tool's enumerator view
+(proposal K; `formats/kobo/README.md` has the layouts and the daily cycle). The
 worked example is the L2PHL form, which records every call attempt in KoBoToolbox; the tool was checked against
 that program's real export.
 
 | File | Direction | Written or read as |
 |---|---|---|
-| KoBoToolbox export, L2PHL layout | KoBoToolbox → Import tab | The interview form submitted once per call attempt: `start`, `end`, `int_id`, `hhid`, `Z8`, `X15` (ten result codes), `X16`, `_uuid`, `_submission_time`; recognised by `_uuid`, `hhid`, `int_id`, `X15`; split by interviewer and merged as a CSV export of each |
+| KoBoToolbox export, L2PHL layout | KoBoToolbox → KoBoToolbox tab | The interview form submitted once per call attempt: `start`, `end`, `int_id`, `hhid`, `Z8`, `X15` (ten result codes), `X16`, `_uuid`, `_submission_time`; recognised by `_uuid`, `hhid`, `int_id`, `X15`; split by interviewer and merged as a CSV export of each |
 | `choices_households.csv` | Leader view → the form's choices sheet | The sample list of that form: `list_name` (SN), `name`, `label`, `filter_int_id` (the enumerator's platform code), `enumerator_id`, `kind`, `replaces`, `rank`. No phone numbers |
-| `households.csv` and the export of `rtm_call_record` | Leader view → KoBo media; KoBoToolbox → Import tab | The tool's own call-record form: the media file (`name`, `label`, `hhid`, `enumerator_id`, numbers, plan, `kind`, `replaces`, `rank`) and its export (`_uuid`, `hhid`, `result`, `enumerator_id`, …). Both have phone numbers |
-| `assignments.tab` and the Survey Solutions export | Leader view → Survey Solutions; Survey Solutions → Import tab | The assignments upload (identifying variables, `_responsible`, `_quantity`) and the export zip or its `.tab` files, joined by `interview__id` |
-| Calling service log | The service → Import tab | A CSV with the number called, the start, the end or duration and the status (Twilio's Call resource names); matched to the recorded calls by number and time, never re-exported |
-| Any other form | → Import tab | One row per call attempt; mapped once on the Import tab (roles and result codes); the mapping is saved in the leader's session (`settings.profiles`) and reused |
+| `households.csv` and the export of `rtm_call_record` | Leader view → KoBo media; KoBoToolbox → KoBoToolbox tab | The tool's own call-record form: the media file (`name`, `label`, `hhid`, `enumerator_id`, numbers, plan, `kind`, `replaces`, `rank`) and its export (`_uuid`, `hhid`, `result`, `enumerator_id`, …). Both have phone numbers |
+| `{program}_R{nn}_kobo_review.csv` | Leader view → the leader, for KoBoToolbox | Every dial behind a merge question that needs or had a decision, with the submission's `_uuid`: `issue`, `status`, `decision`, `hhid`, `enumerator`, `record_id`, `call_start`, `result`, `minutes`, `detail` |
+| Any other form | → KoBoToolbox tab | One row per call attempt; mapped once on the KoBoToolbox tab (roles and result codes); the mapping is saved in the leader's session (`settings.profiles`) and reused |
 
 The manifest's `enumerators[].platform_id` carries each enumerator's code in the platform, so that platform files
-are read under the tool's enumerator ID and the files written for the platform carry the code.
+are read under the tool's enumerator ID and the files written for the platform carry the code. A code entered on
+the KoBoToolbox tab after the files are written is kept in the leader's session (`settings.platform.codes`) and
+overrides the manifest's for reading and writing.
+
+**The KoBoToolbox tab (3 November 2026).** One tab walks the round's cycle with the form: the codes (1), the list
+out (2), the export in each day (3, with the mapping card and the open merge questions), the list again after
+moves (4), and the records to look at in KoBoToolbox (5). The Import tab keeps the enumerators' own exports; the
+Call log tab keeps the round's own files. The Survey Solutions reading and writing and the calling-service log of
+1 November 2026 were taken out on 3 November 2026 (KoBoToolbox only, the author's decision); they remain in the
+repository's history.
 
 
 ## Additions made on 31 October 2026, from the supervisor's requests of 28 October, for the author's approval
@@ -370,4 +378,23 @@ are read under the tool's enumerator ID and the files written for the platform c
 - **More cases during the round (3 November 2026).** `handover.appointment_ts`, the booked callback a moved
   household brings; in the manifest's roster, `away_from` for an enumerator who left and `joined_at` (with `name`,
   `platform_id`) for one who joined.
+- **The enumerator's own changes to the schedule (3 November 2026).** In the calendar of the assignment file and the
+  manifest, `self_scheduling`: `reschedule` and `availability` (what the enumerator may change themselves, both true
+  by default), `push_first_calls` (whether a first call may go past `first_calls_by`, false by default) and
+  `first_calls_by` (the last day of the plan's first-call period). In the call log, two event types: `plan` (the
+  enumerator moved a household's next call: `at`, `reason` one of `TOLD`, `PATTERN`, `WORKLOAD`, `OTHER`, `note`,
+  `was`, the time it replaced, and `first` for a household not yet called; or `clear`, undoing it; a later dial ends
+  it) and `availability` (a day or half day off: `date`, `part` one of `day`, `morning` until 13:00, `afternoon`
+  from 13:00, `note`; or `cancel`). A respondent's callback is never moved by a `plan` event. The leader reads both
+  from the JSON export; the CSV does not carry them. The leader's session keeps the setting in `settings.cal.self`.
+- **The contact protocol (3 November 2026).** In the calendar of the assignment file and the manifest,
+  `contact_protocol`: `per_day` (at most this many calls a day to one household), `gap_hours` (at least this many hours
+  between two calls to it on one day, 2 by default), `days` (a household never reached, no call with contact, is done
+  after this many working days of calls from its first call) and `vary_times` (each new day of calls starts in the part
+  of the day tried least: morning until 12:00, afternoon until 17:00, evening). Absent, the earlier rule applies: two
+  hours apart, no daily or day limit. The enumerator's list shows a household past its days as "Protocol done", a
+  decision like the dial cap; the replacement trigger `CAP_REACHED` covers both.
+- **L2PHL's result codes (3 November 2026, corrected).** In the L2PHL layout a complete is `X15` = 1 with consent
+  (`Z9` = 1), as in the program's own processing; `X15` = 2 (partially complete, no more callback) closes the case as
+  `REFUSAL_HARD`, the form's label kept in the note. A complete-coded record without consent is read as `OTHER`.
 - Files written before these additions read as before: every new field is optional.

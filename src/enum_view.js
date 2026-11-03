@@ -266,6 +266,38 @@
     APP.correct = null;
     log('correction', { target: eventId, changes: R.clean(ch), reason }, null, 'Correction saved. The original entry stays in the log.');
   }
+  // ---- the enumerator's own changes to the schedule, inside the leader's rules (calendar.self_scheduling) ----
+  function savePlan() {
+    const c = APP.C.map.get(APP.sel), f = $('#planform'); if (!c || !f) return;
+    const g = n => { const el = f.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ''; };
+    const at = fromLocalInput(g('when')), reason = g('reason'), note = g('note');
+    if (!at) return fieldError('#planform', 'when', 'Choose the day and time of the next call.');
+    if (!reason) return fieldError('#planform', 'reason', 'Say why you are moving the call.');
+    if (reason === 'OTHER' && !note) return fieldError('#planform', 'note', 'Write a note for "Other".');
+    const why = R.checkPlan(APP.S, c, at, APP.C.cal, R.now());
+    if (why) return fieldError('#planform', 'when', why);
+    const first = c.n === 0 && !(c.prior && c.prior.dials);
+    APP.plan = false;
+    log('plan', { hhid: c.hhid, at: R.localISO(at), reason, note: note || undefined, was: c.next.at ? R.localISO(c.next.at) : undefined, first: first ? 1 : undefined },
+      null, `Next call for ${c.hhid} moved to ${when(at)}. Your leader sees the change and its reason.`);
+  }
+  function clearPlan() {
+    const c = APP.C.map.get(APP.sel); if (!c || !c.mine) return;
+    log('plan', { hhid: c.hhid, clear: 1 }, null, `Your change is undone: ${c.hhid} follows the plan again.`);
+  }
+  function saveOff() {
+    const f = $('#offform'); if (!f) return;
+    const g = n => { const el = f.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ''; };
+    const key = g('date'), part = g('part') || 'day', note = g('note');
+    const r = R.checkOff(APP.S, APP.C, key, part, R.now());
+    if (r.error) return fieldError('#offform', 'date', r.error);
+    const go = () => log('availability', { date: key, part, note: note || undefined }, null,
+      `${dayLabel(key)} marked off (${R.OFF_PARTS[part]}). Calls planned then move to your next working time; your leader sees it.`);
+    if (r.warn.length) return confirmModal('A callback falls in that time', `${R.plural(r.warn.length, 'household')} booked a callback then: ${r.warn.join(', ')}. A callback the respondent agreed does not move: call it before you go, ask a colleague through your leader, or rebook it with the respondent.`, { okLabel: 'Mark it off anyway' }, go);
+    go();
+  }
+  function cancelOff(key) { log('availability', { date: key, cancel: 1 }, null, `${dayLabel(key)} is a working day for you again.`); }
+
   function confirmModal(title, text, opts, onOk) {
     APP.modal = Object.assign({ kind: 'confirm', title, text, onOk }, opts || {});
     render();
@@ -296,8 +328,8 @@
     if (!pol.active) return { ok: false, why: 'Replacements are not in use this round.' };
     if (!c.replacements.some(x => !x.active)) return { ok: false, why: 'No replacement left for this household.' };
     const trig = pol.triggers || ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'];
-    if ((trig.includes('REFUSAL_HARD') && c.flags.hard_refusal) || (trig.includes('ALL_NUMBERS_DEAD') && c.flags.all_dead) || (trig.includes('CAP_REACHED') && c.flags.cap_reached)) return { ok: true };
-    const say = { REFUSAL_HARD: 'a hard refusal', ALL_NUMBERS_DEAD: 'no working number', CAP_REACHED: 'the dial cap reached' };
+    if ((trig.includes('REFUSAL_HARD') && c.flags.hard_refusal) || (trig.includes('ALL_NUMBERS_DEAD') && c.flags.all_dead) || (trig.includes('CAP_REACHED') && (c.flags.cap_reached || c.next.kind === 'protocol_end'))) return { ok: true };
+    const say = { REFUSAL_HARD: 'a hard refusal', ALL_NUMBERS_DEAD: 'no working number', CAP_REACHED: 'the dial cap or the contact protocol reached' };
     return { ok: false, why: 'Allowed after ' + trig.map(t => say[t] || t).join(' or ') + '.' };
   }
   function saveContact() {
@@ -375,7 +407,7 @@
     const t = [['today', 'Today', q.due.length], ['households', 'Households', C.list.length], ['calendar', 'Calendar'], ['performance', 'My performance'], ['log', 'Log']];
     return `<nav class="tabs" role="tablist">${t.map(([k, l, n]) => `<button role="tab" aria-selected="${APP.tab === k}" data-act="tab" data-t="${k}" class="${APP.tab === k ? 'on' : ''}">${l}${n !== undefined ? ` <span class="count">${n}</span>` : ''}</button>`).join('')}</nav>`;
   }
-  const kindLabel = { callback: 'Callback', first: 'First dial', overdue: 'Overdue', redial: 'Redial', next_day: 'Redial', cap: 'Cap reached', refusal: 'Refusal', dead: 'No number', window_end: 'Window ends' };
+  const kindLabel = { callback: 'Callback', mine: 'Moved by you', first: 'First dial', overdue: 'Overdue', redial: 'Redial', next_day: 'Redial', cap: 'Cap reached', protocol_end: 'Protocol done', refusal: 'Refusal', dead: 'No number', window_end: 'Window ends' };
   function card(c, showDate) {
     const s = c.next;
     const t = s.at ? (showDate ? when(s.at) : hm(s.at)) : '';
@@ -483,16 +515,27 @@
         const k = `${y}-${R.p2(m)}-${R.p2(d)}`, inW = cal.inWindow(k);
         const hol = (inW ? cal.holiday(k) : null) || bundled.get(k);
         const st = stats[k] || {};
-        const cls = ['cell', inW ? 'inw' : 'outw', inW && !cal.isWorking(k) ? 'off' : '', hol ? 'hol' : '', k === today ? 'today' : ''].join(' ');
+        const mo = inW && cal.off ? cal.off.get(k) : null;
+        const cls = ['cell', inW ? 'inw' : 'outw', inW && !cal.isWorking(k) ? 'off' : '', hol ? 'hol' : '', mo ? 'myoff' : '', k === today ? 'today' : ''].join(' ');
         cells += `<button class="${cls}" data-act="gotoday" data-k="${k}" ${inW ? '' : 'tabindex="-1"'}>
-          <span class="dn">${d}</span>${hol ? `<span class="hname">${esc(hol.name)}${hol.estimated ? ' (est.)' : ''}</span>` : ''}
+          <span class="dn">${d}</span>${hol ? `<span class="hname">${esc(hol.name)}${hol.estimated ? ' (est.)' : ''}</span>` : ''}${mo ? `<span class="m me">you: off${mo === 'day' ? '' : mo === 'morning' ? ' a.m.' : ' p.m.'}</span>` : ''}
           ${inW ? `<span class="marks">${st.plan ? `<span class="m plan" title="first dials planned">${st.plan} planned</span>` : ''}${st.cb ? `<span class="m cb" title="callbacks booked">${st.cb} callback${st.cb > 1 ? 's' : ''}</span>` : ''}${st.dials ? `<span class="m done" title="dials made; completes">${R.plural(st.dials, 'dial')} · ${st.ok} complete</span>` : ''}</span>` : ''}
         </button>`;
       }
       return `<section class="month"><h3>${MONTH[m - 1]} ${y}</h3><div class="wk">${WD.map(w => `<span>${w}</span>`).join('')}</div><div class="days">${cells}</div></section>`;
     };
     const holsIn = (cal.raw.holidays || []).filter(h => cal.inWindow(h.date));
-    return `<p class="muted">Days in the round window are white; days outside it are grey. Hatched days get no calls planned automatically: days the call center does not work and public holidays. Holidays come from the assignment file (the leader's list for this round) and, outside the window, from the tool's bundled table (Python package <code>holidays</code>, as in handbook Section 3.5.4). Click a day to see its calls.</p>
+    const rules = R.selfRules(A), mine = [...(cal.off || new Map())].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const nextWork = (() => { let k = today < cal.start ? cal.start : today, g = 0; while (!cal.isWorking(k) && g++ < 60) k = R.addDaysKey(k, 1); return k; })();
+    const offCard = `<section class="sec offcard"><h4>My time off</h4>
+      ${rules.availability ? `<p class="muted small">Mark a day or half day you will not work. Calls planned then move to your next working time, so nothing waits for you; a callback a respondent agreed stays where it is. Your leader sees your time off and plans with it.</p>
+        <form id="offform" novalidate onsubmit="return false" class="row3"><label>Day <input type="date" name="date" min="${cal.start}" max="${cal.end}" value="${nextWork}"></label>
+          <label>Part <select name="part">${Object.entries(R.OFF_PARTS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+          <label>Note <input type="text" name="note" maxlength="120" placeholder="optional, no personal details"></label>
+          <button class="primary" data-act="saveoff">Mark as off</button></form>
+        ${mine.length ? `<ul class="offlist">${mine.map(([k, part]) => `<li><b>${dayLabel(k)}</b>, ${R.OFF_PARTS[part]} <button class="link" data-act="canceloff" data-k="${k}">I will work after all</button></li>`).join('')}</ul>` : '<p class="muted small">No time off marked.</p>'}`
+        : `<p class="muted small">Your leader keeps time off with them this round: tell your leader directly when you will not work.${mine.length ? ` Marked earlier: ${mine.map(([k]) => dayLabel(k)).join(', ')}.` : ''}</p>`}</section>`;
+    return `${offCard}<p class="muted">Days in the round window are white; days outside it are grey. Hatched days get no calls planned automatically: days the call center does not work and public holidays. Holidays come from the assignment file (the leader's list for this round) and, outside the window, from the tool's bundled table (Python package <code>holidays</code>, as in handbook Section 3.5.4). Click a day to see its calls.</p>
       <div class="months">${months.map(grid).join('')}</div>
       <p class="muted">${holsIn.length ? `Holidays in the window: ${holsIn.map(h => `${dayLabel(h.date)} ${esc(h.name)}${h.estimated ? ' (estimated)' : ''}${h.working ? ' — working day' : ''}`).join('; ')}.` : 'No public holiday falls inside the window.'} Working weekdays: ${cal.raw.working_weekdays.map(x => WD[x - 1]).join(', ')}; call hours ${R.p2(cal.hours.start)}:00–${R.p2(cal.hours.end)}:00${cal.tz ? ' (' + esc(cal.tz) + ')' : ''}.</p>`;
   }
@@ -556,13 +599,16 @@
   function logPanel(C) {
     const S = APP.S, chain = R.verifyChain(S.events, S.genesis);
     const ev = S.events.slice().reverse();
-    const kindTxt = e => ({ dial: 'Call', correction: e.void ? 'Voided an entry' : 'Correction', action: R.ACTIONS[e.action] || e.action, contact_update: 'Phone number', export: 'Exported the log', session: e.what === 'started' ? 'Session started' : 'Assignment updated' }[e.type] || e.type);
+    const kindTxt = e => ({ dial: 'Call', correction: e.void ? 'Voided an entry' : 'Correction', action: R.ACTIONS[e.action] || e.action, contact_update: 'Phone number', export: 'Exported the log', session: e.what === 'started' ? 'Session started' : 'Assignment updated',
+      plan: e.clear ? 'Undid a moved call' : 'Moved a call', availability: e.cancel ? 'Time off cancelled' : 'Time off' }[e.type] || e.type);
     const detail = e => {
       if (e.type === 'dial') return `${statusLabel(e.status)} · number ${e.phone_slot} · ${isoWhen(e.ts)}${e.end_ts ? ' – ' + hm(R.parseTS(e.end_ts)) : ''}${e.appointment_ts ? ' · callback ' + isoWhen(e.appointment_ts) : ''}${e.action ? ' · ' + (R.ACTIONS[e.action] || e.action) : ''}${e.note ? ' · “' + esc(e.note) + '”' : ''}`;
       if (e.type === 'correction') return `${esc(e.reason || '')}${e.changes ? ' · changed: ' + Object.keys(e.changes).join(', ') : ''}`;
       if (e.type === 'action') return `${e.target_hhid ? 'replacement ' + esc(e.target_hhid) + ' · ' : ''}${esc(e.reason || '')}`;
       if (e.type === 'contact_update') return `number ${e.slot}: ${esc(e.change)}${e.label ? ' (' + esc(e.label) + ')' : ''}`;
       if (e.type === 'export') return esc(e.file_base) + ' · ' + e.event_count + ' events';
+      if (e.type === 'plan') return e.clear ? 'back to the plan' : `to ${isoWhen(e.at)} · ${esc(R.PLAN_REASONS[e.reason] || e.reason || '')}${e.note ? ' · “' + esc(e.note) + '”' : ''}${e.was ? ' · was ' + isoWhen(e.was) : ''}`;
+      if (e.type === 'availability') return `${dayLabel(e.date)}${e.cancel ? '' : ', ' + esc(R.OFF_PARTS[e.part] || e.part)}${e.note ? ' · “' + esc(e.note) + '”' : ''}`;
       if (e.type === 'session') return e.what === 'started' ? `from ${esc(e.file || 'the assignment file')}${e.fingerprint_ok === 0 ? ' · the file was changed after it was generated' : ''}` : `${e.households_added || 0} added, ${e.households_removed || 0} removed`;
       return '';
     };
@@ -612,7 +658,8 @@
       ${c.flags.complete_short && c.open ? `<div class="alert warn">The complete you logged lasted under ${R.MIN_COMPLETE_MIN} minutes. Box 3.0 counts it as an appointment contact, not a complete, so the household stays open: call again, or correct the time if it is wrong.</div>` : ''}
       ${c.kind === 'removed' ? `<div class="alert info">This household is no longer in your assignment${h.removed_at ? ` (your leader's update, opened ${isoWhen(h.removed_at)})` : ''}. The calls you logged stay in your log and in your exports; you cannot log new calls for it.</div>` : ''}
       ${c.prior ? `<div class="alert info">Moved to you by your leader${c.prior.moved_at ? ` on ${isoWhen(c.prior.moved_at)}` : ''}${c.prior.from ? ` from ${esc(c.prior.from)}` : ''}, who made ${R.plural(c.prior.dials, 'dial')}${c.prior.last_status ? ` (last: ${esc(statusLabel(c.prior.last_status))}${c.prior.last_ts ? ', ' + isoWhen(c.prior.last_ts) : ''})` : ''}. ${c.prior.dials ? `Those dials count toward the cap of ${C.cal.cap}: ${Math.max(0, C.cal.cap - c.nAll)} left.` : ''}${c.prior.appointment_ts ? ` The household booked a callback for ${isoWhen(c.prior.appointment_ts)}${c.n ? '' : ': keep it'}.` : ''}</div>` : ''}
-      ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}</div>` : ''}
+      ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}
+        ${planLinks(c)}</div>${APP.plan ? planForm(c) : ''}` : ''}
       <dl class="facts">
         <dt>Usual time</dt><dd>${usual ? (hist.last_interview ? `${usual}, from the last interview` : `${usual}, planned by your leader (no interview yet)`) : 'not known'}${tzNote}</dd>
         <dt>Last interview</dt><dd>${hist.last_interview ? `round ${hist.last_interview.round}, ${dayLabel(hist.last_interview.date)}${Number.isInteger(hist.last_interview.hour) ? ' at ' + R.p2(hist.last_interview.hour) + ':00' : ''}` : 'none yet'}</dd>
@@ -633,6 +680,25 @@
         ${c.open ? `<div class="btnrow"><button data-act="release">${R.ACTIONS.RELEASE}</button><button data-act="switch">Ask for another enumerator</button><button ${c.flags.all_dead || c.flags.no_phone ? '' : 'disabled title="Only when no number works"'} data-act="remove">Ask the leader to remove</button></div>` : ''}</section>` : ''}
       ${repl}
     </aside>`;
+  }
+  // the links under "Next": move the next call, or undo the move, when the leader allows it
+  function planLinks(c) {
+    const rules = R.selfRules(APP.S.assignment);
+    if (!rules.reschedule || APP.call) return '';
+    if (c.appointment) return '<div class="muted small">A callback is booked: to change it, correct the call’s callback time.</div>';
+    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(c.next.kind)) return '';
+    return `<div class="planlinks">${APP.plan ? '' : '<button class="link" data-act="plan">Move the next call</button>'}${c.mine ? ' · <button class="link" data-act="clearplan">Undo my change</button>' : ''}</div>`;
+  }
+  function planForm(c) {
+    const rules = R.selfRules(APP.S.assignment), first = c.n === 0 && !(c.prior && c.prior.dials);
+    const def = c.next.at && c.next.at > R.now() ? c.next.at : new Date(R.now().getTime() + 2 * 3600e3);
+    return `<section class="sec callbox"><h4>Move the next call · ${esc(c.hhid)}</h4>
+      <p class="muted small">For what the plan cannot know: someone told you when to call, the household answers at another time, or your day is full. Inside the round window and the call hours${first && !rules.push_first_calls && rules.first_calls_by ? `; a first call by ${dayLabel(rules.first_calls_by)}` : ''}. Your leader sees each change and its reason. A respondent’s callback is booked with the call instead.</p>
+      <form id="planform" novalidate onsubmit="return false">
+      <div class="row2"><label>Next call <input type="datetime-local" name="when" value="${toLocalInput(def)}"></label>
+        <label>Why <select name="reason"><option value="">Choose…</option>${Object.entries(R.PLAN_REASONS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></label></div>
+      <label>Note <input type="text" name="note" maxlength="200" placeholder="Operational only: no personal details"></label>
+      <div class="btnrow"><button class="primary" data-act="saveplan">Save the new time</button><button class="subtle" data-act="cancelplan">Cancel</button></div></form></section>`;
   }
   const statusButtons = (sel) => `<fieldset class="statuses"><legend>Result of the call</legend>${R.STATUS.map(s => `<label class="sopt s-${s.cat}"><input type="radio" name="status" value="${s.code}" ${sel === s.code ? 'checked' : ''}>${esc(s.label)}</label>`).join('')}</fieldset>`;
   const afterFields = (defAppt) => `<div class="row2"><label>Callback time, if one was agreed <input type="datetime-local" name="appointment" value="${defAppt || ''}"></label>
@@ -747,7 +813,7 @@
     switch (act) {
       case 'view': APP.view = el.dataset.v; render(); break;
       case 'tab': APP.tab = el.dataset.t; render(); break;
-      case 'open': APP.sel = el.dataset.hh; APP.correct = null; APP.contact = false; APP.manual = false; render(); break;
+      case 'open': APP.sel = el.dataset.hh; APP.correct = null; APP.contact = false; APP.manual = false; APP.plan = false; render(); break;
       case 'closehh': if (APP.call && !APP.call.end) return toast('End the call first.', 'warn'); APP.sel = null; APP.call = null; render(); break;
       case 'filter': APP.filter = el.dataset.f; render(); break;
       case 'day': { const d = +el.dataset.d; APP.day = d === 0 ? null : R.addDaysKey(APP.day || todayKey(), d); if (APP.day === todayKey()) APP.day = null; render(); break; }
@@ -766,6 +832,12 @@
       case 'switch': if (c) doAction(c, 'SWITCH_REQUEST'); break;
       case 'remove': if (c) doAction(c, 'REMOVE_REQUEST'); break;
       case 'replace': if (c) activateReplacement(c); break;
+      case 'plan': APP.plan = true; render(); { const el = $('#planform [name="when"]'); if (el) el.focus(); } break;
+      case 'cancelplan': APP.plan = false; render(); break;
+      case 'saveplan': savePlan(); break;
+      case 'clearplan': clearPlan(); break;
+      case 'saveoff': saveOff(); break;
+      case 'canceloff': cancelOff(el.dataset.k); break;
       case 'contact': APP.contact = !APP.contact; render(); break;
       case 'cancelcontact': APP.contact = false; render(); break;
       case 'savecontact': saveContact(); break;

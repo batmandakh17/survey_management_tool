@@ -90,7 +90,19 @@
           }
         },
         "dial_cap": { "type": "integer", "minimum": 1, "description": "The program's stopping rule, in dials per household per round." },
-        "day_list": { "type": "integer", "minimum": 1, "description": "The day list: how many households the enumerator's Today tab offers at most each day, the calls due first and then households pulled forward from later days, so that unanswered calls leave nobody waiting. The leader's number, or 1.5 × the planned first dials per day." }
+        "day_list": { "type": "integer", "minimum": 1, "description": "The day list: how many households the enumerator's Today tab offers at most each day, the calls due first and then households pulled forward from later days, so that unanswered calls leave nobody waiting. The leader's number, or 1.5 × the planned first dials per day." },
+        "contact_protocol": { "type": "object", "additionalProperties": false, "description": "The leader's contact protocol (3 November 2026): how the enumerator's list plans the next call after an unanswered one. Absent: two hours apart, no daily or day limit, the usual hour each day.",
+          "properties": {
+            "per_day": { "type": "integer", "minimum": 1, "description": "At most this many calls a day to one household; then the next working day." },
+            "gap_hours": { "type": "number", "exclusiveMinimum": 0, "maximum": 12, "description": "At least this many hours between two calls to one household on the same day (2 by default)." },
+            "days": { "type": "integer", "minimum": 1, "description": "A household never reached (no call with contact) is done after this many working days of calls, counted from its first call, as at the dial cap." },
+            "vary_times": { "type": "boolean", "description": "Each new day of calls starts in the part of the day tried least so far for the household (morning until 12:00, afternoon until 17:00, evening), at its usual hour when that falls in the part." } } },
+        "self_scheduling": { "type": "object", "additionalProperties": false, "description": "What the enumerator may change in their own schedule, set by the leader (3 November 2026). Absent: both allowed, first calls held to the latest first dial the file plans.",
+          "properties": {
+            "reschedule": { "type": "boolean", "description": "May move a household's next call themselves, with a reason (event 'plan'). A respondent's callback is never moved this way." },
+            "availability": { "type": "boolean", "description": "May mark a day or half day off (event 'availability'); the calls planned then move to their next working time." },
+            "push_first_calls": { "type": "boolean", "description": "May move a household's first call past first_calls_by." },
+            "first_calls_by": { "$ref": "#/$defs/date", "description": "The last day of the round's first-call period (the plan's spread over the window, Section 3.4)." } } }
       }
     },
     "phone": {

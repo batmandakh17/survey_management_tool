@@ -93,7 +93,7 @@ button.primary .pill { background: var(--accent-ink); }
 .id.big { font-size: 20px; font-weight: 700; }
 .badges { margin: 8px 0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .next { background: var(--soft); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
-.next.k-cap, .next.k-refusal, .next.k-dead, .next.k-window_end { background: var(--warn-bg); }
+.next.k-cap, .next.k-refusal, .next.k-dead, .next.k-window_end, .next.k-protocol_end { background: var(--warn-bg); }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 10px 0; font-size: 14px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
@@ -174,6 +174,9 @@ table.kpi th:first-child { width: 34%; }
 .marks { display: grid; gap: 1px; }
 .m { border-radius: 4px; padding: 0 3px; }
 .m.plan { background: var(--soft); } .m.cb { background: var(--accent); color: var(--accent-ink); } .m.done { background: var(--ok-bg); color: var(--ok); }
+.cell.myoff { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--soft); } .m.me { background: var(--warn-bg); color: var(--warn); }
+.kind.k-mine { background: var(--soft); } .planlinks { margin-top: 4px; font-size: .92em; }
+.offcard { margin-bottom: 12px; } .offlist { margin: 6px 0 0; padding-left: 18px; }
 
 /* performance */
 .perf { display: grid; gap: 22px; }
@@ -266,7 +269,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.3.3';
+  RTM.VERSION = '0.3.7';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -469,6 +472,13 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       if (c.time_zone && !RTM.validTZ(c.time_zone)) warn(`The time zone "${c.time_zone}" is not known to this browser; the device's time zone is used.`);
       (c.holidays || []).forEach(h => { if (!RTM.isDateKey(h.date)) err(`A holiday has an invalid date: ${h.date}`); });
       if (c.ramadan && c.ramadan.dates && !Number.isInteger(c.ramadan.break_fast_hour)) warn('Ramadan dates are given without the hour the fast is broken.');
+      const cp = c.contact_protocol;
+      if (cp !== undefined && (!cp || typeof cp !== 'object'
+        || (cp.per_day !== undefined && (!Number.isInteger(cp.per_day) || cp.per_day < 1))
+        || (cp.gap_hours !== undefined && !(typeof cp.gap_hours === 'number' && cp.gap_hours > 0 && cp.gap_hours <= 12))
+        || (cp.days !== undefined && (!Number.isInteger(cp.days) || cp.days < 1)))) err('contact_protocol (calls a day, hours between calls, days of calls) is not readable.');
+      const ss = c.self_scheduling;
+      if (ss !== undefined && (!ss || typeof ss !== 'object' || (ss.first_calls_by !== undefined && !RTM.isDateKey(ss.first_calls_by)))) err('self_scheduling (what the enumerator may change) is not readable.');
     }
     if (!Array.isArray(A.households) || !A.households.length) err('The file lists no households.');
     else {
@@ -576,7 +586,28 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       inWindow: k => k >= c.window_start && k <= c.window_end,
       isRamadan: k => ram.has(k),
       breakFastHour: c.ramadan && Number.isInteger(c.ramadan.break_fast_hour) ? c.ramadan.break_fast_hour : null,
+      protocol: RTM.protocolOf(c),
     };
+  };
+  // the contact protocol the leader set (calendar.contact_protocol, 3 November 2026): calls a day to one household, hours between them,
+  // working days of calls for a household never reached, and whether each new day starts in the part of the day tried least.
+  // Absent: the rule of earlier versions, two hours apart with no daily limit, no limit in days, the usual hour each day.
+  RTM.protocolOf = c => {
+    const p = (c && c.contact_protocol) || {};
+    return { perDay: Number.isInteger(p.per_day) && p.per_day >= 1 ? p.per_day : null, gap: typeof p.gap_hours === 'number' && p.gap_hours > 0 ? p.gap_hours : 2,
+      days: Number.isInteger(p.days) && p.days >= 1 ? p.days : null, vary: p.vary_times === true };
+  };
+  RTM.DAY_PARTS = [['morning', 0, 12], ['afternoon', 12, 17], ['evening', 17, 24]];
+  // the part of the day tried least so far for a household (within the call hours), and the hour to start it at:
+  // the household's usual hour when it falls in that part, else the part's first call hour
+  RTM.leastTriedHour = (dials, cal, usual) => {
+    const parts = RTM.DAY_PARTS.map(([name, a, b]) => ({ name, a: Math.max(a, cal.hours.start), b: Math.min(b, cal.hours.end) })).filter(x => x.a < x.b);
+    const n = parts.map(x => dials.filter(d => { const h = RTM.partsIn(RTM.parseTS(d.ts), cal.tz).h; return h >= x.a && h < x.b; }).length);
+    const min = Math.min(...n);
+    const home = usual !== null ? parts.findIndex(x => usual >= x.a && usual < x.b) : -1;
+    const i = home >= 0 && n[home] === min ? home : n.indexOf(min);
+    const x = parts[i];
+    return { part: x.name, hour: usual !== null && usual >= x.a && usual < x.b ? usual : x.a };
   };
   RTM.bundledHolidays = country => (((G.RTM_HOLIDAYS || {}).table || {})[country] || []).map(([date, name, est]) => ({ date, name, estimated: !!est, bundled: true }));
   RTM.workingDaysLeft = (cal, fromKey) => { let k = fromKey < cal.start ? cal.start : fromKey, n = 0; while (k <= cal.end) { if (cal.isWorking(k)) n++; k = RTM.addDaysKey(k, 1); } return n; };
@@ -605,6 +636,72 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
 
   // the results whose callback time books a call: a moved household takes such a callback with it
   RTM.CALLBACK_STATUSES = ['APPOINTMENT', 'PARTIAL', 'NOT_AVAILABLE', 'REFUSAL_SOFT', 'OTHER', 'LANGUAGE'];
+
+  // ---- what the enumerator may change in their own schedule (calendar.self_scheduling, set by the leader) ----
+  // Absent in a file written before 3 November 2026: the defaults, with first calls held to the latest first dial the file plans.
+  RTM.selfRules = A => {
+    const ss = (A.calendar && A.calendar.self_scheduling) || {};
+    const latest = A.households.map(h => (h.plan || {}).first_dial_date).filter(Boolean).sort().pop() || null;
+    return { reschedule: ss.reschedule !== false, availability: ss.availability !== false, push_first_calls: ss.push_first_calls === true,
+      first_calls_by: ss.first_calls_by || latest };
+  };
+  RTM.PLAN_REASONS = { TOLD: 'Someone said when to call', PATTERN: 'The household answers at another time', WORKLOAD: 'My day is too full', OTHER: 'Other (write a note)' };
+  RTM.OFF_PARTS = { day: 'the whole day', morning: 'the morning, until 13:00', afternoon: 'the afternoon, from 13:00' };
+  RTM.HALF_DAY = 13;
+  // the enumerator's days off: date -> 'day' | 'morning' | 'afternoon', from the availability events in order (a cancel removes the date)
+  RTM.offDays = S => {
+    const m = new Map();
+    for (const e of S.events) {
+      if (e.type !== 'availability' || !e.date) continue;
+      if (e.cancel) { m.delete(e.date); continue; }
+      const had = m.get(e.date);
+      m.set(e.date, had && had !== e.part && had !== 'day' && e.part !== 'day' ? 'day' : e.part === 'day' || had === 'day' ? 'day' : e.part);
+    }
+    return m;
+  };
+  // the enumerator's own next time for each household: the last plan event, unless a dial (not voided) was logged after it in the log, or it was cleared
+  RTM.ownPlans = (S, dials) => {
+    const m = new Map(), live = new Set(dials.map(d => d.event_id));
+    for (const e of S.events) {
+      if (e.type === 'plan' && e.hhid) { if (e.clear) m.delete(e.hhid); else m.set(e.hhid, e); }
+      else if (e.type === 'dial' && live.has(e.event_id)) m.delete(e.hhid);
+    }
+    return m;
+  };
+  // can the enumerator move this household's next call to `at`? '' when yes, else what stops it
+  RTM.checkPlan = (S, c, at, cal, now) => {
+    const rules = RTM.selfRules(S.assignment);
+    if (!rules.reschedule) return 'Your leader has not allowed moving calls yourself this round.';
+    if (!c || !c.open || c.kind === 'removed') return 'Only an open household of yours can be moved.';
+    if (c.appointment) return 'A callback is booked with the respondent: change it by correcting that call’s callback time.';
+    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(c.next.kind)) return 'This household needs a decision, not a new time (see “Needs your decision”).';
+    if (!at || isNaN(at.getTime())) return 'Choose the day and time of the next call.';
+    if (at.getTime() < now.getTime() - 60000) return 'Choose a time from now on.';
+    const p = RTM.partsIn(at, cal.tz);
+    if (!cal.inWindow(p.key)) return `Choose a day inside the round window (${cal.start} to ${cal.end}).`;
+    if (!cal.isWorking(p.key)) return 'That day is not a working day of the call center.';
+    if (p.h < cal.hours.start || p.h >= cal.hours.end) return `Choose a time inside the call hours, ${RTM.p2(cal.hours.start)}:00 to ${RTM.p2(cal.hours.end)}:00.`;
+    const off = RTM.offDays(S).get(p.key);
+    if (off && (off === 'day' || (off === 'morning' && p.h < RTM.HALF_DAY) || (off === 'afternoon' && p.h >= RTM.HALF_DAY))) return 'You marked that time as off.';
+    if (c.n === 0 && !(c.prior && c.prior.dials) && !rules.push_first_calls && rules.first_calls_by && p.key > rules.first_calls_by)
+      return `First calls are made by ${rules.first_calls_by}: your leader keeps them early in the round (handbook Section 3.4). Choose a day up to then, or ask your leader.`;
+    return '';
+  };
+  // can the enumerator mark this day (or half day) off? { error } or { warn: households with a callback booked then }
+  RTM.checkOff = (S, C, key, part, now) => {
+    const rules = RTM.selfRules(S.assignment), cal = C.cal;
+    if (!rules.availability) return { error: 'Your leader has not allowed marking days off in the tool this round: tell your leader directly.' };
+    if (!RTM.isDateKey(key)) return { error: 'Choose the day.' };
+    if (!RTM.OFF_PARTS[part]) return { error: 'Choose the whole day, the morning or the afternoon.' };
+    if (!cal.inWindow(key)) return { error: `Choose a day inside the round window (${cal.start} to ${cal.end}).` };
+    if (!cal.isWorking(key)) return { error: 'That day is not a working day of the call center anyway.' };
+    if (key < RTM.partsIn(now, cal.tz).key) return { error: 'That day has passed.' };
+    const had = RTM.offDays(S).get(key);
+    if (had === 'day' || had === part) return { error: 'That day is already marked off.' };
+    const hit = C.list.filter(c => c.open && c.appointment && (() => { const p = RTM.partsIn(c.appointment, cal.tz);
+      return p.key === key && (part === 'day' || (part === 'morning' ? p.h < RTM.HALF_DAY : p.h >= RTM.HALF_DAY)); })()).map(c => c.hhid);
+    return { warn: hit };
+  };
 
   // ---- the case universe: assigned households plus activated replacements ----
   RTM.householdsOf = (S, eff) => {
@@ -640,6 +737,9 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   // ---- case states and the next suggested dial (D) ----
   RTM.cases = (S, now) => {
     const A = S.assignment, cal = RTM.calendarOf(A), eff = RTM.effective(S);
+    const off = RTM.offDays(S), own = RTM.ownPlans(S, eff.dials);
+    cal.off = off;
+    cal.offAt = (key, h) => { const o = off.get(key); return !!o && (o === 'day' || (o === 'morning' && h < RTM.HALF_DAY) || (o === 'afternoon' && h >= RTM.HALF_DAY)); };
     const byHH = new Map();
     for (const d of eff.dials) { if (!byHH.has(d.hhid)) byHH.set(d.hhid, []); byHH.get(d.hhid).push(d); }
     const acts = new Map();
@@ -676,7 +776,8 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       const appointment = last && last.appointment_ts && RTM.CALLBACK_STATUSES.includes(last.status) ? RTM.parseTS(last.appointment_ts)
         : !last && prior && prior.appointment_ts ? RTM.parseTS(prior.appointment_ts) : null;
       const myRepl = (h.replacements || []).map((r, i) => Object.assign({ rank: r.rank || i + 1 }, r, { active: false }));
-      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
+      const mine = !appointment && own.get(h.hhid) ? own.get(h.hhid) : null;      // the enumerator's own next time, under a callback never
+      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, mine, replacements: myRepl, complete: cmp || null };
       c.next = RTM.suggest(c, cal, now);
       return c;
     });
@@ -686,6 +787,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     return { list: out, map: new Map(out.map(c => [c.hhid, c])), cal, eff, pool };
   };
 
+  const R_days = n => (n === 1 ? 'one working day' : `${n} working days`);
   RTM.suggest = (c, cal, now) => {
     if (!c.open) return { kind: 'none', text: '' };
     if (c.flags.hard_refusal) return { kind: 'refusal', text: 'Hard refusal: release it for this round' };
@@ -698,22 +800,31 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const startHour = cal.hours.start, endHour = cal.hours.end;
     let at, kind, text;
     if (c.appointment) { at = c.appointment; kind = 'callback'; text = 'Booked callback: call at the agreed time'; }
+    else if (c.mine && c.mine.at) { at = RTM.parseTS(c.mine.at); kind = 'mine'; text = `Moved by you: ${(RTM.PLAN_REASONS[c.mine.reason] || c.mine.reason || '').replace(/ \(write a note\)$/, '')}${c.mine.note ? ` (“${c.mine.note}”)` : ''}`; }
     else if (c.n === 0) {
       const key = c.h.plan && c.h.plan.first_dial_date ? c.h.plan.first_dial_date : RTM.partsIn(now, cal.tz).key;
       at = RTM.zoned(key, hour !== null ? hour : startHour, 0, tz);
       const hadInterview = !!(c.h.history && c.h.history.last_interview);
       kind = 'first'; text = hour === null ? 'First dial' : hadInterview ? 'First dial, at the time of the last interview' : 'First dial, at the hour your leader planned';
     } else {
+      // the contact protocol: at most perDay calls a day, gap hours apart; then the next working day, at the usual hour or in the part of the day tried least
+      const proto = cal.protocol || RTM.protocolOf(null);
       const end = RTM.parseTS(c.last.end_ts || c.last.ts);
-      const cand = new Date(end.getTime() + 2 * 3600e3);
+      const cand = new Date(end.getTime() + proto.gap * 3600e3);
       const pc = RTM.partsIn(cand, cal.tz), pe = RTM.partsIn(end, cal.tz);
-      if (pc.key === pe.key && cal.isWorking(pc.key) && pc.h >= startHour && pc.h < endHour) {
-        at = cand; kind = 'redial'; text = 'Same day, at least two hours after the last dial';
+      const today = (c.dials || [c.last]).filter(d => RTM.partsIn(RTM.parseTS(d.ts), cal.tz).key === pe.key).length;
+      const gapTxt = proto.gap === 1 ? 'an hour' : `${proto.gap % 1 ? proto.gap : proto.gap === 2 ? 'two' : proto.gap} hours`;
+      if ((proto.perDay === null || today < proto.perDay) && pc.key === pe.key && cal.isWorking(pc.key) && pc.h >= startHour && pc.h < endHour) {
+        at = cand; kind = 'redial'; text = `Same day, at least ${gapTxt} after the last dial${proto.perDay ? ` (call ${today + 1} of ${proto.perDay} today)` : ''}`;
       } else {
         let k = RTM.addDaysKey(pe.key, 1), guard = 0;
         while (!cal.isWorking(k) && guard++ < 60) k = RTM.addDaysKey(k, 1);
-        at = RTM.zoned(k, hour !== null ? hour : startHour, 0, tz);
-        kind = 'next_day'; text = hour !== null ? 'Next working day, near the usual hour' : 'Next working day';
+        if (proto.vary) {
+          const lt = RTM.leastTriedHour(c.dials || [c.last], cal, hour);
+          at = RTM.zoned(k, lt.hour, 0, tz); text = `Next working day, in the ${lt.part}: the part of the day tried least`;
+        } else { at = RTM.zoned(k, hour !== null ? hour : startHour, 0, tz); text = hour !== null ? 'Next working day, near the usual hour' : 'Next working day'; }
+        kind = 'next_day';
+        if (proto.perDay && today >= proto.perDay) text += ` (${proto.perDay} calls today)`;
       }
     }
     // keep the suggestion inside the call hours, and off the hour the fast is broken during Ramadan (3.5.4)
@@ -724,10 +835,33 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       while (!cal.isWorking(k) && guard++ < 60) k = RTM.addDaysKey(k, 1);
       at = RTM.zoned(k, startHour, 0, cal.tz); pa = RTM.partsIn(at, cal.tz);
     }
+    // the enumerator's days off: a planned call that falls on one moves to the next time they work; a callback stays (the respondent agreed it)
+    if (cal.offAt && kind !== 'callback' && cal.offAt(pa.key, pa.h)) {
+      let guard = 0;
+      while (cal.offAt(pa.key, pa.h) && guard++ < 60) {
+        const o = cal.off.get(pa.key);
+        if (o === 'morning' && pa.h < RTM.HALF_DAY && RTM.HALF_DAY < endHour) at = RTM.zoned(pa.key, Math.max(RTM.HALF_DAY, startHour), 0, cal.tz);
+        else {
+          let k = RTM.addDaysKey(pa.key, 1), g2 = 0;
+          while (!cal.isWorking(k) && g2++ < 60) k = RTM.addDaysKey(k, 1);
+          at = RTM.zoned(k, Math.max(startHour, Math.min(endHour - 1, hour !== null ? hour : startHour)), 0, cal.tz);
+        }
+        pa = RTM.partsIn(at, cal.tz);
+      }
+      text += '; moved off your time off';
+    }
     if (cal.breakFastHour !== null && cal.isRamadan(pa.key) && pa.h === cal.breakFastHour && kind !== 'callback') {
       at = new Date(at.getTime() + 3600e3); text += '; moved off the hour the fast is broken';
     }
     pa = RTM.partsIn(at, cal.tz);
+    // a household never reached in the protocol's working days of calls is done: the leader's protocol closes it, as a dial cap does
+    const proto = cal.protocol;
+    if (proto && proto.days && c.n > 0 && c.dials && kind !== 'callback' && kind !== 'mine' && !c.dials.some(d => (RTM.STATUS_BY[d.status] || {}).contact)) {
+      const first = RTM.partsIn(RTM.parseTS(c.dials[0].ts), cal.tz).key;
+      let used = 0, k = first, guard = 0;
+      while (k <= pa.key && guard++ < 400) { if (cal.isWorking(k)) used++; k = RTM.addDaysKey(k, 1); }
+      if (used > proto.days) return { kind: 'protocol_end', text: `Not reached in ${R_days(proto.days)} of calls (the contact protocol): release it, or activate a replacement if the round allows it` };
+    }
     if (pa.key > cal.end) return { kind: 'window_end', text: 'The next dial would fall after the window: release it for this round' };
     const due = at.getTime() <= now.getTime();
     if (kind === 'first' && due && pa.key < RTM.partsIn(now, cal.tz).key) kind = 'overdue';
@@ -741,7 +875,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     for (const c of C.list) {
       if (!c.open) continue;
       const s = c.next;
-      if (['refusal', 'dead', 'cap', 'window_end'].includes(s.kind)) { if (isToday) decide.push(c); continue; }
+      if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(s.kind)) { if (isToday) decide.push(c); continue; }
       if (!s.at) continue;
       const k = RTM.partsIn(s.at, cal.tz).key;
       if (isToday && s.at.getTime() <= now.getTime()) due.push(c);
@@ -757,7 +891,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     if (isToday && dayList) {
       const room = dayList - due.length - later.length;
       if (room > 0) {
-        ahead = C.list.filter(c => c.open && c.next.at && !['callback'].includes(c.next.kind) && RTM.partsIn(c.next.at, cal.tz).key > todayKey)
+        ahead = C.list.filter(c => c.open && c.next.at && !['callback', 'mine'].includes(c.next.kind) && RTM.partsIn(c.next.at, cal.tz).key > todayKey)
           .sort((a, b) => a.next.at - b.next.at || (a.h.plan && b.h.plan ? (a.h.plan.order || 0) - (b.h.plan.order || 0) : 0)).slice(0, room);
       }
     }
@@ -1527,7 +1661,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
         plans.set(id, { first_dial_date: date, target_hour: hour, order: i + 1 });
       });
     }
-    return { plans, best, firstDays: first.length, workingDays: days.length };
+    return { plans, best, firstDays: first.length, workingDays: days.length, firstCallsBy: first.length ? first[first.length - 1] : null };
   };
 
   // ---- the round files (A.3, A.6) ----
@@ -1631,10 +1765,9 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       return { name, sha, base, kind: 'unknown', problem: `its schema is "${o.schema || 'missing'}"` };
     }
     const head = (t.split(/\r?\n/)[0] || '').split(',');
-    // a platform file: a KoBoToolbox export, a Survey Solutions export (main file or the calls roster) or a calling service's call log (proposal K)
-    const P = L.parseDelimited(t), prof = L.profileFor(P.header, profiles), pk = prof ? null : L.platformKind(P.header);
+    // a platform file: a KoBoToolbox export of a form that records each call attempt (proposal K)
+    const P = L.parseDelimited(t), prof = L.profileFor(P.header, profiles);
     if (prof) return { name, sha, base, kind: 'platform', profile: prof, header: P.header, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '' };
-    if (pk) return { name, sha, base, kind: pk, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '' };
     if (head.join(',') === R.CSV_COLS.join(',')) {
       const rows = R.parseCSV(t);
       const ids = [...new Set(rows.map(r => r.logged_by || r.operator).filter(Boolean))];
@@ -1646,7 +1779,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     }
     // a table the tool does not know: the leader maps its columns on the Import tab (proposal K.2)
     if (P.header.length >= 4 && P.rows.length && !t.startsWith('{')) return { name, sha, base, kind: 'unmapped', header: P.header, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '', problem: 'a table whose columns are not known: map them on the Import tab' };
-    return { name, sha, base, kind: 'unknown', problem: 'not a call-log export, contacts file, manifest, platform export or call log' };
+    return { name, sha, base, kind: 'unknown', problem: 'not a call-log export, contacts file, manifest or KoBoToolbox export' };
   };
   // a CSV row back into a dial (the CSV holds dials with corrections applied, so no further correction is possible)
   const rowDial = r => {
@@ -1666,7 +1799,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   };
   L.qualifies = d => d.status === 'COMPLETE' && (d.dur_min === null || d.dur_min === undefined || d.dur_min >= R.MIN_COMPLETE_MIN);
 
-  // ---- exports of KoBoToolbox, Survey Solutions and a calling service (proposal K) ----
+  // ---- exports of KoBoToolbox (proposal K) ----
   // A delimited text (comma, semicolon or tab; quotes as in CSV) as rows of objects, the delimiter found from the header.
   const splitDelimited = (text, d) => {
     const rows = [], t = String(text).replace(/^\uFEFF/, '');
@@ -1689,15 +1822,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const head = rows.length ? rows[0].map(h => h.trim()) : [];
     return { delimiter: d, header: head, rows: rows.slice(1).map(r => Object.fromEntries(head.map((h, i) => [h, r[i] === undefined ? '' : r[i]]))) };
   };
-  // the kind of a platform file, from its columns: a Survey Solutions export (main file or the calls roster) or a calling service's log
   const normCol = c => String(c).toLowerCase().replace(/[\s_]/g, '');
-  L.platformKind = header => {
-    const h = new Set(header.map(c => c.trim())), n = new Set(header.map(normCol));
-    if ((h.has('interview__id') || (h.has('Id') && h.has('ParentId1')) || h.has('calls__id')) && h.has('result') && (h.has('calls__id') || h.has('ParentId1'))) return 'suso_calls';
-    if ((h.has('interview__id') || h.has('Id')) && h.has('hhid') && !h.has('result')) return 'suso_main';
-    if ((n.has('sid') || n.has('callsid')) && n.has('to') && n.has('status') && (n.has('starttime') || n.has('datecreated'))) return 'service';
-    return null;
-  };
   // ---- profiles (proposal K.2): how a platform file's columns and codes map onto the harmonized dial table (A.4) ----
   // one row per call attempt, as in a KoBoToolbox form that records each attempt; besides the tool's own form, the layout
   // shipped is that of an L2 program's real form, L2PHL's, which records each call attempt in the form itself
@@ -1715,8 +1840,11 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       codes: Object.fromEntries(R.STATUS.map(s => [s.code, s.code]).concat([['NONE', 'NONE']])) },
     { id: 'phl_kobo', name: 'L2PHL interview form with its call record (KoBoToolbox)', kind: 'calls', detect: ['_uuid', 'hhid', 'int_id', 'X15'],
       columns: { hhid: 'hhid', enumerator: 'int_id', start: 'start', end: 'end', result: 'X15', attempt: 'Z8', id: '_uuid', logged_at: '_submission_time', note: 'X16' },
-      codes: { 1: 'COMPLETE', 2: 'COMPLETE', 3: 'PARTIAL', 4: 'APPOINTMENT', 5: 'REFUSAL_SOFT', 6: 'NO_ANSWER', 7: 'DEAD_NUMBER', 8: 'SWITCHED_OFF', 9: 'WRONG_NUMBER', 10: 'OTHER' }, labels: PHL_LABELS,
-      about: 'Every call attempt is one submission of the interview form: the interviewer\'s ID, the household from the sample list, the attempt number, whether someone answered, and in the closing block the result of the call (X15). The program counts a partially completed interview with no further callback as complete, so code 2 maps to a complete too.' },
+      // as the program's own processing: a complete is code 1 with consent (Z9 = 1); code 2, a break-off with no more callback, closes the case as the
+      // program's protocol does (a "dead call", replaced), so it maps to a firm refusal with the form's label kept in the note
+      codes: { 1: 'COMPLETE', 2: 'REFUSAL_HARD', 3: 'PARTIAL', 4: 'APPOINTMENT', 5: 'REFUSAL_SOFT', 6: 'NO_ANSWER', 7: 'DEAD_NUMBER', 8: 'SWITCHED_OFF', 9: 'WRONG_NUMBER', 10: 'OTHER' }, labels: PHL_LABELS,
+      consent: { column: 'Z9', yes: '1' }, keepLabel: ['2'],
+      about: 'Every call attempt is one submission of the interview form: the interviewer\'s ID, the household from the sample list, the attempt number, whether someone answered, consent (Z9), and in the closing block the result of the call (X15). As in the program\'s own processing, a complete is code 1 with consent; a partially completed interview with no further callback closes the case, as a firm refusal does.' },
   ];
   L.profileFor = (header, custom) => {
     const h = new Set(header.map(c => String(c).trim()));
@@ -1764,9 +1892,12 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   // a row of a platform file as the standard call record the form reader takes (the roles, the codes mapped, the extras of the tool's own form)
   const stdRecord = (prof, r, M) => {
     const c = prof.columns || {}, x = prof.extras || {}, g = k => (k && r[k] !== undefined && r[k] !== null ? String(r[k]).trim() : '');
-    const raw = g(c.result), status = codeStatus(prof, raw);
+    const raw = g(c.result);
+    let status = codeStatus(prof, raw), consentNote = '';
+    // a form that asks for consent: a complete-coded record without it is not a complete (the program's rule), and is shown for the leader to see
+    if (status === 'COMPLETE' && prof.consent) { const cv = g(prof.consent.column); if (cv !== prof.consent.yes) { status = 'OTHER'; consentNote = `complete-coded without consent (${prof.consent.column} ${cv || 'empty'})`; } }
     const label = prof.labels && prof.labels[raw] !== undefined ? prof.labels[raw] : '';
-    const note = [g(c.note), status === 'OTHER' && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : ''].filter(Boolean).join(' · ');
+    const note = [g(c.note), (status === 'OTHER' || (prof.keepLabel || []).includes(raw)) && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : '', consentNote].filter(Boolean).join(' · ');
     return { hhid: g(c.hhid), enumerator: g(c.enumerator), call_start: g(c.start), call_end: g(c.end), result: status, raw, appointment: g(c.callback), phone: g(c.phone), phone_slot: g(c.phone_slot),
       round: g(c.round), attempt: g(c.attempt), id: g(c.id), logged_at: g(c.logged_at), note,
       willing: g(x.willing), action: g(x.action), target_hhid: g(x.target_hhid), replaces: g(x.replaces), program: g(x.program) || M.program };
@@ -1807,15 +1938,18 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   };
   // the platform files among the imports become one cumulative "CSV export" per enumerator; the merge then treats them as section F treats a CSV without its JSON
   const codeKey = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
-  L.enumMapper = M => {
-    const pmap = new Map();
+  // the code each enumerator has in the platform: the session's (Platform tab) over the manifest's, else the ID itself
+  L.codeOf = (M, codes) => id => { const c = codes && codes[id]; if (c) return c; const e = (M.enumerators || []).find(x => x.enumerator_id === id); return (e && e.platform_id) || id; };
+  L.enumMapper = (M, codes) => {
+    const pmap = new Map(), codeOf = L.codeOf(M, codes);
     M.enumerators.forEach(e => { pmap.set(codeKey(e.enumerator_id), e.enumerator_id); if (e.platform_id) pmap.set(codeKey(e.platform_id), e.enumerator_id); });
+    M.enumerators.forEach(e => { const c = codeOf(e.enumerator_id); if (c) pmap.set(codeKey(c), e.enumerator_id); });   // the session's codes win
     return raw => pmap.get(codeKey(raw)) || String(raw || '').trim();
   };
   L.expandForms = (imports, M, opts) => {
-    const out = [], extra = [], service = [];
+    const out = [], extra = [];
     const stamp = v => { const p = isoParts(v); return p.wall ? Date.parse(p.wall.replace(' ', 'T') + (p.off || '')) || 0 : 0; };
-    const enumOf = L.enumMapper(M);
+    const enumOf = L.enumMapper(M, opts && opts.codes);
     const slots = slotIndex(opts && opts.households);
     const emit = (orig, src, recs) => {        // recs: [{r, e, eid, loggedAt, when}]
       const byE = new Map();
@@ -1837,8 +1971,6 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       const en = isoParts(r.call_end), st_ = isoParts(r.call_start), wall = en.wall || st_.wall || '';
       return wall.replace(' ', 'T') + (en.off || st_.off || (wall && tz ? offsetAt(wall, tz) : ''));
     };
-    const mains = imports.filter(f => f.kind === 'suso_main'), callsFiles = imports.filter(f => f.kind === 'suso_calls');
-    const folder = n => (n.includes('/') ? n.slice(0, n.lastIndexOf('/') + 1) : '');
     for (const f of imports) {
       if (f.kind === 'platform') {
         const prof = f.profile, roundCol = (prof.columns || {}).round;
@@ -1859,87 +1991,13 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
         const left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : ''].filter(Boolean);
         const parts = emit(f, prof.id, recs);
         extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
-      } else if (f.kind === 'suso_calls') {
-        const main = mains.find(m => folder(m.name) === folder(f.name)) || mains[0];
-        if (!main) { extra.push({ name: f.name, kind: 'Survey Solutions roster', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: its main file (interview__id, hhid, enumerator_id) was not added' }); continue; }
-        const byInt = new Map(main.rows.map(r => [String(r.interview__id || r.Id || '').trim(), r]));
-        let orphans = 0;
-        const recs = [];
-        f.rows.forEach(r => {
-          const iid = String(r.interview__id || r.ParentId1 || '').trim(), m = byInt.get(iid);
-          if (!m) { orphans++; return; }
-          const row = Object.assign({}, m, r), cid = String(r.calls__id || r.Id || '').trim();
-          row.result = codeStatus({ codes: L.PROFILES[0].codes }, row.result);
-          const loggedAt = (isoParts(r.call_end).wall || isoParts(r.call_start).wall || '').replace(' ', 'T') + (isoParts(r.call_end).off || isoParts(r.call_start).off || '');
-          recs.push({ r: row, e: enumOf(m.enumerator_id), eid: `${iid}:${cid}`, loggedAt, when: stamp(r.call_end) || stamp(r.call_start) });
-        });
-        const parts = emit(f, 'suso', recs);
-        extra.push({ name: f.name, kind: 'Survey Solutions export', enumerator_id: '', exported_at: '', count: f.rows.length,
-          use: `${R.plural(f.rows.length, 'call record')} joined with ${main.name} (${R.plural(main.rows.length, 'interview')}), split into ${R.plural(parts, 'export')} by enumerator${orphans ? `; ${orphans} rows without their interview left out` : ''}` });
-      } else if (f.kind === 'suso_main') {
-        extra.push({ name: f.name, kind: 'Survey Solutions export', enumerator_id: '', exported_at: '', count: f.rows.length,
-          use: callsFiles.length ? 'the interviews: joined with the call records' : 'not merged: its roster file calls.tab (the call records) was not added' });
-      } else if (f.kind === 'service') {
-        service.push(f);
-        extra.push({ name: f.name, kind: 'calling service log', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'matched to the recorded calls after the merge (needs the household list)' });
       } else if (f.kind === 'unmapped') {
         extra.push({ name: f.name, kind: 'table, columns unknown', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged until its columns are mapped (Import tab)' });
       } else out.push(f);
     }
-    return { imports: out, extra, service };
+    return { imports: out, extra };
   };
-  // the calling service's log against the merged dials: by the household's number and a start within three minutes;
-  // a missing call end is filled from the service; what does not match is reported (numbers never leave this computer)
-  L.applyService = (G, services, Hl, resolutions) => {
-    const res = resolutions || new Map(), digits = s => String(s || '').replace(/\D/g, '');
-    const numIndex = new Map();
-    for (const h of Hl.values()) (h.phones || []).forEach(p => { const d = digits(p.number); if (!d) return; if (!numIndex.has(d)) numIndex.set(d, []); numIndex.get(d).push({ hhid: h.hhid, slot: p.slot }); });
-    const bySuffix = new Map();
-    for (const d of numIndex.keys()) { const k = d.slice(-8); if (!bySuffix.has(k)) bySuffix.set(k, []); bySuffix.get(k).push(d); }
-    const find = d => (d ? numIndex.get(d) || (bySuffix.get(d.slice(-8)) || []).flatMap(x => numIndex.get(x)) : []);
-    const dialsBy = new Map();
-    G.dials.forEach(d => { if (!dialsBy.has(d.hhid)) dialsBy.set(d.hhid, []); dialsBy.get(d.hhid).push(d); });
-    const stats = { files: services.length, calls: 0, panel: 0, matched: 0, filled: 0, unknown: 0, unlogged: 0, dials: G.dials.length, unmatched_dials: 0 };
-    for (const f of services) {
-      const g = (r, k) => { const key = Object.keys(r).find(c => normCol(c) === k); return key ? r[key] : ''; };
-      const calls = f.rows.map(r => {
-        const to = digits(g(r, 'to')), start = Date.parse(g(r, 'starttime') || g(r, 'datecreated')), end = Date.parse(g(r, 'endtime')), dur = parseFloat(g(r, 'duration'));
-        return { sid: g(r, 'sid') || g(r, 'callsid'), to, hh: find(to), start: isNaN(start) ? null : start, end: isNaN(end) ? null : end, dur: isNaN(dur) ? null : dur, status: String(g(r, 'status') || '').toLowerCase() };
-      }).filter(c => c.start !== null).sort((a, b) => a.start - b.start);
-      stats.calls += calls.length;
-      let unlogged = 0;
-      for (const c of calls) {
-        if (!c.hh.length) { stats.unknown++; continue; }
-        stats.panel++;
-        let best = null, bd = 180000 + 1;
-        for (const { hhid, slot } of c.hh) for (const d of dialsBy.get(hhid) || []) {
-          if (d._svc || (d.phone_slot && slot && +d.phone_slot !== +slot)) continue;
-          const dt = Math.abs(Date.parse(d.ts) - c.start);
-          if (dt < bd) { bd = dt; best = d; }
-        }
-        if (!best) {
-          unlogged++; stats.unlogged++;
-          const key = `unlogged_call:${c.sid || c.start}`;
-          const r = res.get(key);
-          G.issues.push(Object.assign({ key, type: 'unlogged_call', severity: 'action', file: f.name, hhid: c.hh[0].hhid,
-            detail: `The calling service shows a ${c.status || ''} call to ${c.hh[0].hhid} at ${R.localISO(new Date(c.start)).slice(0, 16).replace('T', ' ')} that nobody recorded within three minutes.`,
-            choices: [{ value: 'acknowledged', label: 'Noted' }] }, r ? { status: 'resolved', decision: r.decision, note: r.note, by: r.logged_by, at: r.logged_at } : { status: 'open' }));
-          continue;
-        }
-        best._svc = c; stats.matched++;
-        if (!best.end_ts && (c.end !== null || c.dur !== null)) {
-          const endMs = c.end !== null ? c.end : c.start + c.dur * 1000;
-          best.end_ts = R.localISO(new Date(endMs)); best.dur_min = Math.max(0, (endMs - Date.parse(best.ts)) / 60000); stats.filled++;
-        }
-      }
-      G.issues.push({ key: `service:${f.sha}`, type: 'service_log', severity: 'info', status: 'noted', file: f.name,
-        detail: `${R.plural(calls.length, 'call')} in the service log: ${stats.panel} to the panel's numbers, of which ${stats.matched} matched a recorded call and ${unlogged} had no record within three minutes; ${stats.unknown} to numbers not in the household list.` });
-    }
-    stats.unmatched_dials = G.dials.filter(d => !d._svc).length;
-    G.serviceStats = stats;
-    return stats;
-  };
-  // the two files the platforms take in (proposal K.3): the household file for the KoBo form's media, and the Survey Solutions assignments upload
+  // the file the tool's own KoBo form takes in (proposal K.3): the household file for the form's media
   const planOf = (plans, id) => (plans && plans.get && plans.get(id)) || {};
   L.KOBO_COLS = ['name', 'label', 'hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum', 'kind', 'replaces', 'rank'];
   const contactCols = H => { const o = {}; (H && H.phones || []).forEach(p => { if (p.slot >= 1 && p.slot <= 3) { o[`phone_${p.slot}`] = p.number || ''; o[`phone_${p.slot}_label`] = p.label || ''; } }); return o; };
@@ -1957,25 +2015,29 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     }
     return R.toCSV(rows, L.KOBO_COLS);
   };
-  L.SUSO_COLS = ['hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum',
-    'replacement_1', 'replacement_1_name', 'replacement_1_phone', 'replacement_2', 'replacement_2_name', 'replacement_2_phone', '_responsible', '_quantity'];
-  L.susoAssignments = (M, Hl, plans, logins) => {
-    const cell = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
-    const lines = [L.SUSO_COLS.join('\t')];
-    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
-      const H = Hl.get(h.hhid) || {}, pl = planOf(plans, h.hhid), reps = (h.replacements || []).slice(0, 2).map(id => Hl.get(id) || { hhid: id });
-      const row = Object.assign({ hhid: h.hhid, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: H.name || '', planned_date: pl.first_dial_date || '',
-        planned_hour: Number.isInteger(pl.target_hour) ? pl.target_hour : '', psu: h.psu || '', stratum: h.stratum || '',
-        _responsible: (logins && logins[h.enumerator_id]) || h.enumerator_id, _quantity: 1 }, contactCols(H));
-      reps.forEach((Rh, i) => { row[`replacement_${i + 1}`] = Rh.hhid || ''; row[`replacement_${i + 1}_name`] = Rh.name || ''; row[`replacement_${i + 1}_phone`] = ((Rh.phones || [])[0] || {}).number || ''; });
-      lines.push(L.SUSO_COLS.map(c => cell(row[c])).join('\t'));
+  // the records the leader should look at in the platform (K.8): every dial behind a merge question that needs or had a decision,
+  // with the platform's own record ID (the form's _uuid), so that the leader can find it in KoBoToolbox's table view
+  L.REVIEW_COLS = ['issue', 'status', 'decision', 'hhid', 'enumerator', 'record_id', 'call_start', 'result', 'minutes', 'detail'];
+  L.reviewRows = G => {
+    const out = [], seen = new Set();
+    const dialsOf = (h, e) => G.dials.filter(d => d.hhid === h && (!e || d.source === e));
+    for (const i of G.issues) {
+      if (i.severity !== 'action' || !i.hhid) continue;
+      let ds = i.event_id ? G.dials.filter(d => d.event_id === i.event_id) : dialsOf(i.hhid, i.type === 'two_completes' ? '' : i.enumerator);
+      if (i.type === 'two_completes') ds = ds.filter(L.qualifies);
+      if (!ds.length) ds = [null];
+      for (const d of ds) {
+        const key = `${i.key}|${d ? d.event_id : ''}`; if (seen.has(key)) continue; seen.add(key);
+        out.push({ issue: i.type, status: i.status, decision: i.decision || '', hhid: i.hhid, enumerator: d ? d.source : (i.enumerator || ''), record_id: d ? d.event_id : '',
+          call_start: d ? d.ts : '', result: d ? d.status : '', minutes: d && d.dur_min !== null && d.dur_min !== undefined ? (+d.dur_min).toFixed(1) : '', detail: i.detail });
+      }
     }
-    return lines.join('\n') + '\n';
+    return out;
   };
   // the household list as a KoBoToolbox choices list (the L2PHL form's layout: list_name SN, the ID as name and label, the interviewer's code in filter_int_id)
   L.CHOICE_COLS = ['list_name', 'name', 'label', 'filter_int_id', 'enumerator_id', 'kind', 'replaces', 'rank'];
-  L.koboChoices = (M, Hl) => {
-    const pid = new Map(M.enumerators.map(e => [e.enumerator_id, e.platform_id || e.enumerator_id]));
+  L.koboChoices = (M, Hl, codes) => {
+    const codeOf = L.codeOf(M, codes), pid = new Map(M.enumerators.map(e => [e.enumerator_id, codeOf(e.enumerator_id)]));
     const rows = [];
     for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
       rows.push({ list_name: 'SN', name: h.hhid, label: h.hhid, filter_int_id: pid.get(h.enumerator_id) || h.enumerator_id, enumerator_id: h.enumerator_id, kind: 'main', replaces: '', rank: '' });
@@ -1983,32 +2045,6 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     }
     return R.toCSV(rows, L.CHOICE_COLS);
   };
-  // a zip archive (a Survey Solutions export) as its text members: the same reader as the workbook's
-  L.readZip = async buf => {
-    const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), dec = new TextDecoder('utf-8');
-    let eocd = -1;
-    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-    if (eocd < 0) throw new Error('This is not a zip archive.');
-    const n = dv.getUint16(eocd + 10, true), out = new Map();
-    let p = dv.getUint32(eocd + 16, true);
-    const entries = [];
-    for (let k = 0; k < n; k++) {
-      if (dv.getUint32(p, true) !== 0x02014b50) break;
-      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
-      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
-      entries.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, off });
-      p += 46 + nl + el + cl;
-    }
-    for (const e of entries) {
-      if (e.name.endsWith('/') || !/\.(tab|csv|txt|json)$/i.test(e.name)) continue;
-      const start = e.off + 30 + dv.getUint16(e.off + 26, true) + dv.getUint16(e.off + 28, true);
-      const data = u8.subarray(start, start + e.csize);
-      if (e.method === 0) out.set(e.name, dec.decode(data));
-      else if (e.method === 8 && typeof DecompressionStream !== 'undefined') out.set(e.name, dec.decode(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
-    }
-    return out;
-  };
-
   // ---- the merge (F): every situation gives a line in the merge report; nothing is resolved silently ----
   // resolutions: Map issue key -> {decision, note, logged_by, logged_at}
   L.merge = (M, imports, resolutions, now, opts) => {
@@ -2041,7 +2077,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
     for (const f of imports) {
-      const row = { name: f.name, kind: f.form ? (f.form === 'suso' || f.form === 'suso_calls' ? 'Survey Solutions records' : 'platform records') : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
+      const row = { name: f.name, kind: f.form ? 'platform records' : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
       files.push(row);
       if (seen.has(f.sha)) {
         row.use = 'duplicate, ignored';
@@ -2197,6 +2233,19 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
         perEnum.set(e, { file: latest.f, dials, actions, contacts, events: null, unverified: true });
       }
     }
+    // the enumerators' own changes to their schedule (3 November 2026): calls they moved, and their time off; known only from a JSON export
+    const selfSched = new Map();
+    for (const [e, x] of perEnum) {
+      if (!x.events) { selfSched.set(e, { known: false }); continue; }
+      const plans = x.events.filter(ev => ev.type === 'plan' && !ev.clear), off = new Map();
+      x.events.filter(ev => ev.type === 'availability' && ev.date).forEach(ev => {
+        if (ev.cancel) { off.delete(ev.date); return; }
+        const had = off.get(ev.date);
+        off.set(ev.date, had && had !== ev.part && had !== 'day' && ev.part !== 'day' ? 'day' : ev.part === 'day' || had === 'day' ? 'day' : ev.part);
+      });
+      selfSched.set(e, { known: true, moved: plans.length, first_later: plans.filter(ev => ev.first && ev.was && (ev.at || '').slice(0, 10) > ev.was.slice(0, 10)).length,
+        reasons: plans.reduce((m, ev) => { m[ev.reason] = (m[ev.reason] || 0) + 1; return m; }, {}), off });
+    }
     // 3. households: dials outside the enumerator's assignment, two completes, implausible clocks
     const excludedDials = new Set();
     const activatedBy = new Map();
@@ -2299,7 +2348,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       if (!okNum || !okLog) issue({ key: `contact:${u.event_id}`, type: 'contact_mismatch', severity: 'info', file: f.name, hhid: u.hhid, enumerator: f.enumerator_id,
         detail: `The number for ${u.hhid}, slot ${u.slot}, does not match the digest ${okNum ? 'in the call log' : 'beside it'}.` });
     });
-    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), service: ex.service, unmapped };
+    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), unmapped, selfSched };
   };
 
   // ---- cases and progress: one line per household of the round (manifest households and activated replacements) ----
@@ -2336,14 +2385,19 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   L.progress = (M, C, G) => {
     const tz = M.calendar.time_zone;
     const rows = new Map();
-    const row = e => { if (!rows.has(e)) rows.set(e, { enumerator_id: e, households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, days: new Set(), last_export: '' }); return rows.get(e); };
+    const row = e => { if (!rows.has(e)) rows.set(e, { enumerator_id: e, households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, days: new Set(), last_export: '', moved_by_them: 0, first_later: 0, days_off: 0, off: [] }); return rows.get(e); };
     M.enumerators.forEach(e => row(e.enumerator_id));
     for (const c of C.values()) { const r = row(c.enumerator_id); r.households++; r[c.state]++; }
     G.dials.forEach(d => { const r = row(d.source); r.dials++; r.days.add(R.partsIn(new Date(Date.parse(d.ts)), tz).key); });
     for (const [e, x] of G.perEnum) row(e).last_export = x.file.exported_at || '';
+    for (const [e, ss] of (G.selfSched || new Map())) {
+      if (!ss.known) continue;
+      const r = row(e); r.moved_by_them = ss.moved; r.first_later = ss.first_later; r.off = [...ss.off].sort();
+      r.days_off = r.off.reduce((a, [, part]) => a + (part === 'day' ? 1 : 0.5), 0);
+    }
     const list = [...rows.values()].sort((a, b) => cmpStr(a.enumerator_id, b.enumerator_id));
     list.forEach(r => { r.enumerator_days = r.days.size; delete r.days; r.completes_per_day = r.enumerator_days ? r.complete / r.enumerator_days : null; });
-    const tot = { enumerator_id: 'All', households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, enumerator_days: 0 };
+    const tot = { enumerator_id: 'All', households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, enumerator_days: 0, moved_by_them: 0, first_later: 0, days_off: 0 };
     list.forEach(r => Object.keys(tot).forEach(k => { if (k !== 'enumerator_id') tot[k] += r[k]; }));
     tot.completes_per_day = tot.enumerator_days ? tot.complete / tot.enumerator_days : null;
     // completes by day of the window, and by stratum
@@ -2369,10 +2423,12 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     const left = R.workingDaysLeft(cal, today);
     const rows = P.list.map(r => {
       const open = r.not_started + r.in_progress, exportDay = r.last_export ? r.last_export.slice(0, 10) : '';
+      const offAhead = (r.off || []).filter(([k]) => k >= today && k <= cal.end && cal.isWorking(k)).reduce((a, [, part]) => a + (part === 'day' ? 1 : 0.5), 0);
+      const leftE = Math.max(0, left - offAhead);
       const known = r.enumerator_days >= 2 && r.completes_per_day !== null;
       const row = { enumerator_id: r.enumerator_id, households: r.households, complete: r.complete, open, waiting: r.not_started, in_progress: r.in_progress,
-        pace: r.completes_per_day, enumerator_days: r.enumerator_days, days_left: left, export_at: r.last_export || '', export_day: exportDay, fresh: exportDay === today, known };
-      row.capacity = known ? r.completes_per_day * left : null;
+        pace: r.completes_per_day, enumerator_days: r.enumerator_days, days_left: leftE, off_ahead: offAhead, export_at: r.last_export || '', export_day: exportDay, fresh: exportDay === today, known };
+      row.capacity = known ? r.completes_per_day * leftE : null;
       row.need = known ? open - row.capacity : null;
       row.projected = known ? Math.min(r.households, r.complete + Math.floor(row.capacity + 1e-9)) : null;
       // an enumerator who left during the round is judged no more; one with nothing open is judged on any export (nothing can have changed)
@@ -3471,6 +3527,38 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     APP.correct = null;
     log('correction', { target: eventId, changes: R.clean(ch), reason }, null, 'Correction saved. The original entry stays in the log.');
   }
+  // ---- the enumerator's own changes to the schedule, inside the leader's rules (calendar.self_scheduling) ----
+  function savePlan() {
+    const c = APP.C.map.get(APP.sel), f = $('#planform'); if (!c || !f) return;
+    const g = n => { const el = f.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ''; };
+    const at = fromLocalInput(g('when')), reason = g('reason'), note = g('note');
+    if (!at) return fieldError('#planform', 'when', 'Choose the day and time of the next call.');
+    if (!reason) return fieldError('#planform', 'reason', 'Say why you are moving the call.');
+    if (reason === 'OTHER' && !note) return fieldError('#planform', 'note', 'Write a note for "Other".');
+    const why = R.checkPlan(APP.S, c, at, APP.C.cal, R.now());
+    if (why) return fieldError('#planform', 'when', why);
+    const first = c.n === 0 && !(c.prior && c.prior.dials);
+    APP.plan = false;
+    log('plan', { hhid: c.hhid, at: R.localISO(at), reason, note: note || undefined, was: c.next.at ? R.localISO(c.next.at) : undefined, first: first ? 1 : undefined },
+      null, `Next call for ${c.hhid} moved to ${when(at)}. Your leader sees the change and its reason.`);
+  }
+  function clearPlan() {
+    const c = APP.C.map.get(APP.sel); if (!c || !c.mine) return;
+    log('plan', { hhid: c.hhid, clear: 1 }, null, `Your change is undone: ${c.hhid} follows the plan again.`);
+  }
+  function saveOff() {
+    const f = $('#offform'); if (!f) return;
+    const g = n => { const el = f.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ''; };
+    const key = g('date'), part = g('part') || 'day', note = g('note');
+    const r = R.checkOff(APP.S, APP.C, key, part, R.now());
+    if (r.error) return fieldError('#offform', 'date', r.error);
+    const go = () => log('availability', { date: key, part, note: note || undefined }, null,
+      `${dayLabel(key)} marked off (${R.OFF_PARTS[part]}). Calls planned then move to your next working time; your leader sees it.`);
+    if (r.warn.length) return confirmModal('A callback falls in that time', `${R.plural(r.warn.length, 'household')} booked a callback then: ${r.warn.join(', ')}. A callback the respondent agreed does not move: call it before you go, ask a colleague through your leader, or rebook it with the respondent.`, { okLabel: 'Mark it off anyway' }, go);
+    go();
+  }
+  function cancelOff(key) { log('availability', { date: key, cancel: 1 }, null, `${dayLabel(key)} is a working day for you again.`); }
+
   function confirmModal(title, text, opts, onOk) {
     APP.modal = Object.assign({ kind: 'confirm', title, text, onOk }, opts || {});
     render();
@@ -3501,8 +3589,8 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     if (!pol.active) return { ok: false, why: 'Replacements are not in use this round.' };
     if (!c.replacements.some(x => !x.active)) return { ok: false, why: 'No replacement left for this household.' };
     const trig = pol.triggers || ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'];
-    if ((trig.includes('REFUSAL_HARD') && c.flags.hard_refusal) || (trig.includes('ALL_NUMBERS_DEAD') && c.flags.all_dead) || (trig.includes('CAP_REACHED') && c.flags.cap_reached)) return { ok: true };
-    const say = { REFUSAL_HARD: 'a hard refusal', ALL_NUMBERS_DEAD: 'no working number', CAP_REACHED: 'the dial cap reached' };
+    if ((trig.includes('REFUSAL_HARD') && c.flags.hard_refusal) || (trig.includes('ALL_NUMBERS_DEAD') && c.flags.all_dead) || (trig.includes('CAP_REACHED') && (c.flags.cap_reached || c.next.kind === 'protocol_end'))) return { ok: true };
+    const say = { REFUSAL_HARD: 'a hard refusal', ALL_NUMBERS_DEAD: 'no working number', CAP_REACHED: 'the dial cap or the contact protocol reached' };
     return { ok: false, why: 'Allowed after ' + trig.map(t => say[t] || t).join(' or ') + '.' };
   }
   function saveContact() {
@@ -3580,7 +3668,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     const t = [['today', 'Today', q.due.length], ['households', 'Households', C.list.length], ['calendar', 'Calendar'], ['performance', 'My performance'], ['log', 'Log']];
     return `<nav class="tabs" role="tablist">${t.map(([k, l, n]) => `<button role="tab" aria-selected="${APP.tab === k}" data-act="tab" data-t="${k}" class="${APP.tab === k ? 'on' : ''}">${l}${n !== undefined ? ` <span class="count">${n}</span>` : ''}</button>`).join('')}</nav>`;
   }
-  const kindLabel = { callback: 'Callback', first: 'First dial', overdue: 'Overdue', redial: 'Redial', next_day: 'Redial', cap: 'Cap reached', refusal: 'Refusal', dead: 'No number', window_end: 'Window ends' };
+  const kindLabel = { callback: 'Callback', mine: 'Moved by you', first: 'First dial', overdue: 'Overdue', redial: 'Redial', next_day: 'Redial', cap: 'Cap reached', protocol_end: 'Protocol done', refusal: 'Refusal', dead: 'No number', window_end: 'Window ends' };
   function card(c, showDate) {
     const s = c.next;
     const t = s.at ? (showDate ? when(s.at) : hm(s.at)) : '';
@@ -3688,16 +3776,27 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
         const k = `${y}-${R.p2(m)}-${R.p2(d)}`, inW = cal.inWindow(k);
         const hol = (inW ? cal.holiday(k) : null) || bundled.get(k);
         const st = stats[k] || {};
-        const cls = ['cell', inW ? 'inw' : 'outw', inW && !cal.isWorking(k) ? 'off' : '', hol ? 'hol' : '', k === today ? 'today' : ''].join(' ');
+        const mo = inW && cal.off ? cal.off.get(k) : null;
+        const cls = ['cell', inW ? 'inw' : 'outw', inW && !cal.isWorking(k) ? 'off' : '', hol ? 'hol' : '', mo ? 'myoff' : '', k === today ? 'today' : ''].join(' ');
         cells += `<button class="${cls}" data-act="gotoday" data-k="${k}" ${inW ? '' : 'tabindex="-1"'}>
-          <span class="dn">${d}</span>${hol ? `<span class="hname">${esc(hol.name)}${hol.estimated ? ' (est.)' : ''}</span>` : ''}
+          <span class="dn">${d}</span>${hol ? `<span class="hname">${esc(hol.name)}${hol.estimated ? ' (est.)' : ''}</span>` : ''}${mo ? `<span class="m me">you: off${mo === 'day' ? '' : mo === 'morning' ? ' a.m.' : ' p.m.'}</span>` : ''}
           ${inW ? `<span class="marks">${st.plan ? `<span class="m plan" title="first dials planned">${st.plan} planned</span>` : ''}${st.cb ? `<span class="m cb" title="callbacks booked">${st.cb} callback${st.cb > 1 ? 's' : ''}</span>` : ''}${st.dials ? `<span class="m done" title="dials made; completes">${R.plural(st.dials, 'dial')} · ${st.ok} complete</span>` : ''}</span>` : ''}
         </button>`;
       }
       return `<section class="month"><h3>${MONTH[m - 1]} ${y}</h3><div class="wk">${WD.map(w => `<span>${w}</span>`).join('')}</div><div class="days">${cells}</div></section>`;
     };
     const holsIn = (cal.raw.holidays || []).filter(h => cal.inWindow(h.date));
-    return `<p class="muted">Days in the round window are white; days outside it are grey. Hatched days get no calls planned automatically: days the call center does not work and public holidays. Holidays come from the assignment file (the leader's list for this round) and, outside the window, from the tool's bundled table (Python package <code>holidays</code>, as in handbook Section 3.5.4). Click a day to see its calls.</p>
+    const rules = R.selfRules(A), mine = [...(cal.off || new Map())].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const nextWork = (() => { let k = today < cal.start ? cal.start : today, g = 0; while (!cal.isWorking(k) && g++ < 60) k = R.addDaysKey(k, 1); return k; })();
+    const offCard = `<section class="sec offcard"><h4>My time off</h4>
+      ${rules.availability ? `<p class="muted small">Mark a day or half day you will not work. Calls planned then move to your next working time, so nothing waits for you; a callback a respondent agreed stays where it is. Your leader sees your time off and plans with it.</p>
+        <form id="offform" novalidate onsubmit="return false" class="row3"><label>Day <input type="date" name="date" min="${cal.start}" max="${cal.end}" value="${nextWork}"></label>
+          <label>Part <select name="part">${Object.entries(R.OFF_PARTS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+          <label>Note <input type="text" name="note" maxlength="120" placeholder="optional, no personal details"></label>
+          <button class="primary" data-act="saveoff">Mark as off</button></form>
+        ${mine.length ? `<ul class="offlist">${mine.map(([k, part]) => `<li><b>${dayLabel(k)}</b>, ${R.OFF_PARTS[part]} <button class="link" data-act="canceloff" data-k="${k}">I will work after all</button></li>`).join('')}</ul>` : '<p class="muted small">No time off marked.</p>'}`
+        : `<p class="muted small">Your leader keeps time off with them this round: tell your leader directly when you will not work.${mine.length ? ` Marked earlier: ${mine.map(([k]) => dayLabel(k)).join(', ')}.` : ''}</p>`}</section>`;
+    return `${offCard}<p class="muted">Days in the round window are white; days outside it are grey. Hatched days get no calls planned automatically: days the call center does not work and public holidays. Holidays come from the assignment file (the leader's list for this round) and, outside the window, from the tool's bundled table (Python package <code>holidays</code>, as in handbook Section 3.5.4). Click a day to see its calls.</p>
       <div class="months">${months.map(grid).join('')}</div>
       <p class="muted">${holsIn.length ? `Holidays in the window: ${holsIn.map(h => `${dayLabel(h.date)} ${esc(h.name)}${h.estimated ? ' (estimated)' : ''}${h.working ? ' — working day' : ''}`).join('; ')}.` : 'No public holiday falls inside the window.'} Working weekdays: ${cal.raw.working_weekdays.map(x => WD[x - 1]).join(', ')}; call hours ${R.p2(cal.hours.start)}:00–${R.p2(cal.hours.end)}:00${cal.tz ? ' (' + esc(cal.tz) + ')' : ''}.</p>`;
   }
@@ -3761,13 +3860,16 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   function logPanel(C) {
     const S = APP.S, chain = R.verifyChain(S.events, S.genesis);
     const ev = S.events.slice().reverse();
-    const kindTxt = e => ({ dial: 'Call', correction: e.void ? 'Voided an entry' : 'Correction', action: R.ACTIONS[e.action] || e.action, contact_update: 'Phone number', export: 'Exported the log', session: e.what === 'started' ? 'Session started' : 'Assignment updated' }[e.type] || e.type);
+    const kindTxt = e => ({ dial: 'Call', correction: e.void ? 'Voided an entry' : 'Correction', action: R.ACTIONS[e.action] || e.action, contact_update: 'Phone number', export: 'Exported the log', session: e.what === 'started' ? 'Session started' : 'Assignment updated',
+      plan: e.clear ? 'Undid a moved call' : 'Moved a call', availability: e.cancel ? 'Time off cancelled' : 'Time off' }[e.type] || e.type);
     const detail = e => {
       if (e.type === 'dial') return `${statusLabel(e.status)} · number ${e.phone_slot} · ${isoWhen(e.ts)}${e.end_ts ? ' – ' + hm(R.parseTS(e.end_ts)) : ''}${e.appointment_ts ? ' · callback ' + isoWhen(e.appointment_ts) : ''}${e.action ? ' · ' + (R.ACTIONS[e.action] || e.action) : ''}${e.note ? ' · “' + esc(e.note) + '”' : ''}`;
       if (e.type === 'correction') return `${esc(e.reason || '')}${e.changes ? ' · changed: ' + Object.keys(e.changes).join(', ') : ''}`;
       if (e.type === 'action') return `${e.target_hhid ? 'replacement ' + esc(e.target_hhid) + ' · ' : ''}${esc(e.reason || '')}`;
       if (e.type === 'contact_update') return `number ${e.slot}: ${esc(e.change)}${e.label ? ' (' + esc(e.label) + ')' : ''}`;
       if (e.type === 'export') return esc(e.file_base) + ' · ' + e.event_count + ' events';
+      if (e.type === 'plan') return e.clear ? 'back to the plan' : `to ${isoWhen(e.at)} · ${esc(R.PLAN_REASONS[e.reason] || e.reason || '')}${e.note ? ' · “' + esc(e.note) + '”' : ''}${e.was ? ' · was ' + isoWhen(e.was) : ''}`;
+      if (e.type === 'availability') return `${dayLabel(e.date)}${e.cancel ? '' : ', ' + esc(R.OFF_PARTS[e.part] || e.part)}${e.note ? ' · “' + esc(e.note) + '”' : ''}`;
       if (e.type === 'session') return e.what === 'started' ? `from ${esc(e.file || 'the assignment file')}${e.fingerprint_ok === 0 ? ' · the file was changed after it was generated' : ''}` : `${e.households_added || 0} added, ${e.households_removed || 0} removed`;
       return '';
     };
@@ -3817,7 +3919,8 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       ${c.flags.complete_short && c.open ? `<div class="alert warn">The complete you logged lasted under ${R.MIN_COMPLETE_MIN} minutes. Box 3.0 counts it as an appointment contact, not a complete, so the household stays open: call again, or correct the time if it is wrong.</div>` : ''}
       ${c.kind === 'removed' ? `<div class="alert info">This household is no longer in your assignment${h.removed_at ? ` (your leader's update, opened ${isoWhen(h.removed_at)})` : ''}. The calls you logged stay in your log and in your exports; you cannot log new calls for it.</div>` : ''}
       ${c.prior ? `<div class="alert info">Moved to you by your leader${c.prior.moved_at ? ` on ${isoWhen(c.prior.moved_at)}` : ''}${c.prior.from ? ` from ${esc(c.prior.from)}` : ''}, who made ${R.plural(c.prior.dials, 'dial')}${c.prior.last_status ? ` (last: ${esc(statusLabel(c.prior.last_status))}${c.prior.last_ts ? ', ' + isoWhen(c.prior.last_ts) : ''})` : ''}. ${c.prior.dials ? `Those dials count toward the cap of ${C.cal.cap}: ${Math.max(0, C.cal.cap - c.nAll)} left.` : ''}${c.prior.appointment_ts ? ` The household booked a callback for ${isoWhen(c.prior.appointment_ts)}${c.n ? '' : ': keep it'}.` : ''}</div>` : ''}
-      ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}</div>` : ''}
+      ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}
+        ${planLinks(c)}</div>${APP.plan ? planForm(c) : ''}` : ''}
       <dl class="facts">
         <dt>Usual time</dt><dd>${usual ? (hist.last_interview ? `${usual}, from the last interview` : `${usual}, planned by your leader (no interview yet)`) : 'not known'}${tzNote}</dd>
         <dt>Last interview</dt><dd>${hist.last_interview ? `round ${hist.last_interview.round}, ${dayLabel(hist.last_interview.date)}${Number.isInteger(hist.last_interview.hour) ? ' at ' + R.p2(hist.last_interview.hour) + ':00' : ''}` : 'none yet'}</dd>
@@ -3838,6 +3941,25 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
         ${c.open ? `<div class="btnrow"><button data-act="release">${R.ACTIONS.RELEASE}</button><button data-act="switch">Ask for another enumerator</button><button ${c.flags.all_dead || c.flags.no_phone ? '' : 'disabled title="Only when no number works"'} data-act="remove">Ask the leader to remove</button></div>` : ''}</section>` : ''}
       ${repl}
     </aside>`;
+  }
+  // the links under "Next": move the next call, or undo the move, when the leader allows it
+  function planLinks(c) {
+    const rules = R.selfRules(APP.S.assignment);
+    if (!rules.reschedule || APP.call) return '';
+    if (c.appointment) return '<div class="muted small">A callback is booked: to change it, correct the call’s callback time.</div>';
+    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(c.next.kind)) return '';
+    return `<div class="planlinks">${APP.plan ? '' : '<button class="link" data-act="plan">Move the next call</button>'}${c.mine ? ' · <button class="link" data-act="clearplan">Undo my change</button>' : ''}</div>`;
+  }
+  function planForm(c) {
+    const rules = R.selfRules(APP.S.assignment), first = c.n === 0 && !(c.prior && c.prior.dials);
+    const def = c.next.at && c.next.at > R.now() ? c.next.at : new Date(R.now().getTime() + 2 * 3600e3);
+    return `<section class="sec callbox"><h4>Move the next call · ${esc(c.hhid)}</h4>
+      <p class="muted small">For what the plan cannot know: someone told you when to call, the household answers at another time, or your day is full. Inside the round window and the call hours${first && !rules.push_first_calls && rules.first_calls_by ? `; a first call by ${dayLabel(rules.first_calls_by)}` : ''}. Your leader sees each change and its reason. A respondent’s callback is booked with the call instead.</p>
+      <form id="planform" novalidate onsubmit="return false">
+      <div class="row2"><label>Next call <input type="datetime-local" name="when" value="${toLocalInput(def)}"></label>
+        <label>Why <select name="reason"><option value="">Choose…</option>${Object.entries(R.PLAN_REASONS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></label></div>
+      <label>Note <input type="text" name="note" maxlength="200" placeholder="Operational only: no personal details"></label>
+      <div class="btnrow"><button class="primary" data-act="saveplan">Save the new time</button><button class="subtle" data-act="cancelplan">Cancel</button></div></form></section>`;
   }
   const statusButtons = (sel) => `<fieldset class="statuses"><legend>Result of the call</legend>${R.STATUS.map(s => `<label class="sopt s-${s.cat}"><input type="radio" name="status" value="${s.code}" ${sel === s.code ? 'checked' : ''}>${esc(s.label)}</label>`).join('')}</fieldset>`;
   const afterFields = (defAppt) => `<div class="row2"><label>Callback time, if one was agreed <input type="datetime-local" name="appointment" value="${defAppt || ''}"></label>
@@ -3952,7 +4074,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     switch (act) {
       case 'view': APP.view = el.dataset.v; render(); break;
       case 'tab': APP.tab = el.dataset.t; render(); break;
-      case 'open': APP.sel = el.dataset.hh; APP.correct = null; APP.contact = false; APP.manual = false; render(); break;
+      case 'open': APP.sel = el.dataset.hh; APP.correct = null; APP.contact = false; APP.manual = false; APP.plan = false; render(); break;
       case 'closehh': if (APP.call && !APP.call.end) return toast('End the call first.', 'warn'); APP.sel = null; APP.call = null; render(); break;
       case 'filter': APP.filter = el.dataset.f; render(); break;
       case 'day': { const d = +el.dataset.d; APP.day = d === 0 ? null : R.addDaysKey(APP.day || todayKey(), d); if (APP.day === todayKey()) APP.day = null; render(); break; }
@@ -3971,6 +4093,12 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       case 'switch': if (c) doAction(c, 'SWITCH_REQUEST'); break;
       case 'remove': if (c) doAction(c, 'REMOVE_REQUEST'); break;
       case 'replace': if (c) activateReplacement(c); break;
+      case 'plan': APP.plan = true; render(); { const el = $('#planform [name="when"]'); if (el) el.focus(); } break;
+      case 'cancelplan': APP.plan = false; render(); break;
+      case 'saveplan': savePlan(); break;
+      case 'clearplan': clearPlan(); break;
+      case 'saveoff': saveOff(); break;
+      case 'canceloff': cancelOff(el.dataset.k); break;
       case 'contact': APP.contact = !APP.contact; render(); break;
       case 'cancelcontact': APP.contact = false; render(); break;
       case 'savecontact': saveContact(); break;
@@ -4070,12 +4198,13 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     st = {
       schema: L.SCHEMA.leader, leader: o.leader, program: o.program, country: o.country, round: o.round, started_at: R.localISO(R.now()),
       inputs: { households: null, replacements: null, history: [], manual: null }, mapping: {},
-      cal: { window_start: '', window_end: '', working_weekdays: [1, 2, 3, 4, 5, 6], call_hours: { start: 9, end: 21 }, time_zone: TZ_OF[o.country] || '', dial_cap: null, day_list: null },
+      cal: { window_start: '', window_end: '', working_weekdays: [1, 2, 3, 4, 5, 6], call_hours: { start: 9, end: 21 }, time_zone: TZ_OF[o.country] || '', dial_cap: null, day_list: null,
+        self: { reschedule: true, availability: true, push_first_calls: false }, protocol: { per_day: null, gap_hours: 2, days: null, vary_times: false } },
       holidayWorking: [], customHolidays: [], removedHolidays: [], ramadanOn: RAMADAN.has(o.country), breakFast: null,
       team: [], criteria: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
       spread: 0.5, margin: 0.15, policy: { active: true, triggers: ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'] }, protect: false,
       plan: null, generated: null, manifest: null, imports: [], resolutions: [], events: [], unsaved: 0,
-      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [],
+      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [], platform: { codes: {} },
     };
     st.genesis = R.sha256(R.canon({ program: st.program, round: st.round, leader: st.leader, started_at: st.started_at }));
     logEv('started', {});
@@ -4089,6 +4218,14 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     // the day list: the leader's number, else 1.5 × the planned first dials per day once the rule has been applied
     const dl = Number.isInteger(c.day_list) && c.day_list >= 1 ? c.day_list : (st.plan && st.plan.dayListDefault) || null;
     if (dl) out.day_list = dl;
+    // what the enumerators may change in their own schedule (3 November 2026), with the end of the plan's first-call period
+    // the contact protocol (3 November 2026): calls a day to one household, hours between them, working days of calls for a household never reached
+    const cp = c.protocol || {};
+    out.contact_protocol = R.clean({ per_day: Number.isInteger(cp.per_day) && cp.per_day >= 1 ? cp.per_day : undefined, gap_hours: typeof cp.gap_hours === 'number' && cp.gap_hours > 0 ? cp.gap_hours : 2,
+      days: Number.isInteger(cp.days) && cp.days >= 1 ? cp.days : undefined, vary_times: cp.vary_times === true });
+    const ss = c.self || {};
+    out.self_scheduling = R.clean({ reschedule: ss.reschedule !== false, availability: ss.availability !== false, push_first_calls: ss.push_first_calls === true,
+      first_calls_by: st.plan && st.plan.firstCallsBy ? st.plan.firstCallsBy : undefined });
     const hol = [];
     if (R.isDateKey(c.window_start) && R.isDateKey(c.window_end)) {
       R.bundledHolidays(st.country).filter(h => h.date >= c.window_start && h.date <= c.window_end && !st.removedHolidays.includes(h.date))
@@ -4153,6 +4290,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       if (Array.isArray(c.working_weekdays)) st.cal.working_weekdays = c.working_weekdays.slice();
       if (c.time_zone && !st.cal.time_zone) st.cal.time_zone = c.time_zone;
       if ((st.cal.day_list === null || st.cal.day_list === undefined) && Number.isInteger(c.day_list)) st.cal.day_list = c.day_list;
+      // last round's contact protocol carries over; the leader can change it
+      if (c.contact_protocol && !st.protocolFromHistory) { const p = c.contact_protocol; st.cal.protocol = { per_day: Number.isInteger(p.per_day) ? p.per_day : null, gap_hours: typeof p.gap_hours === 'number' ? p.gap_hours : 2,
+        days: Number.isInteger(p.days) ? p.days : null, vary_times: p.vary_times === true }; st.protocolFromHistory = true; }
     }
     if (!st.team.length && lastR !== null) {
       const ids = new Set();
@@ -4216,7 +4356,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     ui.stale = false;
     inp.highRisk = highRiskSet();
     const P = L.plan(inp, A.out, A.summaries, inp.hist);
-    st.plan = { out: A.out, sums: A.summaries, notes: A.notes, warnings: A.warnings, plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, moves: [], at: R.localISO(R.now()),
+    st.plan = { out: A.out, sums: A.summaries, notes: A.notes, warnings: A.warnings, plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, firstCallsBy: P.firstCallsBy, moves: [], at: R.localISO(R.now()),
       unmatched: A.unmatched || [], criteria: A.criteria || [] };
     // the day list's default: 1.5 × the busiest enumerator's planned first dials per working day of the first part of the window
     const perEnum = new Map(); for (const x of A.out.values()) perEnum.set(x.enumerator_id, (perEnum.get(x.enumerator_id) || 0) + 1);
@@ -4418,15 +4558,14 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   function downloadAll(files) { files.forEach((f, i) => setTimeout(() => sh().download(f.name, f.text, f.name.endsWith('.csv') ? 'text/csv' : 'application/json'), i * 250)); }
 
   // ---- the merge (F) ----
+  const isPlatformRec = r => ['platform', 'unmapped'].includes(r.kind);
   const resolutionMap = () => { const m = new Map(); st.resolutions.forEach(r => m.set(r.key, r)); return m; };
   function merged() {
     if (cache.g) return cache.g;
     if (!st.manifest) return null;
     const recs = st.imports.map(f => Object.assign(L.readImport(f.name, f.text, st.profiles), { opened: f.opened }));
     const d = derived();
-    const G = L.merge(st.manifest, recs, resolutionMap(), R.now(), { households: d.hh && !d.hh.errors.length ? d.hh.households : null });
-    // a calling service's log is matched to the merged dials by the household's number (proposal K.3); it needs the household list
-    if (G.service && G.service.length && d.hh && !d.hh.errors.length) L.applyService(G, G.service, d.hh.households, resolutionMap());
+    const G = L.merge(st.manifest, recs, resolutionMap(), R.now(), { households: d.hh && !d.hh.errors.length ? d.hh.households : null, codes: st.platform.codes });
     const C = L.cases(st.manifest, G), P = L.progress(st.manifest, C, G);
     cache.g = { G, C, P, recs };
     return cache.g;
@@ -4434,14 +4573,6 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   async function addImports(files) {
     let n = 0;
     for (const f of files) {
-      if (/\.zip$/i.test(f.name)) {            // a Survey Solutions export: its .tab members are added one by one (proposal K)
-        let parts;
-        try { parts = await L.readZip(await f.arrayBuffer()); } catch (e) { toast(`${f.name}: ${e.message}`, 'warn'); continue; }
-        let k = 0;
-        for (const [name, text] of parts) { if (/\.(tab|csv)$/i.test(name)) { st.imports.push({ name: `${f.name}/${name}`, text }); k++; n++; } }
-        if (!k) toast(`${f.name} holds no .tab or .csv file.`, 'warn');
-        continue;
-      }
       const text = await sh().readText(f);
       st.imports.push({ name: f.webkitRelativePath || f.name, text });
       n++;
@@ -4510,14 +4641,14 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       report: () => [`${base}_merge_report.csv`, R.toCSV(L.reportRows(g.G), L.REPORT_COLS)],
       contacts: () => [`${base}_contact_updates.csv`, R.toCSV(L.contactRows(g.G), L.CONTACT_COLS)],
       manifest: () => [`${base}_manifest.json`, JSON.stringify(M, null, 1)],
-      // the platform files (proposal K.3): the KoBo form's media file and the Survey Solutions assignments upload, from the current manifest
+      // the files the KoBo form takes in (proposal K.3), from the current manifest; and the records to look at in KoBoToolbox (K.8)
       kobo: () => ['households.csv', L.koboHouseholds(M, derived().hh.households, st.plan ? st.plan.plans : null)],
-      suso: () => ['assignments.tab', L.susoAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null)],
-      choices: () => ['choices_households.csv', L.koboChoices(M, derived().hh.households)],
+      choices: () => ['choices_households.csv', L.koboChoices(M, derived().hh.households, st.platform.codes)],
+      review: () => [`${base}_kobo_review.csv`, R.toCSV(L.reviewRows(g.G), L.REVIEW_COLS)],
     };
-    if (['kobo', 'suso', 'choices'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: the platform files need the contacts.', 'warn');
+    if (['kobo', 'choices'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: the files for the form need the contacts.', 'warn');
     const [name, text] = files[what]();
-    sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : name.endsWith('.tab') ? 'text/tab-separated-values' : 'application/json');
+    sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : 'application/json');
     logEv('exported', { file: name });
   }
 
@@ -4527,7 +4658,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       schema: L.SCHEMA.leader, tool_version: R.VERSION, saved_at: R.localISO(R.now()), saved_by: st.leader,
       program: st.program, country: st.country, round: st.round, started_at: st.started_at, chain_genesis: st.genesis,
       settings: { cal: st.cal, holidayWorking: st.holidayWorking, customHolidays: st.customHolidays, removedHolidays: st.removedHolidays, ramadanOn: st.ramadanOn,
-        breakFast: st.breakFast, team: st.team, criteria: st.criteria, rule: st.rule, spread: st.spread, margin: st.margin, policy: st.policy, protect: st.protect, mapping: st.mapping, risk: st.risk, profiles: st.profiles },
+        breakFast: st.breakFast, team: st.team, criteria: st.criteria, rule: st.rule, spread: st.spread, margin: st.margin, policy: st.policy, protect: st.protect, mapping: st.mapping, risk: st.risk, profiles: st.profiles, platform: st.platform },
       inputs: st.inputs,
       plan: st.plan ? { out: [...st.plan.out], moves: st.plan.moves, notes: st.plan.notes, warnings: st.plan.warnings, at: st.plan.at } : null,
       generated: st.generated, manifest: st.manifest, imports: st.imports, resolutions: st.resolutions, events: st.events,
@@ -4573,8 +4704,11 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     st.risk = st.risk || { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } };
     st.criteria = Array.isArray(st.criteria) ? st.criteria : [];
     st.profiles = Array.isArray(st.profiles) ? st.profiles : [];
+    st.platform = { codes: st.platform && st.platform.codes && typeof st.platform.codes === 'object' ? st.platform.codes : {} };
     (st.team || []).forEach(t => { t.attrs = t.attrs || {}; });
     if (st.cal && st.cal.day_list === undefined) st.cal.day_list = null;
+    if (st.cal && !st.cal.self) st.cal.self = { reschedule: true, availability: true, push_first_calls: false };
+    if (st.cal && !st.cal.protocol) st.cal.protocol = { per_day: null, gap_hours: 2, days: null, vary_times: false };
     if (o.plan) {
       invalidate();
       const inp = inputFor();
@@ -4582,7 +4716,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       const out = new Map(o.plan.out);
       st.plan = { out, sums, notes: o.plan.notes, warnings: o.plan.warnings, moves: o.plan.moves, at: o.plan.at };
       const P = L.plan(inp, out, sums, inp.hist);
-      Object.assign(st.plan, { plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays });
+      Object.assign(st.plan, { plans: P.plans, best: P.best, firstDays: P.firstDays, workingDays: P.workingDays, firstCallsBy: P.firstCallsBy });
     }
     invalidate();
     ui.tab = st.manifest ? 'progress' : 'prepare';
@@ -4681,17 +4815,19 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   }
   function sessionView() {
     const M = st.manifest;
-    const tabs = [['prepare', 'Prepare round'], ['import', 'Import logs'], ['progress', 'Progress'], ['calllog', 'Call log'], ['analytics', 'Analytics'], ['risk', 'Risk lists']];
+    const tabs = [['prepare', 'Prepare round'], ['import', 'Import logs'], ['progress', 'Progress'], ['calllog', 'Call log'], ['platform', 'KoBoToolbox'], ['analytics', 'Analytics'], ['risk', 'Risk lists']];
     const g = M ? merged() : null;
     const openIssues = g && st.imports.length ? g.G.issues.filter(i => i.status === 'open' && i.severity === 'action').length : 0;
+    const platformFiles = g ? g.recs.some(r => isPlatformRec(r)) : false;
+    const badge = k => ((k === 'import' || (k === 'platform' && platformFiles)) && openIssues ? ` <span class="count warn" title="${R.plural(openIssues, 'merge question')} waiting for your decision">${openIssues}</span>` : '');
     return `<section class="summary">
         <div class="line"><b>${esc(st.leader)}</b> · ${esc(st.program)} round ${st.round} · ${esc(COUNTRIES[st.country] || st.country)}${M ? ` · window ${esc(M.calendar.window_start)} to ${esc(M.calendar.window_end)} · ${M.households.length} households, ${M.enumerators.length} enumerators` : ''}</div>
         <div class="actions"><button class="primary" data-lact="save"${st.unsaved ? ` title="${R.plural(st.unsaved, 'change')} not saved yet"` : ''}>Save leader session${st.unsaved ? ` <span class="pill" aria-label="${R.plural(st.unsaved, 'change')} not saved yet">${st.unsaved}</span>` : ''}</button>
           <button class="subtle" data-lact="close">Close</button></div>
         <div class="savestate">${st.last_save ? `Last saved ${esc(st.last_save.at.slice(0, 16).replace('T', ' '))} (${esc(st.last_save.file)})` : 'Not saved yet'}${st.unsaved ? `${(st.last_save ? ', ' : ': ')}${R.plural(st.unsaved, 'change')}${st.last_save ? ' since' : ''}` : ''} · the session file holds contact information: keep it in your own folder</div>
       </section>
-      <nav class="tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-lact="tab" data-t="${k}" aria-selected="${ui.tab === k}" class="${ui.tab === k ? 'on' : ''}">${l}${k === 'import' && openIssues ? ` <span class="count warn" title="${R.plural(openIssues, 'merge question')} waiting for your decision">${openIssues}</span>` : ''}</button>`).join('')}</nav>
-      <div class="body"><main class="panel lead-panel">${({ prepare: prepareTab, import: importTab, progress: progressTab, calllog: callLogTab, analytics: analyticsTab, risk: riskTab })[ui.tab]()}</main></div>`;
+      <nav class="tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-lact="tab" data-t="${k}" aria-selected="${ui.tab === k}" class="${ui.tab === k ? 'on' : ''}">${l}${badge(k)}</button>`).join('')}</nav>
+      <div class="body"><main class="panel lead-panel">${({ prepare: prepareTab, import: importTab, progress: progressTab, calllog: callLogTab, platform: platformTab, analytics: analyticsTab, risk: riskTab })[ui.tab]()}</main></div>`;
   }
   // the replacement list in words: how many, for how many households, how many still in reserve
   function replSummary(d) {
@@ -4737,7 +4873,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <label class="btn subtle">${st.inputs.replacements ? 'Replace' : 'Open'} the replacement list<input type="file" id="lf-repl" accept=".csv,.txt,.xlsx"></label>${st.inputs.replacements ? ` <span class="muted">${esc(st.inputs.replacements.name)}</span> <button class="link" data-lact="clearrepl">Remove</button>` : ''}
       ${d.repl ? `${errList(d.repl.errors)}${d.repl.errors.length ? '' : `<p>${replSummary(d)}</p>`}${list(d.repl.warnings)}` : ''}
       <div class="row2"><label class="inline"><input type="checkbox" data-lset="policy.active" data-type="bool" ${st.policy.active ? 'checked' : ''}> Replacements in use this round</label>
-      <span class="checks">Allowed after: ${[['REFUSAL_HARD', 'a hard refusal'], ['ALL_NUMBERS_DEAD', 'no working number'], ['CAP_REACHED', 'the dial cap']].map(([k, l]) => `<label class="inline"><input type="checkbox" data-ltrig="${k}" ${st.policy.triggers.includes(k) ? 'checked' : ''}> ${l}</label>`).join(' ')}</span></div></section>`;
+      <span class="checks">Allowed after: ${[['REFUSAL_HARD', 'a hard refusal'], ['ALL_NUMBERS_DEAD', 'no working number'], ['CAP_REACHED', 'the dial cap or the contact protocol']].map(([k, l]) => `<label class="inline"><input type="checkbox" data-ltrig="${k}" ${st.policy.triggers.includes(k) ? 'checked' : ''}> ${l}</label>`).join(' ')}</span></div></section>`;
     const wd = [1, 2, 3, 4, 5, 6, 7].map(i => `<label class="inline"><input type="checkbox" data-lwd="${i}" ${c.working_weekdays.includes(i) ? 'checked' : ''}> ${WDN[i - 1]}</label>`).join(' ');
     const ram = ramadanDates();
     const working = cal.holidays.length ? `<table class="grid small"><thead><tr><th>Date</th><th>Holiday</th><th>Call center works</th><th></th></tr></thead><tbody>${cal.holidays.map(h => `<tr><td>${esc(h.date)} ${WDN[R.weekdayOfKey(h.date) - 1]}</td><td>${esc(h.name)}${h.estimated ? ' <span class="tag">estimated</span>' : ''}${h.added_by_leader ? ' <span class="tag">added</span>' : ''}</td><td><input type="checkbox" data-lhwork="${h.date}" ${h.working ? 'checked' : ''}></td><td><button class="link" data-lact="delhol" data-d="${h.date}">remove</button></td></tr>`).join('')}</tbody></table>` : R.isDateKey(c.window_start) && R.isDateKey(c.window_end) ? '<p class="muted">No public holiday inside the window.</p>' : '<p class="muted">Set the first and last day above to see the public holidays inside the window.</p>';
@@ -4747,10 +4883,22 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <div class="row3"><label>First day <input type="date" data-lset="cal.window_start" value="${esc(c.window_start)}"></label><label>Last day <input type="date" data-lset="cal.window_end" value="${esc(c.window_end)}"></label>
       <label>Dial cap (stopping rule) <input type="number" min="1" data-lset="cal.dial_cap" data-type="int" value="${c.dial_cap === null ? '' : c.dial_cap}"></label></div>
       <div class="checks">Working days: ${wd}</div>
+      <h4>Contact protocol</h4>
+      <div class="row3"><label>At most <input class="tiny" type="number" min="1" step="1" data-lset="cal.protocol.per_day" data-type="int" value="${Number.isInteger(c.protocol.per_day) ? c.protocol.per_day : ''}" placeholder="no limit"> calls a day to one household</label>
+        <label>at least <input class="tiny" type="number" min="0.5" max="12" step="0.5" data-lset="cal.protocol.gap_hours" data-type="num" value="${c.protocol.gap_hours}"> hours apart</label>
+        <label>over at most <input class="tiny" type="number" min="1" step="1" data-lset="cal.protocol.days" data-type="int" value="${Number.isInteger(c.protocol.days) ? c.protocol.days : ''}" placeholder="no limit"> working days for a household never reached</label></div>
+      <label class="inline"><input type="checkbox" data-lset="cal.protocol.vary_times" data-type="bool" ${c.protocol.vary_times ? 'checked' : ''}> Vary the time of day: each new day of calls starts in the part of the day tried least so far (morning until 12:00, afternoon until 17:00, evening)</label>
+      ${(() => { const pd = c.protocol.per_day, dd = c.protocol.days, cap = c.dial_cap; return Number.isInteger(pd) && Number.isInteger(dd) ? `<p class="muted small">${pd} a day over ${dd} working days is ${pd * dd} calls${Number.isInteger(cap) ? (cap < pd * dd ? `; the dial cap of ${cap} stops a household first.` : cap > pd * dd ? `; a household never reached is done after ${pd * dd}, before the dial cap of ${cap}, and one reached keeps the cap.` : ', the dial cap.') : '.'}</p>` : ''; })()}
+      <p class="muted small">How the enumerator's list plans the next call after an unanswered one: the same day when the hours apart still fall inside the call hours and the day's calls are not used up, otherwise the next working day, at the household's usual hour or, if you tick it, in the part of the day tried least. A household never reached by the last of its working days of calls is done, as at the dial cap: the enumerator releases it, or activates a replacement where the round allows replacements after the dial cap (step 3). A booked callback is never limited by the protocol. Empty fields keep the earlier rule: two hours apart, no daily or day limit.</p>
       <div class="row3"><label>Calls from <input type="number" min="0" max="23" data-lset="cal.call_hours.start" data-type="int" value="${c.call_hours.start}"></label><label>until <input type="number" min="1" max="24" data-lset="cal.call_hours.end" data-type="int" value="${c.call_hours.end}"></label>
       <label>Time zone <input data-lset="cal.time_zone" value="${esc(c.time_zone)}" placeholder="Asia/Ulaanbaatar"></label></div>
       ${days.length ? `<p>${days.length} working days in the window; first dials are spread over the first <input class="tiny" type="number" min="10" max="100" step="5" data-lset="spread" data-type="pct" value="${Math.round(st.spread * 100)}">% of them (Section 3.4: front-load the contact effort).</p>
       <p>Each enumerator's <b>day list</b>: up to <input class="tiny" type="number" min="1" data-lset="cal.day_list" data-type="int" value="${Number.isInteger(c.day_list) ? c.day_list : ''}" placeholder="${st.plan ? st.plan.dayListDefault : 'auto'}"> households a day. ${st.plan ? `The plan gives about ${nm(st.plan.plannedPerDay, 1)} first dials per enumerator per working day; empty means 1.5 × that, ${st.plan.dayListDefault}.` : 'Empty means 1.5 × the planned first dials per day, set when the rule is applied.'} The enumerator sees the calls due, then households pulled forward from later days, so that unanswered calls do not leave anyone waiting.</p>` : ''}
+      <h4>What enumerators may change themselves</h4>
+      <div class="checks"><label class="inline"><input type="checkbox" data-lset="cal.self.reschedule" data-type="bool" ${c.self.reschedule ? 'checked' : ''}> Move a household's next call, with a reason</label>
+        <label class="inline"><input type="checkbox" data-lset="cal.self.push_first_calls" data-type="bool" ${c.self.push_first_calls ? 'checked' : ''} ${c.self.reschedule ? '' : 'disabled'}> also a first call past the first-call period${st.plan && st.plan.firstCallsBy ? ` (to ${esc(st.plan.firstCallsBy)})` : ''}</label>
+        <label class="inline"><input type="checkbox" data-lset="cal.self.availability" data-type="bool" ${c.self.availability ? 'checked' : ''}> Mark a day or half day off</label></div>
+      <p class="muted small">Inside the window and the call hours only. A respondent's callback never moves this way. Every change is in the enumerator's log with its reason, and the Progress tab counts them: calls moved, first calls moved later, days off. The pace counts only the days each enumerator works. First calls stay in the plan's first-call period unless you allow more: the handbook front-loads the contact effort (Section 3.4). The setting travels in the assignment files, so a change is written into the next files.</p>
       <h4>Holidays inside the window</h4>${working}
       <div class="row3"><label>Add a day off <input type="date" id="lhol-date"></label><label>Name <input id="lhol-name" placeholder="call center closed"></label><button class="subtle" data-lact="addhol">Add</button></div>
       ${ram.length || st.ramadanOn ? `<h4>Ramadan</h4><label class="inline"><input type="checkbox" data-lset="ramadanOn" data-type="bool" ${st.ramadanOn ? 'checked' : ''}> Observed: no first dial is planned in the hour the fast is broken (Section 3.5.4)</label>
@@ -4865,24 +5013,17 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
         <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
         <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
         <p class="muted">No export added yet. The merge checks every file against this round's manifest (${R.plural(st.manifest.households.length, 'household')}, ${R.plural(st.manifest.enumerators.length, 'enumerator')}); an enumerator whose export has not arrived is reported once you add the others.</p>
-        <h4>Or from KoBoToolbox</h4>
-        <p class="muted small">The KoBoToolbox export of a form that records each call attempt: the L2PHL form's layout, or the tool's own call-record form. The export is cumulative: add the latest download, and the tool splits it by enumerator and merges it as it merges the enumerators' CSV exports. A form with other columns is mapped here once and read from then on. A Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files) and a calling service's call log (the number called, the start, the end or duration and the status, as Twilio's) are read here too.</p>
-        <label class="btn subtle">Add platform files<input type="file" id="lf-platform" accept=".csv,.tab,.zip,.txt" multiple></label></section>`;
+        <p class="muted small">A team that records its calls in a KoBoToolbox form adds the form's export on the <b>KoBoToolbox</b> tab instead, which also writes the form's list.</p></section>`;
     }
     const open = G.issues.filter(i => i.status === 'open' && i.severity === 'action');
     const sealed = st.imports.map((f, i) => ({ f, i, rec: g.recs[i] })).filter(x => x.rec.kind === 'sealed' && x.rec.contains === R.SCHEMA.contacts);
-    const svc = G.serviceStats, d_ = derived(), noHH = G.service && G.service.length && !(d_.hh && !d_.hh.errors.length);
+    const nPlat = g.recs.filter(isPlatformRec).length;
     return `<section class="lcard"><h3>Add exports from the common folder</h3>
       <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
       <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
       ${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}
       ${sealed.map(x => `<div class="alert info">${esc(x.f.name)} is a protected contacts file. <button class="subtle" data-lact="opensealed" data-i="${x.i}">Open with its passphrase</button></div>`).join('')}
-      <h4>Or from KoBoToolbox</h4>
-      <p class="muted small">The KoBoToolbox export of a form that records each call attempt: the L2PHL form's layout, or the tool's own call-record form. The export is cumulative: add the latest download, and the tool splits it by enumerator and merges it as it merges the enumerators' CSV exports. A form with other columns is mapped here once and read from then on. A Survey Solutions export (the <code>.zip</code>, or its <code>.tab</code> files) and a calling service's call log (the number called, the start, the end or duration and the status, as Twilio's) are read here too.</p>
-      <label class="btn subtle">Add platform files<input type="file" id="lf-platform" accept=".csv,.tab,.zip,.txt" multiple></label>
-      ${noHH ? '<p class="alert warn">A calling service log was added, but the household list is not open: the numbers cannot be matched. Open it on the Prepare tab (step 1).</p>' : ''}
-      ${G.unmapped && G.unmapped.length ? mappingCard(G.unmapped[0]) : ''}
-      ${svc ? `<div class="alert info"><b>Calling service log:</b> ${R.plural(svc.calls, 'call')}, ${svc.panel} to the panel's numbers; ${svc.matched} matched a recorded call (${svc.filled} call ends filled from the service), ${svc.unlogged} had no record within three minutes (listed below if any), ${svc.unknown} went to numbers not in the list. ${svc.unmatched_dials} of ${svc.dials} recorded calls have no service call.</div>` : ''}</section>
+      <p class="muted small">${nPlat ? `${R.plural(nPlat, 'KoBoToolbox file')} ${nPlat === 1 ? 'is' : 'are'} in the merge too (KoBoToolbox tab).` : 'A team that records its calls in a KoBoToolbox form adds the form\'s export on the <b>KoBoToolbox</b> tab instead.'}</p></section>
       ${open.length ? `<section class="lcard"><h3>Needs your decision <span class="count warn">${open.length}</span></h3>${open.map(issueCard).join('')}</section>` : (st.imports.length ? '<p class="alert ok">No merge question is open.</p>' : '')}
       ${G.files.length ? `<section class="lcard"><h3>Files</h3><table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th>Exported</th><th class="num">Events or rows</th><th>Used</th></tr></thead><tbody>
         ${G.files.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td>${esc((f.exported_at || '').slice(0, 16).replace('T', ' '))}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table></section>` : ''}
@@ -4934,7 +5075,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
   function progressTab() {
     if (!st.manifest) return '<p class="muted">Write the round’s files or open its manifest first (Prepare or Import tab).</p>';
     const g = merged(), P = g.P, M = st.manifest;
-    const cols = [['households', 'Households'], ['complete', 'Complete'], ['in_progress', 'In progress'], ['not_started', 'Not started'], ['released', 'Released'], ['replaced', 'Replaced'], ['remove_requested', 'Removal requested'], ['conflict', 'Two completes'], ['not_reported', 'Not reported'], ['dials', 'Dials'], ['enumerator_days', 'Enumerator-days']];
+    const cols = [['households', 'Households'], ['complete', 'Complete'], ['in_progress', 'In progress'], ['not_started', 'Not started'], ['released', 'Released'], ['replaced', 'Replaced'], ['remove_requested', 'Removal requested'], ['conflict', 'Two completes'], ['not_reported', 'Not reported'], ['dials', 'Dials'], ['enumerator_days', 'Enumerator-days'], ['moved_by_them', 'Calls they moved'], ['first_later', 'First calls moved later'], ['days_off', 'Days off marked']];
     const always = new Set(['households', 'complete', 'in_progress', 'not_started', 'dials', 'enumerator_days']);
     const shownCols = cols.filter(([k]) => always.has(k) || P.list.some(r => r[k]));
     const row = r => `<tr${r.enumerator_id === 'All' ? ' class="total"' : ''}><td class="id">${esc(r.enumerator_id)}${r.enumerator_id === 'All' ? '' : `<div class="muted small nowrap">${r.last_export ? 'export ' + esc(r.last_export.slice(5, 16).replace('T', ' ')) : 'no export yet'}</div>`}</td>${shownCols.map(([k]) => `<td class="num">${r[k] || (k === 'households' ? 0 : '')}</td>`).join('')}<td class="num">${pc(r.households ? r.complete / r.households : null)}</td><td class="num">${nm(r.completes_per_day, 1)}</td></tr>`;
@@ -4950,7 +5091,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     if (ui.hhFilter !== 'all') f = f.filter(c => c.state === ui.hhFilter);
     if (ui.hhEnum) f = f.filter(c => c.enumerator_id === ui.hhEnum);
     f.sort((a, b) => (a.hhid < b.hhid ? -1 : 1));
-    return `<section class="lcard"><h3>Team</h3><p class="muted small">Households: those assigned, plus any replacement brought in this round (the household it replaces stays in the count, as Replaced). Not reported: households of an enumerator whose export has not arrived, counted apart from completes and misses. Completes per enumerator-day as in Box 3.0, from this round's dials. Columns with nothing to count are left out.</p>
+    return `<section class="lcard"><h3>Team</h3><p class="muted small">Households: those assigned, plus any replacement brought in this round (the household it replaces stays in the count, as Replaced). Not reported: households of an enumerator whose export has not arrived, counted apart from completes and misses. Completes per enumerator-day as in Box 3.0, from this round's dials. Calls they moved, first calls moved later and days off: the enumerators' own changes to their schedule, from their JSON exports (a CSV alone does not carry them). Columns with nothing to count are left out.</p>
       <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th>${shownCols.map(([, l]) => `<th class="num">${l}</th>`).join('')}<th class="num">Share complete</th><th class="num">Completes per enumerator-day</th></tr></thead>
       <tbody>${P.list.map(row).join('')}${row(P.total)}</tbody></table></div></section>
       ${movesCard(g)}
@@ -4973,9 +5114,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     const leftOut = x => (x && x.length ? `Not judged: ${x.map(y => `${esc(y.id)} (${esc(y.why)})`).join('; ')}.` : '');
     const crit = M.matching && M.matching.criteria ? M.matching.criteria : [];
     const rosterOpts = keep => roster(M).filter(keep).map(r => `<option value="${esc(r.id)}">${esc(r.id)}${r.away ? ' (away)' : ''}${r.added ? ' (new)' : ''}</option>`).join('');
-    const rows = pace.rows.map(r => `<tr><td class="id">${esc(r.enumerator_id)}</td><td class="num">${r.households}</td><td class="num">${r.complete}</td><td class="num">${r.waiting}</td><td class="num">${r.in_progress}</td><td class="num">${nm(r.pace, 2)}</td><td class="num">${r.known ? nm(r.capacity, 0) : '–'}</td><td class="num ${r.known && r.need > 0.5 ? 'warn' : ''}">${r.known ? (r.need > 0.5 ? `${nm(r.need, 0)} short` : r.need < -0.5 ? `${nm(-r.need, 0)} spare` : 'on time') : '–'}</td><td class="small">${r.why ? `<span class="muted">${esc(r.why)}</span>` : `export ${esc((r.export_at || '').slice(5, 16).replace('T', ' '))}`}</td></tr>`).join('');
+    const rows = pace.rows.map(r => `<tr><td class="id">${esc(r.enumerator_id)}</td><td class="num">${r.households}</td><td class="num">${r.complete}</td><td class="num">${r.waiting}</td><td class="num">${r.in_progress}</td><td class="num">${nm(r.pace, 2)}</td><td class="num">${r.known ? nm(r.capacity, 0) : '–'}</td><td class="num ${r.known && r.need > 0.5 ? 'warn' : ''}">${r.known ? (r.need > 0.5 ? `${nm(r.need, 0)} short` : r.need < -0.5 ? `${nm(-r.need, 0)} spare` : 'on time') : '–'}</td><td class="small">${r.why ? `<span class="muted">${esc(r.why)}</span>` : `export ${esc((r.export_at || '').slice(5, 16).replace('T', ' '))}`}${r.off_ahead ? ` <span class="tag">${nm(r.off_ahead, r.off_ahead % 1 ? 1 : 0)} day${r.off_ahead === 1 ? '' : 's'} off ahead</span>` : ''}</td></tr>`).join('');
     return `<section class="lcard"><h3>Move waiting households</h3>
-      <p class="muted small">Part-way through the round, households not yet called can move from an enumerator who will not finish to one with spare days, with no household in two files and no double call: each move is recorded in the manifest, the previous enumerator's dials up to the move stay theirs, and any dial they make after it is flagged in the merge. Pace: completes per enumerator-day so far (Box 3.0). Capacity: pace × the ${pace.days_left} working days left from today. Only enumerators whose export is from today, with two or more enumerator-days, are judged; an enumerator with nothing left open is judged on any export. Below the proposal: give households to an enumerator who finished early or joined the round, cover one who is away, add one who joins.</p>
+      <p class="muted small">Part-way through the round, households not yet called can move from an enumerator who will not finish to one with spare days, with no household in two files and no double call: each move is recorded in the manifest, the previous enumerator's dials up to the move stay theirs, and any dial they make after it is flagged in the merge. Pace: completes per enumerator-day so far (Box 3.0). Capacity: pace × the ${pace.days_left} working days left from today, less any time off an enumerator marked. Only enumerators whose export is from today, with two or more enumerator-days, are judged; an enumerator with nothing left open is judged on any export. Below the proposal: give households to an enumerator who finished early or joined the round, cover one who is away, add one who joins.</p>
       <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Not started</th><th class="num">In progress</th><th class="num">Completes per day</th><th class="num">Can still complete</th><th class="num">At this pace</th><th>Export</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="row3"><label>Which households may move <select data-lset="__movesInclude"><option value="not_started" ${ui.movesInclude === 'not_started' ? 'selected' : ''}>not yet called</option><option value="in_progress" ${ui.movesInclude === 'in_progress' ? 'selected' : ''}>also called, without a booked callback or a hard refusal</option></select></label>
         <label class="inline"><input type="checkbox" data-lset="__movesStale" data-type="bool" ${ui.movesStale ? 'checked' : ''}> also judge enumerators whose latest export is from an earlier day</label>
@@ -5015,11 +5156,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <div class="btnrow"><button class="primary" data-lact="export" data-what="calls">Merged call log (CSV)</button><button class="subtle" data-lact="export" data-what="actions">Actions (CSV)</button>
         <button class="subtle" data-lact="export" data-what="interviews">interviews.csv</button><button class="subtle" data-lact="export" data-what="outcomes">outcome_codes.csv</button>
         <button class="subtle" data-lact="export" data-what="calendar">calendar.csv</button><button class="subtle" data-lact="export" data-what="manifest">Manifest</button></div>
-      <p class="muted small">The merged call log has the harmonized dial-table columns of the enumerators' exports, the dial number counted per household across enumerators; the handbook's analysis scripts read it as a program's log, and the leader view reads it back as an earlier round. <code>interviews.csv</code> has one row per household for the Section 4.2 round template; <code>outcome_codes.csv</code> lists the codes and meanings to copy into the template's configuration.</p>
-      <h4>For a team that records calls in KoBoToolbox (or Survey Solutions)</h4>
-      <div class="btnrow"><button class="subtle" data-lact="export" data-what="choices">choices_households.csv (KoBoToolbox choices list)</button><button class="subtle" data-lact="export" data-what="kobo">households.csv (KoBoToolbox media file)</button>
-        <button class="subtle" data-lact="export" data-what="suso">assignments.tab (Survey Solutions)</button> <span class="tag warn">all but the choices list have phone numbers</span></div>
-      <p class="muted small">From the current manifest, so after moving households during the round they are written again. <code>choices_households.csv</code> is the sample list of a form that picks the household from its choices sheet (the L2PHL layout: <code>list_name</code> SN, the ID, and the enumerator's platform code in <code>filter_int_id</code>); paste it into the form's choices sheet and redeploy. <code>households.csv</code> is the media file of a form that pulls the household's details from an external file (the tool's own call-record form). <code>assignments.tab</code> goes to Survey Solutions under Survey Setup › Questionnaires › Upload assignments.</p></section>
+      <p class="muted small">The merged call log has the harmonized dial-table columns of the enumerators' exports, the dial number counted per household across enumerators; the handbook's analysis scripts read it as a program's log, and the leader view reads it back as an earlier round. <code>interviews.csv</code> has one row per household for the Section 4.2 round template; <code>outcome_codes.csv</code> lists the codes and meanings to copy into the template's configuration. The lists a KoBoToolbox form takes in are on the KoBoToolbox tab.</p></section>
       <section class="lcard"><h3>Merged call log <span class="count">${G.dials.length}</span></h3>
       <div class="filters"><select data-lset="__logEnum"><option value="">every enumerator</option>${[...G.perEnum.keys()].sort().map(e => `<option ${ui.logEnum === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select>
         <select data-lset="__logStatus"><option value="">every result</option>${R.STATUS.map(s => `<option value="${s.code}" ${ui.logStatus === s.code ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</select>
@@ -5027,6 +5164,45 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       <table class="grid small"><thead><tr><th>Household</th><th class="num">Dial</th><th>Start</th><th class="num">Minutes</th><th>Result</th><th>Enumerator</th><th>Number</th><th>Action</th><th>Logged</th></tr></thead><tbody>
       ${show.map(x => `<tr><td class="id">${esc(x.hhid)}</td><td class="num">${x.attempt}</td><td>${esc(R.wallFromISO(x.ts).slice(0, 16))}</td><td class="num">${nm(x.dur_min, 1)}</td><td>${esc(sh().statusLabel(x.status))}${x.corrected ? ' <span class="tag">corrected</span>' : ''}</td><td class="id">${esc(x.operator || x.source)}</td><td>${x.phone_slot || ''}</td><td>${esc(x.action || '')}</td><td>${esc(x.logged_by)} ${esc((x.logged_at || '').slice(5, 16).replace('T', ' '))}</td></tr>`).join('')}
       </tbody></table>${d.length > show.length ? `<button class="subtle" data-lact="logmore">Show 300 more (${d.length - show.length} left)</button>` : ''}</section>`;
+  }
+
+  // ---- KoBoToolbox: the round's cycle with a form that records each call attempt (proposal K.8) ----
+  function platformTab() {
+    const M = st.manifest, pf = st.platform, d = derived();
+    const g = M ? merged() : null, G = g ? g.G : null;
+    const hasHH = !!(d.hh && !d.hh.errors.length);
+    const ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
+    const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
+    const step1 = `<section class="lcard"><h3>1 · The form and the interviewers' codes</h3>
+      <p class="muted small">For a team that records its calls in a KoBoToolbox form rather than in this tool's enumerator view: the L2PHL layout, where the interview form is submitted once per call attempt, or the tool's own call-record form. The tool keeps the leader's side: the assignment, the plan, the merge, progress and the moves during the round. What crosses the boundary is a file each way, and this tab walks the round's cycle: the list goes to the form (2), the form's export comes in each day (3), moves follow (4), and the records to look at in KoBoToolbox go back (5).</p>
+      ${ids.length ? `<table class="grid small"><thead><tr><th>Enumerator</th><th>Code in the form (or the KoBoToolbox account)</th></tr></thead><tbody>
+        ${ids.map(id => `<tr><td class="id">${esc(id)}</td><td><input class="small" data-lpcode="${esc(id)}" value="${esc(codeOf(id) === id ? (pf.codes[id] || '') : codeOf(id))}" placeholder="CATI01"></td></tr>`).join('')}</tbody></table>
+        <p class="muted small">Empty means the enumerator's ID itself. The form's records are read under the tool's ID through the code, whatever its case or punctuation, and the list written for the form carries the code. A code entered before the files are written goes into the manifest (Prepare tab, step 5, shows the same column); one entered later is kept in this session.</p>` : '<p class="muted">Add the team on the Prepare tab (step 5), or open the round\'s manifest on the Import tab.</p>'}</section>`;
+    const need = !M ? 'Write the round\'s files (Prepare tab) or open its manifest (Import tab) first.' : !hasHH ? 'Open the household list on the Prepare tab (step 1): the files for the form need the contacts.' : '';
+    const moved = M && M.moves && M.moves.length ? M.moves.length : 0;
+    const listBtns = again => `<div class="btnrow"><button class="subtle" data-lact="export" data-what="choices" ${need ? 'disabled' : ''}>choices_households.csv${again ? ' again' : ' (the form\'s choices list)'}</button><button class="subtle" data-lact="export" data-what="kobo" ${need ? 'disabled' : ''}>households.csv${again ? ' again' : ' (media file of the tool\'s own form)'}</button> <span class="tag warn">the media file has phone numbers</span></div>`;
+    const step2 = `<section class="lcard"><h3>2 · Before the round: the list goes to the form</h3>
+      ${need ? `<p class="alert info">${esc(need)}</p>` : ''}${listBtns(false)}
+      <p class="muted small"><code>choices_households.csv</code> is the sample list of a form that picks the household from its choices sheet (the L2PHL layout: <code>list_name</code> SN, the ID, and the interviewer's code in <code>filter_int_id</code>): paste it over the form's list and redeploy; with a <code>choice_filter</code> on the code, each interviewer sees only their households. <code>households.csv</code> is the media file of the tool's own call-record form (<code>formats/kobo/rtm_call_record.xlsx</code>): upload it under Settings › Media and redeploy. Both come from the current manifest.</p></section>`;
+    const platRows = G ? G.files.filter(f => !['json', 'csv', 'contacts', 'sealed', 'manifest', 'unknown', 'protected contacts file', 'contacts file'].includes(f.kind)) : [];
+    const open = G ? G.issues.filter(i => i.status === 'open' && i.severity === 'action') : [];
+    const step3 = `<section class="lcard"><h3>3 · Each day: the form's export</h3>
+      <p class="muted small">Download the form's data (Data › Downloads › CSV with XML values and headers, or the project's export link) and add it: one submission per call attempt, the L2PHL layout or the tool's own form. The export is cumulative: add the latest download, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A form with other columns is mapped here once.</p>
+      ${M ? `<label class="btn">Add the form's export<input type="file" id="lf-platform" accept=".csv,.txt" multiple></label>${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}` : '<p class="alert info">Write the round\'s files or open its manifest first: the merge checks every record against it.</p>'}
+      ${G && G.unmapped && G.unmapped.length ? mappingCard(G.unmapped[0]) : ''}
+      ${platRows.length ? `<table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th class="num">Rows</th><th>Used</th></tr></thead><tbody>${platRows.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${open.length ? `<h4>Needs your decision <span class="count warn">${open.length}</span></h4>${open.map(issueCard).join('')}` : (platRows.length ? '<p class="alert ok">No merge question is open.</p>' : '')}</section>`;
+    const step4 = `<section class="lcard"><h3>4 · After moves during the round: the form follows</h3>
+      ${!moved ? '<p class="muted">No household has moved yet this round. Moves are made on the Progress tab; each one is recorded in the manifest, and this step then writes the list again.</p>'
+        : `<p>${R.plural(moved, 'move')} so far (the last on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}). Write the list again and redeploy the form, so that each moved household sits with its new interviewer. Batch the day's moves: a redeploy reaches the interviewers only when they reload the form. A call the previous interviewer makes after the move is flagged in the merge as a double call.</p>${listBtns(true)}`}</section>`;
+    const rv = G ? L.reviewRows(G) : [];
+    const step5 = `<section class="lcard"><h3>5 · Records to look at in KoBoToolbox</h3>
+      <p class="muted small">Every dial behind a merge question that needs or had your decision, with the form's own record ID (<code>_uuid</code>), so that you can find the submission in the project's table view, set its validation status or ask the interviewer.</p>
+      ${rv.length ? `<div class="btnrow"><button class="subtle" data-lact="export" data-what="review">${esc(`${M.program}_R${p2(M.round)}_kobo_review.csv`)} (${R.plural(rv.length, 'row')})</button></div>
+        <table class="grid small"><thead><tr><th>Question</th><th>Household</th><th>Enumerator</th><th>Record</th><th>Call</th><th>Result</th><th>Status</th></tr></thead><tbody>
+        ${rv.slice(0, 60).map(r => `<tr><td>${esc(r.issue.replace(/_/g, ' '))}</td><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.enumerator)}</td><td class="id small">${esc(r.record_id.slice(0, 18))}</td><td>${esc((r.call_start || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(r.result ? sh().statusLabel(r.result) : '')}</td><td>${r.status === 'open' ? '<b class="warn">open</b>' : esc(r.decision || r.status)}</td></tr>`).join('')}</tbody></table>${rv.length > 60 ? `<p class="muted">First 60 of ${rv.length}.</p>` : ''}`
+        : `<p class="muted">${G && platRows.length ? 'Nothing to look at: no merge question concerns a form record.' : 'The list fills once the form\'s export is in the merge.'}</p>`}</section>`;
+    return step1 + step2 + step3 + step4 + step5;
   }
 
   // ---- Analytics ----
@@ -5294,7 +5470,13 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     if (t.dataset.lrule !== undefined) { st.rule.name = t.dataset.lrule; stale(); return render(); }
     if (t.dataset.lmove !== undefined) return reassign(t.dataset.lmove, t.value);
     if (t.dataset.lcrit !== undefined) { const c = t.dataset.lcrit; st.criteria = t.checked ? [...new Set(st.criteria.concat(c))] : st.criteria.filter(x => x !== c); logEv('criteria_changed', { criteria: st.criteria }); stale(); return render(); }
-    if (t.dataset.lpid !== undefined) { const x = st.team[+t.dataset.lpid]; x.platform_id = t.value.trim(); logEv('platform_code', { id: x.id, platform_id: x.platform_id }); filesStale(); return render(); }
+    if (t.dataset.lpid !== undefined) { const x = st.team[+t.dataset.lpid]; x.platform_id = t.value.trim(); if (st.platform.codes[x.id] !== undefined) st.platform.codes[x.id] = x.platform_id; logEv('platform_code', { id: x.id, platform_id: x.platform_id }); filesStale(); return render(); }
+    if (t.dataset.lpcode !== undefined) {
+      const id = t.dataset.lpcode, v = t.value.trim(), tm = st.team.find(x => x.id === id);
+      if (v) st.platform.codes[id] = v; else delete st.platform.codes[id];
+      if (tm) { tm.platform_id = v; if (!st.manifest) filesStale(); }
+      logEv('platform_code', { id, platform_id: v }); invalidate(); return render();
+    }
     if (t.dataset.lprof !== undefined) { const k = t.dataset.lprof, m = ui.map; if (!m) return; if (k === 'name') m.name = t.value; else if (k.startsWith('col:')) { m.columns[k.slice(4)] = t.value; if (k === 'col:result' || k === 'col:consent') m.codes = {}; } else if (k.startsWith('code:')) m.codes[k.slice(5)] = t.value; return render(); }
     if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
     if (t.dataset.lmovesel !== undefined) { const i = +t.dataset.lmovesel; if (!ui.moves) return; if (t.checked) ui.moves.picked.add(i); else ui.moves.picked.delete(i); return render(); }
@@ -5303,12 +5485,15 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
       let v = t.type === 'checkbox' ? t.checked : t.value;
       if (type === 'int') v = t.value === '' ? null : parseInt(t.value, 10);
       if (type === 'pct') v = t.value === '' ? null : parseFloat(t.value) / 100;
+      if (type === 'num') v = t.value === '' || !(parseFloat(t.value) > 0) ? 2 : parseFloat(t.value);
       if (path === '__movesInclude') { ui.movesInclude = v; ui.moves = null; return render(); }
       if (path === '__movesStale') { ui.movesStale = !!v; ui.moves = null; return render(); }
       if (path.startsWith('__')) { ui[path.slice(2)] = v; return render(); }
       setPath(st, path, v);
       // the day list changes the files, not the assignment: the files are written again, the rule need not be
       if (path === 'cal.day_list') { logEv('day_list_set', { day_list: v }); filesStale(); return render(); }
+      if (path.startsWith('cal.protocol.')) { logEv('contact_protocol_set', { setting: path.slice(13), value: v }); filesStale(); return render(); }
+      if (path.startsWith('cal.self.')) { logEv('self_scheduling_set', { setting: path.slice(9), allowed: v ? 1 : 0 }); filesStale(); return render(); }
       if (/^cal\.|ramadanOn|breakFast|spread/.test(path)) invalidate();
       if (/^(rule\.|cal\.|spread|ramadanOn|breakFast)/.test(path)) stale();
       else if (/^policy\./.test(path)) filesStale();

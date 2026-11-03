@@ -4,7 +4,7 @@
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.3.3';
+  RTM.VERSION = '0.3.7';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -207,6 +207,13 @@
       if (c.time_zone && !RTM.validTZ(c.time_zone)) warn(`The time zone "${c.time_zone}" is not known to this browser; the device's time zone is used.`);
       (c.holidays || []).forEach(h => { if (!RTM.isDateKey(h.date)) err(`A holiday has an invalid date: ${h.date}`); });
       if (c.ramadan && c.ramadan.dates && !Number.isInteger(c.ramadan.break_fast_hour)) warn('Ramadan dates are given without the hour the fast is broken.');
+      const cp = c.contact_protocol;
+      if (cp !== undefined && (!cp || typeof cp !== 'object'
+        || (cp.per_day !== undefined && (!Number.isInteger(cp.per_day) || cp.per_day < 1))
+        || (cp.gap_hours !== undefined && !(typeof cp.gap_hours === 'number' && cp.gap_hours > 0 && cp.gap_hours <= 12))
+        || (cp.days !== undefined && (!Number.isInteger(cp.days) || cp.days < 1)))) err('contact_protocol (calls a day, hours between calls, days of calls) is not readable.');
+      const ss = c.self_scheduling;
+      if (ss !== undefined && (!ss || typeof ss !== 'object' || (ss.first_calls_by !== undefined && !RTM.isDateKey(ss.first_calls_by)))) err('self_scheduling (what the enumerator may change) is not readable.');
     }
     if (!Array.isArray(A.households) || !A.households.length) err('The file lists no households.');
     else {
@@ -314,7 +321,28 @@
       inWindow: k => k >= c.window_start && k <= c.window_end,
       isRamadan: k => ram.has(k),
       breakFastHour: c.ramadan && Number.isInteger(c.ramadan.break_fast_hour) ? c.ramadan.break_fast_hour : null,
+      protocol: RTM.protocolOf(c),
     };
+  };
+  // the contact protocol the leader set (calendar.contact_protocol, 3 November 2026): calls a day to one household, hours between them,
+  // working days of calls for a household never reached, and whether each new day starts in the part of the day tried least.
+  // Absent: the rule of earlier versions, two hours apart with no daily limit, no limit in days, the usual hour each day.
+  RTM.protocolOf = c => {
+    const p = (c && c.contact_protocol) || {};
+    return { perDay: Number.isInteger(p.per_day) && p.per_day >= 1 ? p.per_day : null, gap: typeof p.gap_hours === 'number' && p.gap_hours > 0 ? p.gap_hours : 2,
+      days: Number.isInteger(p.days) && p.days >= 1 ? p.days : null, vary: p.vary_times === true };
+  };
+  RTM.DAY_PARTS = [['morning', 0, 12], ['afternoon', 12, 17], ['evening', 17, 24]];
+  // the part of the day tried least so far for a household (within the call hours), and the hour to start it at:
+  // the household's usual hour when it falls in that part, else the part's first call hour
+  RTM.leastTriedHour = (dials, cal, usual) => {
+    const parts = RTM.DAY_PARTS.map(([name, a, b]) => ({ name, a: Math.max(a, cal.hours.start), b: Math.min(b, cal.hours.end) })).filter(x => x.a < x.b);
+    const n = parts.map(x => dials.filter(d => { const h = RTM.partsIn(RTM.parseTS(d.ts), cal.tz).h; return h >= x.a && h < x.b; }).length);
+    const min = Math.min(...n);
+    const home = usual !== null ? parts.findIndex(x => usual >= x.a && usual < x.b) : -1;
+    const i = home >= 0 && n[home] === min ? home : n.indexOf(min);
+    const x = parts[i];
+    return { part: x.name, hour: usual !== null && usual >= x.a && usual < x.b ? usual : x.a };
   };
   RTM.bundledHolidays = country => (((G.RTM_HOLIDAYS || {}).table || {})[country] || []).map(([date, name, est]) => ({ date, name, estimated: !!est, bundled: true }));
   RTM.workingDaysLeft = (cal, fromKey) => { let k = fromKey < cal.start ? cal.start : fromKey, n = 0; while (k <= cal.end) { if (cal.isWorking(k)) n++; k = RTM.addDaysKey(k, 1); } return n; };
@@ -343,6 +371,72 @@
 
   // the results whose callback time books a call: a moved household takes such a callback with it
   RTM.CALLBACK_STATUSES = ['APPOINTMENT', 'PARTIAL', 'NOT_AVAILABLE', 'REFUSAL_SOFT', 'OTHER', 'LANGUAGE'];
+
+  // ---- what the enumerator may change in their own schedule (calendar.self_scheduling, set by the leader) ----
+  // Absent in a file written before 3 November 2026: the defaults, with first calls held to the latest first dial the file plans.
+  RTM.selfRules = A => {
+    const ss = (A.calendar && A.calendar.self_scheduling) || {};
+    const latest = A.households.map(h => (h.plan || {}).first_dial_date).filter(Boolean).sort().pop() || null;
+    return { reschedule: ss.reschedule !== false, availability: ss.availability !== false, push_first_calls: ss.push_first_calls === true,
+      first_calls_by: ss.first_calls_by || latest };
+  };
+  RTM.PLAN_REASONS = { TOLD: 'Someone said when to call', PATTERN: 'The household answers at another time', WORKLOAD: 'My day is too full', OTHER: 'Other (write a note)' };
+  RTM.OFF_PARTS = { day: 'the whole day', morning: 'the morning, until 13:00', afternoon: 'the afternoon, from 13:00' };
+  RTM.HALF_DAY = 13;
+  // the enumerator's days off: date -> 'day' | 'morning' | 'afternoon', from the availability events in order (a cancel removes the date)
+  RTM.offDays = S => {
+    const m = new Map();
+    for (const e of S.events) {
+      if (e.type !== 'availability' || !e.date) continue;
+      if (e.cancel) { m.delete(e.date); continue; }
+      const had = m.get(e.date);
+      m.set(e.date, had && had !== e.part && had !== 'day' && e.part !== 'day' ? 'day' : e.part === 'day' || had === 'day' ? 'day' : e.part);
+    }
+    return m;
+  };
+  // the enumerator's own next time for each household: the last plan event, unless a dial (not voided) was logged after it in the log, or it was cleared
+  RTM.ownPlans = (S, dials) => {
+    const m = new Map(), live = new Set(dials.map(d => d.event_id));
+    for (const e of S.events) {
+      if (e.type === 'plan' && e.hhid) { if (e.clear) m.delete(e.hhid); else m.set(e.hhid, e); }
+      else if (e.type === 'dial' && live.has(e.event_id)) m.delete(e.hhid);
+    }
+    return m;
+  };
+  // can the enumerator move this household's next call to `at`? '' when yes, else what stops it
+  RTM.checkPlan = (S, c, at, cal, now) => {
+    const rules = RTM.selfRules(S.assignment);
+    if (!rules.reschedule) return 'Your leader has not allowed moving calls yourself this round.';
+    if (!c || !c.open || c.kind === 'removed') return 'Only an open household of yours can be moved.';
+    if (c.appointment) return 'A callback is booked with the respondent: change it by correcting that call’s callback time.';
+    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(c.next.kind)) return 'This household needs a decision, not a new time (see “Needs your decision”).';
+    if (!at || isNaN(at.getTime())) return 'Choose the day and time of the next call.';
+    if (at.getTime() < now.getTime() - 60000) return 'Choose a time from now on.';
+    const p = RTM.partsIn(at, cal.tz);
+    if (!cal.inWindow(p.key)) return `Choose a day inside the round window (${cal.start} to ${cal.end}).`;
+    if (!cal.isWorking(p.key)) return 'That day is not a working day of the call center.';
+    if (p.h < cal.hours.start || p.h >= cal.hours.end) return `Choose a time inside the call hours, ${RTM.p2(cal.hours.start)}:00 to ${RTM.p2(cal.hours.end)}:00.`;
+    const off = RTM.offDays(S).get(p.key);
+    if (off && (off === 'day' || (off === 'morning' && p.h < RTM.HALF_DAY) || (off === 'afternoon' && p.h >= RTM.HALF_DAY))) return 'You marked that time as off.';
+    if (c.n === 0 && !(c.prior && c.prior.dials) && !rules.push_first_calls && rules.first_calls_by && p.key > rules.first_calls_by)
+      return `First calls are made by ${rules.first_calls_by}: your leader keeps them early in the round (handbook Section 3.4). Choose a day up to then, or ask your leader.`;
+    return '';
+  };
+  // can the enumerator mark this day (or half day) off? { error } or { warn: households with a callback booked then }
+  RTM.checkOff = (S, C, key, part, now) => {
+    const rules = RTM.selfRules(S.assignment), cal = C.cal;
+    if (!rules.availability) return { error: 'Your leader has not allowed marking days off in the tool this round: tell your leader directly.' };
+    if (!RTM.isDateKey(key)) return { error: 'Choose the day.' };
+    if (!RTM.OFF_PARTS[part]) return { error: 'Choose the whole day, the morning or the afternoon.' };
+    if (!cal.inWindow(key)) return { error: `Choose a day inside the round window (${cal.start} to ${cal.end}).` };
+    if (!cal.isWorking(key)) return { error: 'That day is not a working day of the call center anyway.' };
+    if (key < RTM.partsIn(now, cal.tz).key) return { error: 'That day has passed.' };
+    const had = RTM.offDays(S).get(key);
+    if (had === 'day' || had === part) return { error: 'That day is already marked off.' };
+    const hit = C.list.filter(c => c.open && c.appointment && (() => { const p = RTM.partsIn(c.appointment, cal.tz);
+      return p.key === key && (part === 'day' || (part === 'morning' ? p.h < RTM.HALF_DAY : p.h >= RTM.HALF_DAY)); })()).map(c => c.hhid);
+    return { warn: hit };
+  };
 
   // ---- the case universe: assigned households plus activated replacements ----
   RTM.householdsOf = (S, eff) => {
@@ -378,6 +472,9 @@
   // ---- case states and the next suggested dial (D) ----
   RTM.cases = (S, now) => {
     const A = S.assignment, cal = RTM.calendarOf(A), eff = RTM.effective(S);
+    const off = RTM.offDays(S), own = RTM.ownPlans(S, eff.dials);
+    cal.off = off;
+    cal.offAt = (key, h) => { const o = off.get(key); return !!o && (o === 'day' || (o === 'morning' && h < RTM.HALF_DAY) || (o === 'afternoon' && h >= RTM.HALF_DAY)); };
     const byHH = new Map();
     for (const d of eff.dials) { if (!byHH.has(d.hhid)) byHH.set(d.hhid, []); byHH.get(d.hhid).push(d); }
     const acts = new Map();
@@ -414,7 +511,8 @@
       const appointment = last && last.appointment_ts && RTM.CALLBACK_STATUSES.includes(last.status) ? RTM.parseTS(last.appointment_ts)
         : !last && prior && prior.appointment_ts ? RTM.parseTS(prior.appointment_ts) : null;
       const myRepl = (h.replacements || []).map((r, i) => Object.assign({ rank: r.rank || i + 1 }, r, { active: false }));
-      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
+      const mine = !appointment && own.get(h.hhid) ? own.get(h.hhid) : null;      // the enumerator's own next time, under a callback never
+      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, mine, replacements: myRepl, complete: cmp || null };
       c.next = RTM.suggest(c, cal, now);
       return c;
     });
@@ -424,6 +522,7 @@
     return { list: out, map: new Map(out.map(c => [c.hhid, c])), cal, eff, pool };
   };
 
+  const R_days = n => (n === 1 ? 'one working day' : `${n} working days`);
   RTM.suggest = (c, cal, now) => {
     if (!c.open) return { kind: 'none', text: '' };
     if (c.flags.hard_refusal) return { kind: 'refusal', text: 'Hard refusal: release it for this round' };
@@ -436,22 +535,31 @@
     const startHour = cal.hours.start, endHour = cal.hours.end;
     let at, kind, text;
     if (c.appointment) { at = c.appointment; kind = 'callback'; text = 'Booked callback: call at the agreed time'; }
+    else if (c.mine && c.mine.at) { at = RTM.parseTS(c.mine.at); kind = 'mine'; text = `Moved by you: ${(RTM.PLAN_REASONS[c.mine.reason] || c.mine.reason || '').replace(/ \(write a note\)$/, '')}${c.mine.note ? ` (“${c.mine.note}”)` : ''}`; }
     else if (c.n === 0) {
       const key = c.h.plan && c.h.plan.first_dial_date ? c.h.plan.first_dial_date : RTM.partsIn(now, cal.tz).key;
       at = RTM.zoned(key, hour !== null ? hour : startHour, 0, tz);
       const hadInterview = !!(c.h.history && c.h.history.last_interview);
       kind = 'first'; text = hour === null ? 'First dial' : hadInterview ? 'First dial, at the time of the last interview' : 'First dial, at the hour your leader planned';
     } else {
+      // the contact protocol: at most perDay calls a day, gap hours apart; then the next working day, at the usual hour or in the part of the day tried least
+      const proto = cal.protocol || RTM.protocolOf(null);
       const end = RTM.parseTS(c.last.end_ts || c.last.ts);
-      const cand = new Date(end.getTime() + 2 * 3600e3);
+      const cand = new Date(end.getTime() + proto.gap * 3600e3);
       const pc = RTM.partsIn(cand, cal.tz), pe = RTM.partsIn(end, cal.tz);
-      if (pc.key === pe.key && cal.isWorking(pc.key) && pc.h >= startHour && pc.h < endHour) {
-        at = cand; kind = 'redial'; text = 'Same day, at least two hours after the last dial';
+      const today = (c.dials || [c.last]).filter(d => RTM.partsIn(RTM.parseTS(d.ts), cal.tz).key === pe.key).length;
+      const gapTxt = proto.gap === 1 ? 'an hour' : `${proto.gap % 1 ? proto.gap : proto.gap === 2 ? 'two' : proto.gap} hours`;
+      if ((proto.perDay === null || today < proto.perDay) && pc.key === pe.key && cal.isWorking(pc.key) && pc.h >= startHour && pc.h < endHour) {
+        at = cand; kind = 'redial'; text = `Same day, at least ${gapTxt} after the last dial${proto.perDay ? ` (call ${today + 1} of ${proto.perDay} today)` : ''}`;
       } else {
         let k = RTM.addDaysKey(pe.key, 1), guard = 0;
         while (!cal.isWorking(k) && guard++ < 60) k = RTM.addDaysKey(k, 1);
-        at = RTM.zoned(k, hour !== null ? hour : startHour, 0, tz);
-        kind = 'next_day'; text = hour !== null ? 'Next working day, near the usual hour' : 'Next working day';
+        if (proto.vary) {
+          const lt = RTM.leastTriedHour(c.dials || [c.last], cal, hour);
+          at = RTM.zoned(k, lt.hour, 0, tz); text = `Next working day, in the ${lt.part}: the part of the day tried least`;
+        } else { at = RTM.zoned(k, hour !== null ? hour : startHour, 0, tz); text = hour !== null ? 'Next working day, near the usual hour' : 'Next working day'; }
+        kind = 'next_day';
+        if (proto.perDay && today >= proto.perDay) text += ` (${proto.perDay} calls today)`;
       }
     }
     // keep the suggestion inside the call hours, and off the hour the fast is broken during Ramadan (3.5.4)
@@ -462,10 +570,33 @@
       while (!cal.isWorking(k) && guard++ < 60) k = RTM.addDaysKey(k, 1);
       at = RTM.zoned(k, startHour, 0, cal.tz); pa = RTM.partsIn(at, cal.tz);
     }
+    // the enumerator's days off: a planned call that falls on one moves to the next time they work; a callback stays (the respondent agreed it)
+    if (cal.offAt && kind !== 'callback' && cal.offAt(pa.key, pa.h)) {
+      let guard = 0;
+      while (cal.offAt(pa.key, pa.h) && guard++ < 60) {
+        const o = cal.off.get(pa.key);
+        if (o === 'morning' && pa.h < RTM.HALF_DAY && RTM.HALF_DAY < endHour) at = RTM.zoned(pa.key, Math.max(RTM.HALF_DAY, startHour), 0, cal.tz);
+        else {
+          let k = RTM.addDaysKey(pa.key, 1), g2 = 0;
+          while (!cal.isWorking(k) && g2++ < 60) k = RTM.addDaysKey(k, 1);
+          at = RTM.zoned(k, Math.max(startHour, Math.min(endHour - 1, hour !== null ? hour : startHour)), 0, cal.tz);
+        }
+        pa = RTM.partsIn(at, cal.tz);
+      }
+      text += '; moved off your time off';
+    }
     if (cal.breakFastHour !== null && cal.isRamadan(pa.key) && pa.h === cal.breakFastHour && kind !== 'callback') {
       at = new Date(at.getTime() + 3600e3); text += '; moved off the hour the fast is broken';
     }
     pa = RTM.partsIn(at, cal.tz);
+    // a household never reached in the protocol's working days of calls is done: the leader's protocol closes it, as a dial cap does
+    const proto = cal.protocol;
+    if (proto && proto.days && c.n > 0 && c.dials && kind !== 'callback' && kind !== 'mine' && !c.dials.some(d => (RTM.STATUS_BY[d.status] || {}).contact)) {
+      const first = RTM.partsIn(RTM.parseTS(c.dials[0].ts), cal.tz).key;
+      let used = 0, k = first, guard = 0;
+      while (k <= pa.key && guard++ < 400) { if (cal.isWorking(k)) used++; k = RTM.addDaysKey(k, 1); }
+      if (used > proto.days) return { kind: 'protocol_end', text: `Not reached in ${R_days(proto.days)} of calls (the contact protocol): release it, or activate a replacement if the round allows it` };
+    }
     if (pa.key > cal.end) return { kind: 'window_end', text: 'The next dial would fall after the window: release it for this round' };
     const due = at.getTime() <= now.getTime();
     if (kind === 'first' && due && pa.key < RTM.partsIn(now, cal.tz).key) kind = 'overdue';
@@ -479,7 +610,7 @@
     for (const c of C.list) {
       if (!c.open) continue;
       const s = c.next;
-      if (['refusal', 'dead', 'cap', 'window_end'].includes(s.kind)) { if (isToday) decide.push(c); continue; }
+      if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(s.kind)) { if (isToday) decide.push(c); continue; }
       if (!s.at) continue;
       const k = RTM.partsIn(s.at, cal.tz).key;
       if (isToday && s.at.getTime() <= now.getTime()) due.push(c);
@@ -495,7 +626,7 @@
     if (isToday && dayList) {
       const room = dayList - due.length - later.length;
       if (room > 0) {
-        ahead = C.list.filter(c => c.open && c.next.at && !['callback'].includes(c.next.kind) && RTM.partsIn(c.next.at, cal.tz).key > todayKey)
+        ahead = C.list.filter(c => c.open && c.next.at && !['callback', 'mine'].includes(c.next.kind) && RTM.partsIn(c.next.at, cal.tz).key > todayKey)
           .sort((a, b) => a.next.at - b.next.at || (a.h.plan && b.h.plan ? (a.h.plan.order || 0) - (b.h.plan.order || 0) : 0)).slice(0, room);
       }
     }

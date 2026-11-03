@@ -567,6 +567,127 @@ def main():
             return { kind: c.next.kind, appt: c.appointment ? c.appointment.getTime() === Date.parse('2026-10-28T15:00:00+08:00') : null, kind2: c2.next.kind, appt2: c2.appointment }; })()""")
         check("a household moved with a booked callback is due at that callback until this enumerator's own first dial replaces it",
               unitc["kind"] == "callback" and unitc["appt"] is True and unitc["kind2"] != "callback" and unitc["appt2"] is None, unitc)
+        # ---------- the enumerator's own changes to the schedule (3 November 2026): moving a call, time off ----------
+        unitp = b.js("""(() => { const base = JSON.parse(JSON.stringify(APP.S.assignment)); delete base.fingerprint;
+            const now = RTM.now(), mk = f => { const A = JSON.parse(JSON.stringify(base)); if (f) f(A); return RTM.newSession(A); };
+            const S = mk(), C = RTM.cases(S, now), cal = C.cal, by = RTM.selfRules(S.assignment).first_calls_by;
+            const c = C.list.find(x => x.open && x.n === 0 && x.h.plan && x.h.plan.first_dial_date > '2026-10-28' && x.h.plan.first_dial_date <= by);
+            const at = (k, h) => RTM.zoned(k, h, 0, cal.tz);
+            const out = { by, ok: RTM.checkPlan(S, c, at('2026-10-29', 18), cal, now), late: RTM.checkPlan(S, c, at('2026-11-12', 18), cal, now),
+              night: RTM.checkPlan(S, c, at('2026-10-29', 22), cal, now), sunday: RTM.checkPlan(S, c, at('2026-11-01', 12), cal, now), past: RTM.checkPlan(S, c, at('2026-10-26', 12), cal, now) };
+            RTM.append(S, 'plan', { hhid: c.hhid, at: RTM.localISO(at('2026-10-29', 18)), reason: 'TOLD', was: RTM.localISO(c.next.at), first: 1 });
+            const m = RTM.cases(S, now).map.get(c.hhid); out.mine = [m.next.kind, RTM.localISO(m.next.at)];
+            RTM.append(S, 'plan', { hhid: c.hhid, clear: 1 }); out.cleared = RTM.cases(S, now).map.get(c.hhid).next.kind;
+            RTM.append(S, 'plan', { hhid: c.hhid, at: RTM.localISO(at('2026-10-29', 18)), reason: 'PATTERN' });
+            RTM.append(S, 'dial', { hhid: c.hhid, ts: '2026-10-27T11:00:00+08:00', end_ts: '2026-10-27T11:01:00+08:00', status: 'NO_ANSWER', phone_slot: 1, operator: 'E07' });
+            const d = RTM.cases(S, now).map.get(c.hhid); out.after_dial = d.next.kind;
+            out.late_in_progress = RTM.checkPlan(S, d, at('2026-11-12', 18), cal, now);
+            const S2 = mk(A => { A.calendar.self_scheduling.push_first_calls = true; }); const C2 = RTM.cases(S2, now);
+            out.late_pushed = RTM.checkPlan(S2, C2.map.get(c.hhid), at('2026-11-12', 18), C2.cal, now);
+            const S3 = mk(A => { A.calendar.self_scheduling.reschedule = false; A.calendar.self_scheduling.availability = false; }); const C3 = RTM.cases(S3, now);
+            out.off_rule = [RTM.checkPlan(S3, C3.map.get(c.hhid), at('2026-10-29', 18), C3.cal, now), RTM.checkOff(S3, C3, '2026-10-30', 'day', now).error || ''];
+            const S4 = mk(A => { delete A.calendar.self_scheduling; });
+            out.defaults = RTM.selfRules(S4.assignment);
+            out.latest_plan = base.households.map(h => (h.plan || {}).first_dial_date).filter(Boolean).sort().pop();
+            // time off: a first call planned on a day off moves to the next working day at its hour; an afternoon off moves an afternoon call
+            const S5 = mk(), C5 = RTM.cases(S5, now);
+            const t = C5.list.find(x => x.open && x.n === 0 && x.h.plan && x.h.plan.first_dial_date === '2026-10-30');
+            const t2 = C5.list.find(x => x.open && x.n === 0 && x.h.plan && x.h.plan.first_dial_date === '2026-10-28' && x.h.plan.target_hour >= 13);
+            RTM.append(S5, 'availability', { date: '2026-10-30', part: 'day' }); RTM.append(S5, 'availability', { date: '2026-10-28', part: 'afternoon' });
+            const C5b = RTM.cases(S5, now), t_ = C5b.map.get(t.hhid), t2_ = C5b.map.get(t2.hhid);
+            out.off_day = [RTM.localISO(t.next.at), RTM.localISO(t_.next.at), /time off/.test(t_.next.text)];
+            out.off_pm = [t2.h.plan.target_hour, RTM.localISO(t2_.next.at)];
+            RTM.append(S5, 'availability', { date: '2026-10-30', cancel: 1 }); out.cancelled = RTM.localISO(RTM.cases(S5, now).map.get(t.hhid).next.at);
+            out.again = RTM.checkOff(S5, RTM.cases(S5, now), '2026-10-28', 'afternoon', now).error || '';
+            // a callback on a day off stays, and marking the day warns about it
+            const S6 = mk(), C6 = RTM.cases(S6, now), cb = C6.list.find(x => x.open && x.n === 0 && x.hhid !== c.hhid);
+            RTM.append(S6, 'dial', { hhid: cb.hhid, ts: '2026-10-27T10:00:00+08:00', end_ts: '2026-10-27T10:02:00+08:00', status: 'APPOINTMENT', phone_slot: 1, operator: 'E07', appointment_ts: '2026-11-03T15:00:00+08:00' });
+            const C6b = RTM.cases(S6, now);
+            out.cb_warn = RTM.checkOff(S6, C6b, '2026-11-03', 'day', now).warn;
+            out.cb_plan = RTM.checkPlan(S6, C6b.map.get(cb.hhid), at('2026-11-04', 15), C6b.cal, now);
+            RTM.append(S6, 'availability', { date: '2026-11-03', part: 'day' });
+            const cbx = RTM.cases(S6, now).map.get(cb.hhid); out.cb_kept = [cbx.next.kind, RTM.localISO(cbx.next.at)];
+            // a household the enumerator moved to a later day is not pulled forward by the day list
+            const S7 = mk(A => { A.calendar.day_list = 60; }), C7 = RTM.cases(S7, now), f = C7.list.find(x => x.open && x.n === 0 && x.h.plan && x.h.plan.first_dial_date === '2026-10-28');
+            RTM.append(S7, 'plan', { hhid: f.hhid, at: RTM.localISO(at('2026-11-02', 15)), reason: 'WORKLOAD', was: RTM.localISO(f.next.at), first: 1 });
+            const q7 = RTM.queue(RTM.cases(S7, now), now, '2026-10-27'); out.not_ahead = !q7.ahead.some(x => x.hhid === f.hhid) && q7.ahead.length > 0;
+            return out; })()""")
+        check("an enumerator may move a household's next call inside the window, the call hours, the working days and the first-call period; a night time, a Sunday, a time already past and a first call after the period are refused, each with its reason",
+              unitp["by"] == json.load(open(A07))["calendar"]["self_scheduling"]["first_calls_by"] and unitp["ok"] == "" and unitp["late"].startswith("First calls are made by")
+              and "call hours" in unitp["night"] and "not a working day" in unitp["sunday"] and "from now on" in unitp["past"], unitp)
+        check("the moved call becomes the household's next call; undoing it returns to the plan; a later dial ends it, after which the call is no longer a first call and may go later",
+              unitp["mine"] == ["mine", "2026-10-29T18:00:00+08:00"] and unitp["cleared"] in ("first", "overdue") and unitp["after_dial"] in ("redial", "next_day") and unitp["late_in_progress"] == "", unitp)
+        check("the leader's settings bind: a first call may go past the period only when the leader allows it; with both rights off, moving and time off are refused; a file without the setting gets the defaults, first calls held to its latest planned first dial",
+              unitp["late_pushed"] == "" and "not allowed" in unitp["off_rule"][0] and "not allowed" in unitp["off_rule"][1]
+              and unitp["defaults"] == {"reschedule": True, "availability": True, "push_first_calls": False, "first_calls_by": unitp["latest_plan"]}, unitp)
+        check("time off: a call planned on a day off moves to the next working day at its hour, an afternoon off moves an afternoon call, a cancelled day off restores the plan, and a half day cannot be marked twice",
+              unitp["off_day"][0].startswith("2026-10-30T") and unitp["off_day"][1].startswith("2026-10-31T") and unitp["off_day"][1][11:13] == unitp["off_day"][0][11:13] and unitp["off_day"][2] is True
+              and unitp["off_pm"][1].startswith("2026-10-29T") and unitp["cancelled"] == unitp["off_day"][0] and "already marked" in unitp["again"], unitp)
+        check("a callback the respondent agreed is never moved: marking its day off warns about it and leaves it; moving it by hand is refused (it is corrected with its call); a moved call is not pulled forward by the day list",
+              len(unitp["cb_warn"]) == 1 and "callback is booked" in unitp["cb_plan"] and unitp["cb_kept"] == ["callback", "2026-11-03T15:00:00+08:00"] and unitp["not_ahead"] is True, unitp)
+        # ---------- the leader's contact protocol (3 November 2026): calls a day, hours apart, days for a household never reached, varied times ----------
+        unitk = b.js("""(() => { const base = JSON.parse(JSON.stringify(APP.S.assignment)); delete base.fingerprint;
+            const now = RTM.now();
+            const run = (proto, dials) => { const A = JSON.parse(JSON.stringify(base)); const h = A.households[0]; h.plan = { first_dial_date: '2026-10-28', target_hour: 10 }; delete h.handover;
+              if (proto === undefined) delete A.calendar.contact_protocol; else A.calendar.contact_protocol = proto;
+              const S = RTM.newSession(A);
+              dials.forEach(([ts, st, ap]) => RTM.append(S, 'dial', { hhid: h.hhid, ts: ts + ':00+08:00', end_ts: ts.slice(0, 14) + String(+ts.slice(14, 16) + 1).padStart(2, '0') + ':00+08:00', status: st, phone_slot: 1, operator: 'E07', appointment_ts: ap }));
+              const C = RTM.cases(S, now), c = C.map.get(h.hhid);
+              return { kind: c.next.kind, at: c.next.at ? RTM.localISO(c.next.at) : null, text: c.next.text, decide: RTM.queue(C, RTM.parseTS('2026-10-30T09:00:00+08:00'), '2026-10-30').decide.some(x => x.hhid === h.hhid) }; };
+            const na = (d, t) => [`2026-10-${d}T${t}`, 'NO_ANSWER'];
+            const out = {};
+            out.old = run(undefined, [na(28, '10:00')]);
+            out.gap3 = run({ per_day: 3, gap_hours: 3 }, [na(28, '10:00')]);
+            out.full = run({ per_day: 3, gap_hours: 3 }, [na(28, '10:00'), na(28, '13:00'), na(28, '16:00')]);
+            out.days = run({ per_day: 1, days: 2 }, [na(28, '10:00'), na(29, '10:00')]);
+            out.days_contact = run({ per_day: 1, days: 2 }, [[`2026-10-28T10:00`, 'NOT_AVAILABLE'], na(29, '10:00')]);
+            out.days_within = run({ per_day: 1, days: 2 }, [na(28, '10:00')]);
+            out.vary = run({ per_day: 1, vary_times: true }, [na(28, '10:00')]);
+            out.vary2 = run({ per_day: 1, vary_times: true }, [na(28, '10:00'), na(29, '12:00')]);
+            out.cb = run({ per_day: 1, days: 1 }, [[`2026-10-28T10:00`, 'APPOINTMENT', '2026-10-28T10:30:00+08:00']]);
+            const bad = JSON.parse(JSON.stringify(base)); bad.calendar.contact_protocol = { per_day: 0 }; out.bad = RTM.validateAssignment(bad).errors.some(e => /contact_protocol/.test(e));
+            return out; })()""")
+        check("the leader's contact protocol plans the next call: without it, two hours after the last call ended as before; with 3 calls a day 3 hours apart, three hours after it, and after the third call of the day the next working day at the usual hour",
+              unitk["old"]["at"] == "2026-10-28T12:01:00+08:00" and unitk["gap3"]["at"] == "2026-10-28T13:01:00+08:00" and "call 2 of 3" in unitk["gap3"]["text"]
+              and unitk["full"]["kind"] == "next_day" and unitk["full"]["at"] == "2026-10-29T10:00:00+08:00" and "3 calls today" in unitk["full"]["text"], unitk)
+        check("a household never reached in the protocol's working days of calls is done, listed under 'Needs your decision'; one reached on any call, or still inside its days, is not",
+              unitk["days"]["kind"] == "protocol_end" and unitk["days"]["decide"] is True and "contact protocol" in unitk["days"]["text"]
+              and unitk["days_contact"]["kind"] == "next_day" and unitk["days_within"]["kind"] == "next_day", unitk)
+        check("varied times: each new day starts in the part of the day tried least (afternoon after a morning call, then evening), and a booked callback is never limited by the protocol; a malformed protocol is refused",
+              unitk["vary"]["at"] == "2026-10-29T12:00:00+08:00" and "afternoon" in unitk["vary"]["text"] and unitk["vary2"]["at"] == "2026-10-30T17:00:00+08:00" and "evening" in unitk["vary2"]["text"]
+              and unitk["cb"]["kind"] == "callback" and unitk["bad"] is True, unitk)
+        # the same in the view: the household panel's link and form, the Calendar tab's time off, the Log tab, and the export
+        hp = b.js("APP.C.list.find(c => c.open && c.n === 0 && !c.appointment && c.h.plan && c.h.plan.first_dial_date > '2026-10-28' && c.h.plan.first_dial_date <= RTM.selfRules(APP.S.assignment).first_calls_by).hhid")
+        b.js(f"APP.sel = {json.dumps(hp)}; APP.render(); true"); b.wait(f"APP.sel === {json.dumps(hp)}")
+        has_link = b.js("!!document.querySelector('[data-act=\"plan\"]')")
+        b.click('[data-act="plan"]'); b.wait("!!document.querySelector('#planform')")
+        b.js("document.querySelector('#planform [name=when]').value = '2026-10-29T19:00'; true"); n0 = b.js("APP.S.events.length")
+        b.click('[data-act="saveplan"]'); time.sleep(0.2)
+        refused = b.js("APP.S.events.length") == n0 and b.js("document.querySelector('#planform [name=reason]').classList.contains('invalid')")
+        b.js("document.querySelector('#planform [name=reason]').value = 'PATTERN'; document.querySelector('#planform [name=note]').value = 'answers after work'; true")
+        b.click('[data-act="saveplan"]'); time.sleep(0.2)
+        pv = b.js(f"(c => [c.next.kind, RTM.localISO(c.next.at), !!document.querySelector('[data-act=\"clearplan\"]'), document.querySelector('.drawer .next').innerText])(APP.C.map.get({json.dumps(hp)}))")
+        check("the household panel offers 'Move the next call'; the form asks why before saving, and the saved time shows as 'Moved by you' with an undo link",
+              has_link and refused and pv[0] == "mine" and pv[1] == "2026-10-29T19:00:00+08:00" and pv[2] and "Moved by you" in pv[3], [has_link, refused, pv])
+        b.click('[data-act="closehh"]'); b.click('[data-act="tab"][data-t="calendar"]'); time.sleep(0.2)
+        b.js("document.querySelector('#offform [name=date]').value = '2026-10-30'; document.querySelector('#offform [name=part]').value = 'morning'; true")
+        b.click('[data-act="saveoff"]'); time.sleep(0.3)
+        if b.js("!!APP.modal"):
+            b.click('[data-act="modalok"]'); time.sleep(0.3)
+        cv = b.js("[(document.querySelector('.offlist') || {}).innerText || '', document.querySelectorAll('.cell.myoff').length, (document.querySelector('.cell.myoff .m.me') || {}).innerText || '']")
+        check("the Calendar tab marks a half day off, lists it with a way to take it back, and shows it on the day", "Fri 30 Oct" in cv[0] and "morning" in cv[0] and cv[1] == 1 and "a.m." in cv[2], cv)
+        b.click('[data-act="tab"][data-t="log"]'); time.sleep(0.2)
+        lt = b.js("document.querySelector('.panel').innerText")
+        check("the Log tab lists both changes in words, with the integrity check still passing", "Moved a call" in lt and "Time off" in lt and "Integrity check passed" in lt, lt[:300])
+        b.click('[data-act="tab"][data-t="today"]'); time.sleep(0.1)
+        before = snapshot()
+        b.click('[data-act="export"]'); b.wait("APP.modal && APP.modal.kind === 'export'")
+        b.click('[data-act="dl"][data-what="json"]'); b.click('[data-act="dl"][data-what="csv"]')     # both, so the pair in the folder stays consistent
+        xj = json.load(open(wait_new("E07_*.json", before), encoding="utf-8")); wait_new("E07_*.csv", before)
+        b.click('[data-act="closemodal"]')
+        types = [e["type"] for e in xj["events"]]
+        check("the export carries the moved call and the time off as events of the hash chain (the format check of section 21 reads them)", "plan" in types and "availability" in types and xj["chain_verified"] is True, types[-6:])
+
         # a revised file that omits the plans of households already held: they are carried beside it, and survive a save
         U = json.load(open(A07, encoding="utf-8"))
         U["generated_at"] = "2026-10-27T12:00:00+08:00"; U["revision"] = 2; U["supersedes"] = U["fingerprint"]
