@@ -122,10 +122,11 @@ def main():
         b.click(".drawer details.why summary"); time.sleep(0.1)
         crop("e07_why", ["document.querySelector('.drawer details.why')"], inside=True)
         crop("e08_numbers", ["__sec('Phone numbers')"], hls=["document.querySelector('[data-act=\"call\"]')"], inside=True)
-        b.click('[data-act="call"][data-slot="1"]'); b.wait("APP.call && !APP.call.end")
-        crop("e09_on_call", ["document.querySelector('.callbox')"], hls=["document.querySelector('[data-act=\"endcall\"]')"], inside=True)
+        # the tool places no call (3 November 2026): the enumerator dials with the call center's system, then logs the call here
         b.js("RTM.setNow('2026-10-27T10:09:00+08:00'); true")
-        b.click('[data-act="endcall"]'); b.wait("!!document.querySelector('#callform')")
+        b.click('[data-act="call"][data-slot="1"]'); b.wait("!!document.querySelector('#callform')")
+        crop("e09_on_call", ["document.querySelector('.callbox')"], hls=["document.querySelector('#callform [name=minutes]')"], inside=True)
+        b.js("(() => { const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '2026-10-27T10:05'; f.querySelector('[name=minutes]').value = '4'; return true; })()")
         crop("e10_result", ["document.querySelector('.callbox')"], hls=["document.querySelector('[data-act=\"savecall\"]')"], inside=True)
         b.js("document.querySelector('input[name=status][value=APPOINTMENT]').checked = true; true")
         b.click('[data-act="savecall"]'); time.sleep(0.3)
@@ -137,17 +138,17 @@ def main():
         # a complete under 3 minutes
         h2 = due[1]
         b.click(f'[data-act="open"][data-hh="{h2}"]'); b.wait(f"APP.sel === '{h2}'")
-        b.js("RTM.setNow('2026-10-27T10:20:00+08:00'); true")
-        b.click('[data-act="call"][data-slot="1"]'); b.wait("APP.call && !APP.call.end")
         b.js("RTM.setNow('2026-10-27T10:22:00+08:00'); true")
-        b.click('[data-act="endcall"]'); b.wait("!!document.querySelector('#callform')")
+        b.click('[data-act="call"][data-slot="1"]'); b.wait("!!document.querySelector('#callform')")
+        b.js("(() => { const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '2026-10-27T10:20'; f.querySelector('[name=minutes]').value = '2'; return true; })()")
         b.js("document.querySelector('input[name=status][value=COMPLETE]').checked = true; true")
         b.click('[data-act="savecall"]'); b.wait("!document.querySelector('#callform')")
         crop("e13_short_complete", ["document.querySelector('.drawer .alert.warn')"], inside=True)
         # a call made earlier, a correction, the actions
-        b.click('[data-act="manual"]'); b.wait("!!APP.manual")
-        crop("e14_logged_later", ["document.querySelector('.drawer .callbox')"], inside=True)
-        b.click('[data-act="cancelmanual"]'); time.sleep(0.2)
+        b.click('[data-act="call"][data-slot="1"]'); b.wait("!!document.querySelector('#callform')")
+        b.js("(() => { const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '2026-10-27T08:50'; f.querySelector('[name=minutes]').value = '1'; return true; })()")
+        crop("e14_logged_later", ["document.querySelector('.drawer .callbox')"], hls=["document.querySelector('#callform [name=start]')"], inside=True)
+        b.click('[data-act="cancelcall"]'); time.sleep(0.2)
         b.click('[data-act="correct"]'); b.wait("!!document.querySelector('#corrform')")
         crop("e15_correct", ["__sec('Calls this round')"], hls=["document.querySelector('#corrform [name=void]')"], inside=True)
         b.click('[data-act="cancelcorr"]'); time.sleep(0.2)
@@ -162,10 +163,9 @@ def main():
         h3 = b.js(f"APP.C.list.find(c => c.open && c.n === 0 && c.replacements.length && ![{json.dumps(h)}, {json.dumps(h2)}].includes(c.hhid)).hhid")
         b.click('[data-act="closehh"]'); time.sleep(0.1)
         b.js(f"APP.sel = {json.dumps(h3)}; APP.render(); true"); b.wait(f"APP.sel === '{h3}'")
-        b.js("RTM.setNow('2026-10-27T10:40:00+08:00'); true")
-        b.click('[data-act="call"][data-slot="1"]'); b.wait("APP.call && !APP.call.end")
         b.js("RTM.setNow('2026-10-27T10:42:00+08:00'); true")
-        b.click('[data-act="endcall"]'); b.wait("!!document.querySelector('#callform')")
+        b.click('[data-act="call"][data-slot="1"]'); b.wait("!!document.querySelector('#callform')")
+        b.js("(() => { const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '2026-10-27T10:40'; f.querySelector('[name=minutes]').value = '2'; return true; })()")
         b.js("document.querySelector('input[name=status][value=REFUSAL_HARD]').checked = true; true")
         b.click('[data-act="savecall"]'); b.wait("!document.querySelector('#callform')")
         crop("e19_replacement", ["__sec('Replacements')"], hls=["document.querySelector('[data-act=\"replace\"]')"], inside=True)
@@ -208,6 +208,13 @@ def main():
             b.click('[data-act="modalok"]'); time.sleep(0.3)
         crop("e31_time_off", ["document.querySelector('.offcard')", "document.querySelector('.month')"], hls=["document.querySelector('.cell.myoff')"], max_h=900)
         b.click('[data-act="tab"][data-t="today"]'); time.sleep(0.2)
+        # replacements the leader approves (3 November 2026): the button asks instead of activating
+        b.js("APP.S.assignment.replacement_policy = Object.assign({}, APP.S.assignment.replacement_policy, { approval: 'leader' }); APP.render(); true")
+        hq_ = b.js("APP.C.list.find(c => c.open && c.n === 0 && c.replacements.length && !c.appointment && !c.mine).hhid")
+        b.js(f"RTM.append(APP.S, 'dial', {{ hhid: {json.dumps(hq_)}, ts: RTM.localISO(RTM.now()), end_ts: RTM.localISO(new Date(RTM.now().getTime() + 60000)), status: 'REFUSAL_HARD', phone_slot: 1, operator: 'E07' }}); APP.unsaved++; APP.sel = {json.dumps(hq_)}; APP.render(); true")
+        crop("e32_ask_replacement", ["__sec('Replacements')"], hls=["document.querySelector('[data-act=\"askrepl\"]')"], inside=True)
+        b.click('[data-act="closehh"]'); time.sleep(0.1)
+        b.js("delete APP.S.assignment.replacement_policy.approval; APP.render(); true")
         # on a phone
         viewport(390, 844, dsf=2, mobile=True)
         b.js("window.scrollTo(0, 0); true"); time.sleep(0.2)
@@ -316,6 +323,20 @@ def main():
         b.js("RTM.setNow('2026-11-07T09:00:00+08:00'); true")
         b.click('[data-lact="tab"][data-t="calllog"]'); time.sleep(0.3)
         crop("l27_calllog", ["__card(\"The round's files\")", "__card('Merged call log')"], max_h=760)
+        # replacement requests the leader approves (3 November 2026): two requests in E07's export, one released and one declined
+        b.js("""(() => { const st = LEAD.state(); st.manifest.replacement_policy = Object.assign({}, st.manifest.replacement_policy, { approval: 'leader' });
+            const f = st.imports.find(x => /E07_2026-11-06\\.json$/.test(x.name)), j = JSON.parse(f.text);
+            const S2 = { assignment: { program: j.program, round: j.round, enumerator_id: j.enumerator_id }, events: j.events, genesis: j.chain_genesis };
+            LEAD.refresh(); const used = new Set(LEAD.merged().G.activatedBy.keys());
+            const cand = [...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E07' && c.state === 'in_progress' && !c.replaces && (st.manifest.households.find(h => h.hhid === c.hhid).replacements || []).some(r => !used.has(r)));
+            const now0 = RTM.now().toISOString(); RTM.setNow('2026-11-06T17:00:00+08:00');
+            RTM.append(S2, 'action', { hhid: cand[0].hhid, action: 'REPLACEMENT_REQUEST', target_hhid: st.manifest.households.find(h => h.hhid === cand[0].hhid).replacements[0], reason: 'refused firmly' });
+            RTM.append(S2, 'action', { hhid: cand[1].hhid, action: 'REPLACEMENT_REQUEST', target_hhid: st.manifest.households.find(h => h.hhid === cand[1].hhid).replacements[0], reason: 'no working number' });
+            RTM.setNow(now0); j.events = S2.events.map(RTM.exportEvent); j.event_count = j.events.length; j.last_hash = j.events[j.events.length - 1].hash; f.text = JSON.stringify(j); LEAD.refresh();
+            window.__rq = [cand[0].hhid, cand[1].hhid]; return true; })()""")
+        b.click('[data-lact="tab"][data-t="progress"]'); time.sleep(0.3)
+        tick(f"[data-lrrsel=\"{b.js('window.__rq[0]')}\"]", True); b.click('[data-lact="rrrelease"]'); time.sleep(0.2)
+        crop("l29b_requests", ["__card('Replacement requests')"], hls=["document.querySelector('[data-lact=\"rrwrite\"]')"], max_h=800)
 
         # ======================= the team leader: with KoBoToolbox (Part C) =======================
         b.click('[data-lact="close"]'); b.wait("APP.modal")

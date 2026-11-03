@@ -30,6 +30,18 @@
         "enumerators": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } } }
       }
     },
+    "field_visits": {
+      "type": "array",
+      "description": "Outcomes of field visits the leader recorded during the round (3 November 2026), in order; the latest for a household is written as a note on it in its enumerator's revised file.",
+      "items": { "type": "object", "required": ["hhid", "outcome", "at"], "properties": { "hhid": { "type": "string" }, "outcome": { "enum": ["time_agreed", "new_number", "not_found", "refused", "other"] },
+        "note": { "type": "string" }, "at": { "type": "string" }, "by": { "type": "string" } } }
+    },
+    "replacement_decisions": {
+      "type": "array",
+      "description": "The leader's decisions on replacement requests during the round (approval 'leader'), in order: a released replacement is active for the household's holder from its time.",
+      "items": { "type": "object", "required": ["main", "decision", "at"], "properties": { "main": { "type": "string" }, "decision": { "enum": ["released", "declined"] },
+        "replacement": { "type": "string" }, "note": { "type": "string" }, "at": { "type": "string" }, "by": { "type": "string" } } }
+    },
     "moves": {
       "type": "array",
       "description": "Households moved during the round, in order. The merge accepts the previous enumerator's dials up to the move and flags any made after it.",
@@ -56,7 +68,7 @@
         "additionalProperties": false,
         "properties": {
           "hhid": { "type": "string" }, "enumerator_id": { "type": "string" },
-          "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "match", "mid_round"] },
+          "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "match", "mid_round", "added_mid_round"] }, "added_at": { "type": "string", "description": "A household added to the round after it started: when." },
           "previous_enumerator": { "type": "string" }, "psu": { "type": "string" }, "stratum": { "type": "string" },
           "matched": { "type": "boolean", "description": "Only when the round has matching criteria: whether the enumerator matches the household." },
           "replacements": { "type": "array", "items": { "type": "string" }, "description": "The household's unused replacements, in order (IDs only)." }

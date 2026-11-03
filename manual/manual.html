@@ -54,7 +54,7 @@
     <div class="sub">User manual for enumerators and team leaders<br>Assignment, scheduling and call logs for phone panel surveys</div>
   </div>
   <img src="img/e03_today.png" alt="The enumerator's Today tab">
-  <div class="meta">Tool version 0.3.7 · Manual of 3 November 2026<br>
+  <div class="meta">Tool version 0.4.0 · Manual of 3 November 2026<br>
     Real-Time Monitoring (RTM) Handbook task team. Every picture in this manual shows the synthetic practice program
     “L2MN-DEMO”: no real household, name or phone number appears anywhere in it.</div>
 </section>
@@ -66,8 +66,8 @@
   <div>1 What the tool does</div><div>2 Files and folders</div><div>3 A round at a glance</div><div>4 Before you start</div><div>5 The tool with KoBoToolbox</div>
   <div class="p">Part A · Enumerator</div>
   <div>A1 Open your assignment</div><div>A2 The screen at a glance</div><div>A3 The Today tab</div><div>A4 A household's panel</div>
-  <div>A5 Make a call</div><div>A6 Log the result</div><div>A7 Booked callbacks</div><div>A8 A complete under 3 minutes</div>
-  <div>A9 Log a call made earlier</div><div>A10 Correct or void an entry</div><div>A11 Release, switch or removal</div>
+  <div>A5 Log a call</div><div>A6 The result</div><div>A7 Booked callbacks</div><div>A8 A complete under 3 minutes</div>
+  <div>A9 A call logged later</div><div>A10 Correct or void an entry</div><div>A11 Release, switch or removal</div>
   <div>A12 Add or correct a number</div><div>A13 Replacements</div><div>A14 The Households tab</div><div>A15 The Calendar tab</div>
   <div>A16 My performance</div><div>A17 The Log tab</div><div>A18 Save, close and continue</div><div>A19 Export your log</div>
   <div>A20 An updated assignment</div><div>A21 On a phone</div><div>A22 Good practice and messages</div>
@@ -166,7 +166,7 @@ dial, the best hours) need one row per dial, and an export of interviews alone g
   <tr><th>What is recorded</th><th>Form records each attempt (the Philippines form)</th><th>Form records interviews only</th><th>Why there</th></tr>
   <tr><td>The interview: answers, per-question timings, device, form version, who submitted</td><td>KoBoToolbox</td><td>KoBoToolbox</td><td>The platform makes it; the tool never holds answers</td></tr>
   <tr><td>Each call attempt: time, number used, result</td><td>The form; the tool reads the export</td><td>The tool's enumerator view, or the tool's own one-row-per-call form (C5)</td><td>Recorded once; double entry costs calls</td></tr>
-  <tr><td>Call length</td><td>The form's open and submit times, an approximation</td><td>Measured by the tool</td><td>A form opened before the dial overstates the call</td></tr>
+  <tr><td>Call length</td><td>The form's open and submit times, an approximation</td><td>Entered by the enumerator with each call (start and minutes), from the phone system</td><td>A form opened before the dial overstates the call; the tool places no call</td></tr>
   <tr><td>Callbacks booked, releases, corrected numbers</td><td>The form, where it asks; otherwise not kept</td><td>The tool</td><td>They drive the next day's list</td></tr>
   <tr><td>The assignment and its reasons, the plan, the calendar, moves and handovers, the leader's decisions</td><td>The tool</td><td>The tool</td><td>No form knows a round, a reassignment or a dial cap</td></tr>
   <tr><td>The round's call log in the handbook's columns</td><td>The tool, derived from the export</td><td>The tool, from its own logs</td><td>One table for the analyses, whichever source fed it</td></tr>
@@ -248,23 +248,26 @@ or <b>Overdue</b>. Use the arrows beside the date to look at another day. Click 
   <figure><img src="img/e07_why.png" style="width:100%"><figcaption><b>Figure A7.</b> “Why is this household with me?”, opened.</figcaption></figure>
 </div>
 
-<h3><span class="num">A5</span>Make a call</h3>
+<h3><span class="num">A5</span>Log a call</h3>
+<p>The tool does not place calls. Dial with your call center's phone system, as you always do, then log the call here.</p>
 <ol>
-  <li>In <b class="ui">Phone numbers</b>, find the number to call. <b class="ui">Copy</b> puts it on the clipboard. The line
-  under each number says how its last dial went.</li>
-  <li>Click <b class="ui">Start call</b> by that number when you dial. A timer starts.</li>
-  <li>When the call ends, click <b class="ui">End call</b>. If no call was made after all, click
-  <b class="ui">Cancel (no call made)</b>: nothing is logged.</li>
+  <li>In <b class="ui">Phone numbers</b>, find the number. <b class="ui">Copy</b> puts it on the clipboard for your phone
+  system. The line under each number says how its last dial went.</li>
+  <li>After the call, click <b class="ui">Log a call</b> by that number. The form opens with the number chosen and the
+  start time set to now.</li>
+  <li>Set <b>Call started</b> to when you dialled, and <b>Minutes</b> to how long the call lasted. If you log several
+  calls at the end of a session, set each one's own start time.</li>
 </ol>
 <div class="pair">
-  <figure><img src="img/e08_numbers.png" style="width:100%"><figcaption><b>Figure A8.</b> A household's number and the <b>Start call</b> button.</figcaption></figure>
-  <figure><img src="img/e09_on_call.png" style="width:100%"><figcaption><b>Figure A9.</b> During the call: the timer and <b>End call</b>.</figcaption></figure>
+  <figure><img src="img/e08_numbers.png" style="width:100%"><figcaption><b>Figure A8.</b> A household's number and the <b>Log a call</b> button.</figcaption></figure>
+  <figure><img src="img/e09_on_call.png" style="width:100%"><figcaption><b>Figure A9.</b> The call log form: the number, when the call started, and its minutes.</figcaption></figure>
 </div>
-<div class="note">The start and end times come from the clock, so the call's length is recorded for you. Box 3.0 uses
-these times: a complete needs at least 3 minutes, and dial minutes count toward productivity.</div>
+<div class="note">Box 3.0 uses the start and the minutes: a complete needs at least 3 minutes, and dial minutes count
+toward productivity. Minutes are required for a complete; for other results, enter them when you know them. If your
+phone system shows the call's length, copy it from there.</div>
 
-<h3><span class="num">A6</span>Log the result</h3>
-<p>After <b class="ui">End call</b>, the result form opens.</p>
+<h3><span class="num">A6</span>The result</h3>
+<p>In the same form:</p>
 <ol>
   <li>Choose the <b>result of the call</b> (R1 lists them all). The coloured edge marks the kind: green for a complete,
   brown for a number problem, red for a refusal.</li>
@@ -273,10 +276,10 @@ these times: a complete needs at least 3 minutes, and dial minutes count toward 
   <li>In <b>After this call</b>, keep the default <b>Keep calling</b>, or choose <b>Release for this round</b> or
   <b>Ask for another enumerator next round</b>.</li>
   <li>Add a short <b>note</b> if useful. Notes are operational only: never write personal details.</li>
-  <li>Click <b class="ui">Save call</b>. <b class="ui">Discard</b> drops the call without logging it.</li>
+  <li>Click <b class="ui">Save call</b>. <b class="ui">Cancel</b> closes the form without logging anything. A start time in the future, or a complete without minutes, is outlined and named before you can save.</li>
 </ol>
 <div class="pair">
-  <figure><img src="img/e10_result.png" style="width:100%"><figcaption><b>Figure A10.</b> The result form after a call.</figcaption></figure>
+  <figure><img src="img/e10_result.png" style="width:100%"><figcaption><b>Figure A10.</b> The form filled in: start, minutes and result.</figcaption></figure>
   <figure><img src="img/e11_missing_time.png" style="width:100%"><figcaption><b>Figure A11.</b> A missing entry is outlined and named in a message: here, the callback time for a booked appointment.</figcaption></figure>
 </div>
 
@@ -297,11 +300,12 @@ A booked callback is never limited by the protocol.</p>
 appointment contact, so the household stays open and the tool tells you why.</p>
 <figure><img class="w55" src="img/e13_short_complete.png"><figcaption><b>Figure A13.</b> A complete that lasted 2 minutes: call again, or correct the time if it is wrong (A10).</figcaption></figure>
 
-<h3><span class="num">A9</span>Log a call made earlier</h3>
-<p>If you made a call without the timer, for example on another phone, use <b class="ui">Log a call made earlier</b>
-under the phone numbers. Enter which number, when the call started and how many minutes it lasted, then the result
-as in A6. The log keeps both the call's own time and the time you entered it.</p>
-<figure><img class="w45" src="img/e14_logged_later.png"><figcaption><b>Figure A14.</b> Logging a call made earlier.</figcaption></figure>
+<h3><span class="num">A9</span>A call logged later</h3>
+<p>A call you could not log at once, for example one made on another phone, is logged the same way: click
+<b class="ui">Log a call</b>, set the start time to when the call was made, and enter its minutes and result. The log
+keeps both the call's own time and the time you entered it, so your leader can tell a call logged at once from one
+logged later.</p>
+<figure><img class="w45" src="img/e14_logged_later.png"><figcaption><b>Figure A14.</b> A call logged later: its own start time.</figcaption></figure>
 
 <h3><span class="num">A10</span>Correct or void an entry</h3>
 <p>Nothing in the log is ever deleted. To fix a mistake, find the call under <b>Calls this round</b> and click
@@ -324,7 +328,12 @@ stays in the log, marked as corrected or voided. An action such as a release is 
   for example after a poor contact. Your leader decides.</li>
   <li><b class="ui">Ask the leader to remove:</b> only when no number works, or the household has no number at all.
   Your leader decides.</li>
+  <li><b class="ui">Refer for a field visit:</b> ask your leader to have the household visited in person, to check its
+  numbers, agree a time to call or reassure it about the survey. You keep calling meanwhile; the visit's outcome comes
+  back as your leader's note on the household in your next updated file.</li>
 </ul>
+<p>When a call shows that the respondent has blocked your number, log it with the result <b>Our number is blocked</b>.
+The household then waits under <b>Needs your decision</b>, and your leader sees it and can move it to a colleague.</p>
 <div class="pair">
   <figure><img src="img/e16_actions.png" style="width:100%"><figcaption><b>Figure A16.</b> A household's actions.</figcaption></figure>
   <figure><img src="img/e17_release.png" style="width:100%"><figcaption><b>Figure A17.</b> Releasing a household for the round.</figcaption></figure>
@@ -352,6 +361,13 @@ works. Then:</p>
 </div>
 <p>When the button is greyed out, the line beside it says why, for example that replacements are allowed only after
 a hard refusal or when no number works.</p>
+<p><b>When your leader approves each replacement.</b> Some rounds keep replacements with the leader. The button then
+reads <b class="ui">Ask the leader for a replacement</b>. Write why and confirm: the household waits, marked
+<b>Replacement asked</b>, and you stop calling it. Your leader decides in a batch and sends you an updated file (A20).
+If the leader releases the replacement, it comes into your list with its contacts and the original household is
+closed as replaced. If the leader declines, the household opens again with the leader's note: keep calling. To call
+the household again before the leader decides, undo the request under <b>Actions</b>.</p>
+<figure><img class="w65" src="img/e32_ask_replacement.png"><figcaption><b>Figure A32.</b> When the leader approves replacements: the button asks instead of activating.</figcaption></figure>
 
 <h3><span class="num">A14</span>The Households tab</h3>
 <p>The Households tab lists all your households in a table: their contact, why each is with you, the first dial
@@ -436,7 +452,7 @@ with the ✕ to return to the list.</p>
 
 <h3><span class="num">A22</span>Good practice and messages</h3>
 <ul>
-  <li>Start the timer when you dial and end it when the call ends: the times are part of the data.</li>
+  <li>Log each call as soon as it ends, with its start and minutes: the times are part of the data.</li>
   <li>Save whenever you stop; export at the end of each day.</li>
   <li>Never write personal details in notes. Keep your assignment and saved sessions in your own folder.</li>
   <li>Use a release, not a refusal code, to stop calling a household for the round.</li>
@@ -537,7 +553,10 @@ tool's, the tool asks you to map each one once.</p>
 rank</code>. Each PSU's reserve is dealt in turn to its households in selection order, so each replacement belongs
 to one household. Replacement households need their contacts in the household list.</p>
 <p>Under the summary, tick <b>Replacements in use this round</b> and choose when they are <b>allowed</b>: after a hard
-refusal, when no number works, or when the dial cap is reached.</p>
+refusal, when no number works, or when the dial cap or the contact protocol is reached. Choose also <b>who activates a
+replacement</b>: the enumerator, when one of those cases is met (the default), or <b>the leader approves each
+request</b>. With the leader's approval, an enumerator asks instead of activating, the household waits, and you
+release or decline the requests in batches on the Progress tab (B15), which writes the revised files.</p>
 <figure><img class="w100" src="img/l05_replacements.png"><figcaption><b>Figure B5.</b> An rtmtools selection, read: one replacement for each of 36 households.</figcaption></figure>
 
 <h3><span class="num">B6</span>Step 4 · Round calendar</h3>
@@ -715,11 +734,39 @@ numbers: keep it in your own folder.</p>
   three more columns count it: the calls they moved, the first calls they moved later, and the days off they marked. A
   CSV export alone does not carry these; the JSON export does. The pace of <em>Move waiting households</em> counts only
   the days each enumerator works, and names the time off still ahead.</li>
+  <li><b>Replacement requests</b>, when you approve replacements (B5): each household an enumerator asked about, with
+  the reason, its dials and last result, and the next replacement in line. Tick requests and click <b class="ui">Release
+  the ticked</b> or <b class="ui">Decline the ticked</b> (with a note), then <b class="ui">Write the updated files</b>:
+  each enumerator concerned gets a revised file, and the manifest records every decision. A released replacement comes
+  into its enumerator's list with its contacts; a declined household opens again. <b class="ui">Release a replacement
+  for household</b> releases one without a request, for a team on KoBoToolbox or a case you decide yourself; the form's
+  list then carries only released replacements. A replacement used without your release is listed as a merge question
+  (Figure B22e).</li>
+  <li><b>Blocked numbers</b> (in <em>Move waiting households</em>): households whose last call shows the respondent
+  blocked the caller's number. <b class="ui">Move them to colleagues</b> lists a move for each, to those with spare
+  days first, then the fewest open, criteria respected.</li>
+  <li><b>Field visits:</b> the households an enumerator referred for a visit in person, with the reason, dials and last
+  result. <b class="ui">Download the visit list</b> (it holds contacts) to plan the visits; record each outcome (reached,
+  a time agreed; a new number; not found; refused at the door; other) with a note, then <b class="ui">Write the updated
+  files</b>: the outcome reaches the enumerator as your note on the household. A new number goes into the household
+  list (step 1) so that the next files carry it.</li>
+  <li><b>Change the round:</b> for what changes after the files are out. A new <b>last day</b> (a late start, a holiday
+  week, a deadline moved) reaches every enumerator's revised file, with the holidays of the new days; first calls
+  planned after an earlier last day move to its last working day. <b>Add households</b> from the household list that
+  are not yet in the round: each goes to the enumerator you name, or to the one with the fewest open, with a first call
+  on the next working day. <b>Re-issue the file</b> of one enumerator who lost their file or its passphrase: a fresh copy,
+  with a new passphrase if files are protected; they open it as a new assignment, and the calls they exported before stay
+  in the common folder.</li>
+  <li><b>Text-message list:</b> for a day you choose (the next working day by default), the households to be called that
+  day: first calls planned and callbacks booked. Download it for whoever sends the messages; the tool sends nothing.</li>
   <li><b>Completes over the window:</b> cumulative completes by day, and completion by stratum.</li>
+  <li><b>By area:</b> completes by PSU this round so far, with the same households' completes in the earlier rounds
+  loaded (step 2). Areas with no interview this round and none before come first.</li>
   <li><b>Households:</b> every household with its enumerator, reason, state, dials and last result, filtered by state or
   enumerator.</li>
 </ul>
 <figure><img class="w100" src="img/l24_progress_team.png"><figcaption><b>Figure B20.</b> The team's progress.</figcaption></figure>
+<figure><img class="w100" src="img/l29b_requests.png"><figcaption><b>Figure B22e.</b> Two replacement requests from E07: one ticked and set to release its next replacement, ready to write the updated files.</figcaption></figure>
 <div class="pair">
   <figure><img src="img/l25_progress_chart.png" style="width:100%"><figcaption><b>Figure B21.</b> Completes by day and by stratum.</figcaption></figure>
   <figure><img src="img/l26_progress_households.png" style="width:100%"><figcaption><b>Figure B22.</b> The households, with their state.</figcaption></figure>
@@ -874,7 +921,9 @@ what, and which files cross between them.</p>
 interviewer number such as CATI07), enter it in step 1 of the KoBoToolbox tab, or on the Prepare tab, step 5,
 <b class="ui">Platform code</b>: the two are the same column. A code entered before the files are written goes into
 the manifest; one entered later is kept in the session. The tool then reads the form's records under the
-enumerator's ID, whatever the case or punctuation of the code, and writes the code into the list it gives the form.</div>
+enumerator's ID, whatever the case or punctuation of the code, and writes the code into the list it gives the form.
+Several codes for one interviewer, separated by commas (an old code, a typing slip), are all read as that interviewer;
+the first is the one written into the list.</div>
 
 <h3><span class="num">C2</span>The Philippines form: one submission per call attempt</h3>
 <p>The form asks, before the interview, the interviewer's ID, the household (picked from the sample list in the
@@ -901,7 +950,10 @@ on the household question, each interviewer sees only their households. The list
 result are needed; end, attempt, callback, number dialed, round, record ID, submission time and note are optional),
 and what each value of the result column means, chosen from the results of R1; the card lists the values with
 their counts. <b class="ui">Save the mapping and merge the file</b> keeps the mapping in your session, so that every
-later file with the same columns is read without asking. A number dialed becomes the household's slot (number 1, 2
+later file with the same columns is read without asking.
+When the Philippines form, or the tool's own, gives a result value its built-in map does not know (a code added when
+the form was redeployed), step 3 lists the value with its count and asks what it means; the answer is kept in your
+session. A number dialed becomes the household's slot (number 1, 2
 or 3) through the household list, which must be open; the number itself is not kept.</p>
 
 <h3><span class="num">C4</span>A round, day by day</h3>
@@ -954,6 +1006,7 @@ own form's files. Every phone number uses the invalid country code +000.</p>
   <tr><td>No answer</td><td><code>NO_ANSWER</code></td><td>The phone rang without an answer</td></tr>
   <tr><td>Busy</td><td><code>BUSY</code></td><td>The line was busy</td></tr>
   <tr><td>Switched off / unreachable</td><td><code>SWITCHED_OFF</code></td><td>The phone was off or out of reach</td></tr>
+  <tr><td>Our number is blocked</td><td><code>BLOCKED</code></td><td>The respondent's phone rejects your number at once: your leader can move the household to a colleague</td></tr>
   <tr><td>Number not in service</td><td><code>DEAD_NUMBER</code></td><td>The number does not exist or is disconnected</td></tr>
   <tr><td>Wrong number</td><td><code>WRONG_NUMBER</code></td><td>The number is not the household's</td></tr>
   <tr><td>Refusal (may retry)</td><td><code>REFUSAL_SOFT</code></td><td>A refusal for now; a later call may succeed</td></tr>

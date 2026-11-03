@@ -4,7 +4,7 @@
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.3.7';
+  RTM.VERSION = '0.4.0';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -17,6 +17,7 @@
     { code: 'NO_ANSWER', label: 'No answer', cat: 'noncontact' },
     { code: 'BUSY', label: 'Busy', cat: 'noncontact' },
     { code: 'SWITCHED_OFF', label: 'Switched off / unreachable', cat: 'noncontact' },
+    { code: 'BLOCKED', label: 'Our number is blocked', cat: 'noncontact' },
     { code: 'DEAD_NUMBER', label: 'Number not in service', cat: 'number' },
     { code: 'WRONG_NUMBER', label: 'Wrong number', cat: 'number' },
     { code: 'REFUSAL_SOFT', label: 'Refusal (may retry)', cat: 'refusal', contact: true },
@@ -32,6 +33,8 @@
     SWITCH_REQUEST: 'Ask the leader to switch enumerator next round',
     REMOVE_REQUEST: 'Ask the leader to remove (no number works)',
     ACTIVATE_REPLACEMENT: 'Activate a replacement household',
+    REPLACEMENT_REQUEST: 'Ask the leader for a replacement',
+    FIELD_VISIT_REQUEST: 'Refer for a field visit',
   };
   RTM.REASONS = {
     keep: 'Kept with you: the same enumerator as before',
@@ -44,6 +47,7 @@
     capacity: 'Moved to balance workloads',
     match: 'Matched to you by the criteria your leader set',
     mid_round: 'Moved to you during the round, so that the round finishes on time',
+    added_mid_round: 'Added to the round by your leader after it started',
     replacement: 'Replacement household',
   };
 
@@ -409,7 +413,7 @@
     if (!rules.reschedule) return 'Your leader has not allowed moving calls yourself this round.';
     if (!c || !c.open || c.kind === 'removed') return 'Only an open household of yours can be moved.';
     if (c.appointment) return 'A callback is booked with the respondent: change it by correcting that call’s callback time.';
-    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(c.next.kind)) return 'This household needs a decision, not a new time (see “Needs your decision”).';
+    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end', 'blocked'].includes(c.next.kind)) return 'This household needs a decision, not a new time (see “Needs your decision”).';
     if (!at || isNaN(at.getTime())) return 'Choose the day and time of the next call.';
     if (at.getTime() < now.getTime() - 60000) return 'Choose a time from now on.';
     const p = RTM.partsIn(at, cal.tz);
@@ -454,6 +458,16 @@
         plan: { first_dial_date: RTM.partsIn(RTM.parseTS(a.logged_at), cal.tz).key, target_hour: (main.plan || {}).target_hour },
         replaces: main.hhid, kind: 'replacement', activated_at: a.logged_at });
     }
+    // a replacement the leader released after the enumerator asked (replacement_policy.approval 'leader'): active from the release
+    for (const h of A.households) {
+      const rel = h.replacement_release;
+      if (!rel || !rel.hhid || !repl.has(rel.hhid) || list.some(x => x.hhid === rel.hhid)) continue;
+      const { r, main } = repl.get(rel.hhid);
+      list.push({ hhid: r.hhid, psu: main.psu, stratum: main.stratum, contact: r.contact || { phones: [] }, tz: main.tz,
+        history: { joined_round: A.round }, assignment: { reason: 'replacement' },
+        plan: { first_dial_date: RTM.partsIn(RTM.parseTS(rel.at), cal.tz).key, target_hour: (main.plan || {}).target_hour },
+        replaces: main.hhid, kind: 'replacement', activated_at: rel.at, released_by: rel.by || 'leader' });
+    }
     // households taken out by an updated assignment stay visible, read-only, with the calls already logged (section B)
     const listed = new Set(list.map(x => x.hhid)), gone = new Map();
     for (const e of S.events) {
@@ -488,12 +502,17 @@
       const cmp = ds.find(d => d.status === 'COMPLETE' && (d.dur_min === null || d.dur_min === undefined || d.dur_min >= RTM.MIN_COMPLETE_MIN));
       const has = code => as.some(a => a.action === code);
       const last = ds.length ? ds[ds.length - 1] : null;
+      // a replacement request waits for the leader until a revised file releases a replacement or declines it (a later request waits again)
+      const req = as.filter(a => a.action === 'REPLACEMENT_REQUEST').slice(-1)[0] || null;
+      const dec = h.replacement_declined && h.replacement_declined.at ? h.replacement_declined : null;
+      const declined = req && dec && Date.parse(dec.at) >= Date.parse(req.logged_at) ? dec : null;
       let state;
       if (cmp) state = 'complete';
       else if (h.kind === 'removed') state = 'reassigned';
-      else if (has('ACTIVATE_REPLACEMENT')) state = 'replaced';
+      else if (has('ACTIVATE_REPLACEMENT') || (h.replacement_release && h.replacement_release.hhid)) state = 'replaced';
       else if (has('RELEASE')) state = 'released';
       else if (has('REMOVE_REQUEST')) state = 'remove_requested';
+      else if (req && !declined) state = 'replacement_requested';
       else state = ds.length ? 'in_progress' : 'not_started';
       const open = h.kind !== 'removed' && (state === 'in_progress' || state === 'not_started');
       // a household moved during the round comes with the dials its previous enumerator made: they count toward the cap
@@ -504,6 +523,8 @@
         all_dead: slots.length > 0 && slots.every(s => s.dead),
         no_phone: slots.length === 0,
         switch_requested: has('SWITCH_REQUEST'),
+        visit_requested: has('FIELD_VISIT_REQUEST'),
+        blocked: !!(last && last.status === 'BLOCKED'),
         complete_short: !!(cmpAny && !cmp),
         cap_reached: nAll >= cal.cap,
       };
@@ -512,7 +533,8 @@
         : !last && prior && prior.appointment_ts ? RTM.parseTS(prior.appointment_ts) : null;
       const myRepl = (h.replacements || []).map((r, i) => Object.assign({ rank: r.rank || i + 1 }, r, { active: false }));
       const mine = !appointment && own.get(h.hhid) ? own.get(h.hhid) : null;      // the enumerator's own next time, under a callback never
-      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, mine, replacements: myRepl, complete: cmp || null };
+      const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, mine, replacements: myRepl, complete: cmp || null,
+        request: req, declined: declined || (dec && !req ? dec : null) };
       c.next = RTM.suggest(c, cal, now);
       return c;
     });
@@ -526,6 +548,7 @@
   RTM.suggest = (c, cal, now) => {
     if (!c.open) return { kind: 'none', text: '' };
     if (c.flags.hard_refusal) return { kind: 'refusal', text: 'Hard refusal: release it for this round' };
+    if (c.flags.blocked && !c.appointment) return { kind: 'blocked', text: 'The respondent blocked your number: your leader can move the household to a colleague (it shows on the leader’s Progress tab)' };
     if (c.flags.no_phone) return { kind: 'dead', text: 'No phone number: add one if you have it, or ask the leader to remove it' };
     if (c.flags.all_dead) return { kind: 'dead', text: 'No working number left: ask the leader to remove it, or activate a replacement' };
     const nAll = Number.isInteger(c.nAll) ? c.nAll : c.n;        // dials this round, those of a previous enumerator included
@@ -610,7 +633,7 @@
     for (const c of C.list) {
       if (!c.open) continue;
       const s = c.next;
-      if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(s.kind)) { if (isToday) decide.push(c); continue; }
+      if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end', 'blocked'].includes(s.kind)) { if (isToday) decide.push(c); continue; }
       if (!s.at) continue;
       const k = RTM.partsIn(s.at, cal.tz).key;
       if (isToday && s.at.getTime() <= now.getTime()) due.push(c);
@@ -635,7 +658,7 @@
 
   // ---- progress counts ----
   RTM.progress = C => {
-    const p = { total: 0, complete: 0, released: 0, replaced: 0, remove_requested: 0, in_progress: 0, not_started: 0, short: 0, reassigned: 0 };
+    const p = { total: 0, complete: 0, released: 0, replaced: 0, remove_requested: 0, replacement_requested: 0, in_progress: 0, not_started: 0, short: 0, reassigned: 0 };
     for (const c of C.list) { if (c.kind === 'removed') { p.reassigned++; continue; } p.total++; p[c.state]++; if (c.flags.complete_short) p.short++; }
     p.open = p.in_progress + p.not_started;
     return p;

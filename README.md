@@ -65,6 +65,13 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
    - **The contact protocol.** On the Prepare tab, step 4, set at most 3 calls a day, 3 hours apart, over 5 working
      days for a household never reached, and tick "Vary the time of day": the step shows 15 calls against the dial
      cap, and the enumerator's list then plans each next call by that protocol.
+   - **Changes during the round, on the Progress tab.** "Change the round" sets a new last day, adds households from
+     the household list, or re-issues one enumerator's file; "Field visits" lists referrals and writes their outcomes
+     back as a note; "Text-message list" gives the calls of a day; "By area" shows completes by PSU across rounds; a
+     household whose respondent blocked the caller's number can be moved to a colleague in one click.
+   - **Replacements the leader approves.** On the Prepare tab, step 3, choose "the leader approves each request".
+     Enumerators then ask for a replacement instead of activating it; the Progress tab lists the requests with the
+     next replacement in line, and you release or decline them in a batch and write the revised files.
    - **What enumerators change themselves.** In the enumerator view, a household's panel has "Move the next
      call" (a new time with a reason; a first call stays inside the round's first-call period) and the Calendar
      tab has "My time off" (a day or half day; the calls planned then move to the next working time). The leader
@@ -118,7 +125,7 @@ the manifest is open:
    The round runs from 26 October to 20 November 2026, so the Today tab lists calls due now. Its fourth column,
    "Ahead of plan", fills the leader's day list (7 households in this sample) with households planned for later
    days once fewer than 7 are due or planned today.
-2. **Log a call.** Open a household, press "Start call" by a number, then "End call", choose the result and
+2. **Log a call.** Open a household and press "Log a call" by a number (the tool places no call: dial with your own phone system), set the start and the minutes, choose the result and
    save. Try a booked callback, a number not in service and then "Activate the next replacement", a release
    and its undo, and "Correct or void" on a logged call.
 3. **Save and continue.** Press "Save session", then "Close session", then "Continue a saved session" and pick

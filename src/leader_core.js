@@ -841,11 +841,13 @@
   // the platform files among the imports become one cumulative "CSV export" per enumerator; the merge then treats them as section F treats a CSV without its JSON
   const codeKey = s => String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
   // the code each enumerator has in the platform: the session's (Platform tab) over the manifest's, else the ID itself
-  L.codeOf = (M, codes) => id => { const c = codes && codes[id]; if (c) return c; const e = (M.enumerators || []).find(x => x.enumerator_id === id); return (e && e.platform_id) || id; };
+  L.codeList = v => String(v == null ? '' : v).split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  L.codeOf = (M, codes) => id => { const c = codes && codes[id]; if (c && L.codeList(c).length) return L.codeList(c)[0]; const e = (M.enumerators || []).find(x => x.enumerator_id === id); return (e && e.platform_id) || id; };
   L.enumMapper = (M, codes) => {
     const pmap = new Map(), codeOf = L.codeOf(M, codes);
     M.enumerators.forEach(e => { pmap.set(codeKey(e.enumerator_id), e.enumerator_id); if (e.platform_id) pmap.set(codeKey(e.platform_id), e.enumerator_id); });
-    M.enumerators.forEach(e => { const c = codeOf(e.enumerator_id); if (c) pmap.set(codeKey(c), e.enumerator_id); });   // the session's codes win
+    M.enumerators.forEach(e => { const c = codeOf(e.enumerator_id); if (c) pmap.set(codeKey(c), e.enumerator_id);   // the session's codes win
+      L.codeList(codes && codes[e.enumerator_id]).forEach(a => pmap.set(codeKey(a), e.enumerator_id)); });              // and every alias reads as the same enumerator
     return raw => pmap.get(codeKey(raw)) || String(raw || '').trim();
   };
   L.expandForms = (imports, M, opts) => {
@@ -875,7 +877,8 @@
     };
     for (const f of imports) {
       if (f.kind === 'platform') {
-        const prof = f.profile, roundCol = (prof.columns || {}).round;
+        const xc = opts && opts.profileExtra && opts.profileExtra[f.profile.id];       // values the leader mapped for this built-in layout
+        const prof = xc ? Object.assign({}, f.profile, { codes: Object.assign({}, f.profile.codes, xc) }) : f.profile, roundCol = (prof.columns || {}).round;
         // a layout of another kind (an interview form without its attempts, saved by an earlier version) is not read
         if (prof.kind !== 'calls') { extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: the tool reads platform files with one row per call attempt' }); continue; }
         let otherRound = 0, noSlot = 0, noId = 0;
@@ -899,17 +902,30 @@
     }
     return { imports: out, extra };
   };
+  // result values of a built-in layout's file that its code map does not know (a form redeployed with a new code): the leader maps them once
+  L.unknownPlatformCodes = (imports, extra) => {
+    const out = new Map();
+    imports.filter(f => f.kind === 'platform' && !f.profile.custom).forEach(f => {
+      const col = (f.profile.columns || {}).result, known = Object.assign({}, f.profile.codes, (extra || {})[f.profile.id] || {});
+      f.rows.forEach(r => { const v = String(r[col] == null ? '' : r[col]).trim(); if (!v || known[v] !== undefined || STATUS_SET.has(v.toUpperCase()) || v.toUpperCase() === 'NONE') return;
+        const k = `${f.profile.id}|${v}`; if (!out.has(k)) out.set(k, { profile: f.profile.id, name: f.profile.name, value: v, n: 0, column: col }); out.get(k).n++; });
+    });
+    return [...out.values()];
+  };
   // the file the tool's own KoBo form takes in (proposal K.3): the household file for the form's media
   const planOf = (plans, id) => (plans && plans.get && plans.get(id)) || {};
   L.KOBO_COLS = ['name', 'label', 'hhid', 'enumerator_id', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour', 'psu', 'stratum', 'kind', 'replaces', 'rank'];
   const contactCols = H => { const o = {}; (H && H.phones || []).forEach(p => { if (p.slot >= 1 && p.slot <= 3) { o[`phone_${p.slot}`] = p.number || ''; o[`phone_${p.slot}_label`] = p.label || ''; } }); return o; };
+  const listedReplacements = M => ((M.replacement_policy || {}).approval === 'leader'
+    ? new Set((M.replacement_decisions || []).filter(d => d.decision === 'released').map(d => d.replacement)) : null);
   L.koboHouseholds = (M, Hl, plans) => {
-    const rows = [];
+    const rows = [], only = listedReplacements(M);
     for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
       const H = Hl.get(h.hhid) || {}, pl = planOf(plans, h.hhid);
       rows.push(Object.assign({ name: h.hhid, label: `${h.hhid} · ${H.name || ''}`.trim(), hhid: h.hhid, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: H.name || '',
         planned_date: pl.first_dial_date || '', planned_hour: Number.isInteger(pl.target_hour) ? pl.target_hour : '', psu: h.psu || '', stratum: h.stratum || '', kind: 'main', replaces: '', rank: '' }, contactCols(H)));
       (h.replacements || []).forEach((id, i) => {
+        if (only && !only.has(id)) return;
         const Rh = Hl.get(id) || {};
         rows.push(Object.assign({ name: id, label: `${id} · ${Rh.name || ''} (replacement ${i + 1} for ${h.hhid})`, hhid: id, enumerator_id: h.enumerator_id, program: M.program, round: M.round, contact_name: Rh.name || '',
           planned_date: '', planned_hour: '', psu: h.psu || '', stratum: h.stratum || '', kind: 'replacement', replaces: h.hhid, rank: i + 1 }, contactCols(Rh)));
@@ -939,11 +955,11 @@
   // the household list as a KoBoToolbox choices list (the L2PHL form's layout: list_name SN, the ID as name and label, the interviewer's code in filter_int_id)
   L.CHOICE_COLS = ['list_name', 'name', 'label', 'filter_int_id', 'enumerator_id', 'kind', 'replaces', 'rank'];
   L.koboChoices = (M, Hl, codes) => {
-    const codeOf = L.codeOf(M, codes), pid = new Map(M.enumerators.map(e => [e.enumerator_id, codeOf(e.enumerator_id)]));
+    const codeOf = L.codeOf(M, codes), pid = new Map(M.enumerators.map(e => [e.enumerator_id, codeOf(e.enumerator_id)])), only = listedReplacements(M);
     const rows = [];
     for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
       rows.push({ list_name: 'SN', name: h.hhid, label: h.hhid, filter_int_id: pid.get(h.enumerator_id) || h.enumerator_id, enumerator_id: h.enumerator_id, kind: 'main', replaces: '', rank: '' });
-      (h.replacements || []).forEach((id, i) => rows.push({ list_name: 'SN', name: id, label: `${id} (replacement ${i + 1} for ${h.hhid})`, filter_int_id: pid.get(h.enumerator_id) || h.enumerator_id, enumerator_id: h.enumerator_id, kind: 'replacement', replaces: h.hhid, rank: i + 1 }));
+      (h.replacements || []).forEach((id, i) => (only && !only.has(id)) || rows.push({ list_name: 'SN', name: id, label: `${id} (replacement ${i + 1} for ${h.hhid})`, filter_int_id: pid.get(h.enumerator_id) || h.enumerator_id, enumerator_id: h.enumerator_id, kind: 'replacement', replaces: h.hhid, rank: i + 1 }));
     }
     return R.toCSV(rows, L.CHOICE_COLS);
   };
@@ -1003,6 +1019,8 @@
       else { row.use = 'not read'; issue({ key: `unknown:${f.sha}`, type: 'unknown_file', severity: 'info', file: f.name, detail: `Not a file the merge reads: ${f.problem}.` }); }
     }
     const stampOf = f => (f.exported_at || '').slice(0, 16).replace('T', ' ');
+    // two files with the same name (an export and a copy edited by hand): the label says which one passes its integrity check
+    const fileLabel = (f, other) => (f.name !== other.name ? f.name : `${f.name} (${f.chain && f.chain.ok && f.lastOk ? 'integrity check passed' : 'integrity check failed'}${stampOf(f) !== stampOf(other) ? `, exported ${stampOf(f)}` : ''})`);
     // 2. per enumerator: the latest export, CSVs checked against their JSON, chains verified
     const groups = new Map();
     usable.forEach(x => { const e = x.f.enumerator_id; if (!groups.has(e)) groups.set(e, []); groups.get(e).push(x); });
@@ -1091,7 +1109,7 @@
             if (!mine || R.canon(R.publicPart(mine)) === R.canon(R.publicPart(ev))) continue;   // compare content: an edit leaves the stored hash unchanged
             const d = issue({ key: `event_conflict:${ev.event_id}`, type: 'event_conflict', severity: 'action', file: x.f.name, enumerator: e, hhid: ev.hhid, event_id: ev.event_id,
               detail: `Event ${ev.event_id.slice(0, 8)} differs between ${latest.f.name} and ${x.f.name}. It is left out of the counts until you choose a version.`,
-              choices: [{ value: `use:${latest.f.sha}`, label: `Use ${latest.f.name}` }, { value: `use:${x.f.sha}`, label: `Use ${x.f.name}` }, { value: 'exclude', label: 'Leave it out' }] });
+              choices: [{ value: `use:${latest.f.sha}`, label: `Use ${fileLabel(latest.f, x.f)}` }, { value: `use:${x.f.sha}`, label: `Use ${fileLabel(x.f, latest.f)}` }, { value: 'exclude', label: 'Leave it out' }] });
             if (!d || d === 'exclude') excludedEvents.add(ev.event_id);
             else if (d === `use:${x.f.sha}`) byId.set(ev.event_id, ev);
           }
@@ -1151,11 +1169,22 @@
     // 3. households: dials outside the enumerator's assignment, two completes, implausible clocks
     const excludedDials = new Set();
     const activatedBy = new Map();
-    for (const [e, x] of perEnum) x.actions.filter(a => a.action === 'ACTIVATE_REPLACEMENT' && a.target_hhid).forEach(a => activatedBy.set(a.target_hhid, { e, main: a.hhid, at: a.logged_at }));
+    // replacements the leader released (approval 'leader'): active for the household's holder from the release
+    (M.replacement_decisions || []).filter(d => d.decision === 'released' && d.replacement).forEach(d => activatedBy.set(d.replacement, { e: assignedTo.get(d.main), main: d.main, at: d.at, released: true }));
+    for (const [e, x] of perEnum) x.actions.filter(a => a.action === 'ACTIVATE_REPLACEMENT' && a.target_hhid && !activatedBy.has(a.target_hhid)).forEach(a => activatedBy.set(a.target_hhid, { e, main: a.hhid, at: a.logged_at }));
     // a replacement's dials name the household they replace, which is all a CSV without its JSON can tell
     for (const [e, x] of perEnum) x.dials.filter(d => d.replaces && !activatedBy.has(d.hhid)).forEach(d => activatedBy.set(d.hhid, { e, main: d.replaces, at: d.logged_at }));
     // a platform's record carries no activation: the first dial on a reserve listed in the manifest activates it for its enumerator
     for (const [e, x] of perEnum) x.dials.filter(d => replOf.has(d.hhid) && !activatedBy.has(d.hhid) && assignedTo.get(replOf.get(d.hhid)) === e).forEach(d => activatedBy.set(d.hhid, { e, main: replOf.get(d.hhid), at: d.logged_at, implied: true }));
+    if ((M.replacement_policy || {}).approval === 'leader') {
+      for (const [h, a] of [...activatedBy]) {
+        if (a.released) continue;
+        const d = issue({ key: `replacement_not_released:${h}`, type: 'replacement_not_released', severity: 'action', enumerator: a.e, hhid: h,
+          detail: `${a.e} used replacement ${h} for ${a.main} without your release (replacements are approved by the leader this round).`,
+          choices: [{ value: 'accept', label: 'Keep it: approved after the fact' }, { value: 'exclude', label: 'Leave its dials out' }] });
+        if (d === 'exclude') { activatedBy.delete(h); for (const [, x] of perEnum) x.dials.filter(dd => dd.hhid === h).forEach(dd => excludedDials.add(dd.event_id)); }
+      }
+    }
     const mine = (e, h) => assignedTo.get(h) === e || (replOf.has(h) && assignedTo.get(replOf.get(h)) === e) || (activatedBy.has(h) && activatedBy.get(h).e === e);
     for (const [e, x] of perEnum) {
       const byHH = new Map();
@@ -1276,6 +1305,7 @@
       else if (has('ACTIVATE_REPLACEMENT')) c.state = 'replaced';
       else if (has('RELEASE')) c.state = 'released';
       else if (has('REMOVE_REQUEST')) c.state = 'remove_requested';
+      else if ((r => r && !((M.replacement_decisions || []).filter(d => d.main === c.hhid && d.decision === 'declined').some(d => Date.parse(d.at) >= Date.parse(r.logged_at))))(c.actions.filter(a => a.action === 'REPLACEMENT_REQUEST').slice(-1)[0])) c.state = 'replacement_requested';
       else if (c.dials.length) c.state = 'in_progress';
       else c.state = reported.has(c.enumerator_id) ? 'not_started' : 'not_reported';
       c.n = c.dials.length;
@@ -1283,11 +1313,11 @@
     return out;
   };
   L.STATES = { complete: 'Complete', in_progress: 'In progress', not_started: 'Not started', released: 'Released', replaced: 'Replaced',
-    remove_requested: 'Removal requested', not_reported: 'Not reported', conflict: 'Two completes' };
+    remove_requested: 'Removal requested', replacement_requested: 'Replacement asked', not_reported: 'Not reported', conflict: 'Two completes' };
   L.progress = (M, C, G) => {
     const tz = M.calendar.time_zone;
     const rows = new Map();
-    const row = e => { if (!rows.has(e)) rows.set(e, { enumerator_id: e, households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, days: new Set(), last_export: '', moved_by_them: 0, first_later: 0, days_off: 0, off: [] }); return rows.get(e); };
+    const row = e => { if (!rows.has(e)) rows.set(e, { enumerator_id: e, households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, replacement_requested: 0, not_reported: 0, conflict: 0, dials: 0, days: new Set(), last_export: '', moved_by_them: 0, first_later: 0, days_off: 0, off: [] }); return rows.get(e); };
     M.enumerators.forEach(e => row(e.enumerator_id));
     for (const c of C.values()) { const r = row(c.enumerator_id); r.households++; r[c.state]++; }
     G.dials.forEach(d => { const r = row(d.source); r.dials++; r.days.add(R.partsIn(new Date(Date.parse(d.ts)), tz).key); });
@@ -1299,7 +1329,7 @@
     }
     const list = [...rows.values()].sort((a, b) => cmpStr(a.enumerator_id, b.enumerator_id));
     list.forEach(r => { r.enumerator_days = r.days.size; delete r.days; r.completes_per_day = r.enumerator_days ? r.complete / r.enumerator_days : null; });
-    const tot = { enumerator_id: 'All', households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, not_reported: 0, conflict: 0, dials: 0, enumerator_days: 0, moved_by_them: 0, first_later: 0, days_off: 0 };
+    const tot = { enumerator_id: 'All', households: 0, complete: 0, in_progress: 0, not_started: 0, released: 0, replaced: 0, remove_requested: 0, replacement_requested: 0, not_reported: 0, conflict: 0, dials: 0, enumerator_days: 0, moved_by_them: 0, first_later: 0, days_off: 0 };
     list.forEach(r => Object.keys(tot).forEach(k => { if (k !== 'enumerator_id') tot[k] += r[k]; }));
     tot.completes_per_day = tot.enumerator_days ? tot.complete / tot.enumerator_days : null;
     // completes by day of the window, and by stratum
@@ -1429,14 +1459,37 @@
   L.reviseFiles = inp => {
     const M = inp.M, at = inp.at, moved = new Map(inp.moves.map(m => [m.hhid, m]));
     const affected = new Set(); inp.moves.forEach(m => { affected.add(m.from); affected.add(m.to); });
+    // the leader's decisions on replacement requests (replacement_policy.approval 'leader'): each goes into the holder's revised file
+    const holderNow = new Map(M.households.map(h => [h.hhid, h.enumerator_id]));
+    const newDecisions = (inp.decisions || []).filter(d => holderNow.has(d.main)).map(d => R.clean({ main: d.main, decision: d.decision, replacement: d.decision === 'released' ? d.replacement : undefined,
+      note: d.note || undefined, at, by: inp.leader }));
+    newDecisions.forEach(d => affected.add(moved.has(d.main) ? moved.get(d.main).to : holderNow.get(d.main)));
+    const decisions = (M.replacement_decisions || []).concat(newDecisions);
+    const lastDecision = new Map(); decisions.forEach(d => lastDecision.set(d.main, d));
+    // other changes during the round (3 November 2026): a new window for everyone, households added, one enumerator's file re-issued,
+    // and the outcomes of field visits, written as a note on the household
+    const addH = (inp.addHouseholds || []).filter(a => a.hhid && a.to && !holderNow.has(a.hhid));
+    const addedIds = new Set(addH.map(a => a.hhid));
+    addH.forEach(a => affected.add(a.to));
+    (inp.reissue || []).forEach(e => affected.add(e));
+    const visitsNew = (inp.visits || []).filter(v => holderNow.has(v.hhid)).map(v => R.clean({ hhid: v.hhid, outcome: v.outcome, note: v.note || undefined, at, by: inp.leader }));
+    visitsNew.forEach(v => affected.add(moved.has(v.hhid) ? moved.get(v.hhid).to : holderNow.get(v.hhid)));
+    const visits = (M.field_visits || []).concat(visitsNew);
+    const lastVisit = new Map(); visits.forEach(v => lastVisit.set(v.hhid, v));
+    const calOut = inp.calendar || M.calendar;
+    if (inp.calendar) { M.households.forEach(h => affected.add(moved.has(h.hhid) ? moved.get(h.hhid).to : h.enumerator_id)); addH.forEach(a => affected.add(a.to)); }
     const added = (inp.added || []).filter(a => a.enumerator_id && !M.enumerators.some(x => x.enumerator_id === a.enumerator_id));
     const team = M.enumerators.concat(added.map(a => R.clean({ enumerator_id: a.enumerator_id, name: a.name || undefined, available: true, share: 1, households: 0,
       platform_id: a.platform_id || undefined, joined_at: at, file: `${a.enumerator_id}_assignment_R${p2(M.round)}.json` })));
     const matching = M.matching ? Object.assign({}, M.matching, { enumerators: Object.assign({}, M.matching.enumerators || {},
       Object.fromEntries(added.map(a => [a.enumerator_id, Object.fromEntries((M.matching.criteria || []).map(c => [c, [...new Set(L.splitVals((a.attrs || {})[c]))].sort()]))]))) }) : undefined;
-    const cal = R.calendarOf({ calendar: M.calendar }), today = R.partsIn(inp.now || R.now(), cal.tz).key;
+    const cal = R.calendarOf({ calendar: calOut }), today = R.partsIn(inp.now || R.now(), cal.tz).key;
     let first = today < cal.start ? cal.start : today, guard = 0;
     while (!cal.isWorking(first) && first < cal.end && guard++ < 60) first = R.addDaysKey(first, 1);
+    // a shortened window: a first dial planned after its new end moves to its last working day
+    let lastWork = cal.end; guard = 0;
+    while (!cal.isWorking(lastWork) && lastWork > cal.start && guard++ < 60) lastWork = R.addDaysKey(lastWork, -1);
+    const fitPlan = pl => (pl && pl.first_dial_date && pl.first_dial_date > cal.end ? Object.assign({}, pl, { first_dial_date: lastWork }) : pl);
     const upd = new Map();                           // hhid -> slot -> the corrected number, from the merged contacts files
     (inp.updates || []).filter(u => u.digest_ok && u.number).forEach(u => { if (!upd.has(u.hhid)) upd.set(u.hhid, new Map()); upd.get(u.hhid).set(+u.slot, u); });
     const contactNow = (H, id, slotLast) => {
@@ -1452,7 +1505,9 @@
     };
     const elig = M.matching ? { criteria: M.matching.criteria } : null;
     const households = M.households.map(h => (moved.has(h.hhid) ? Object.assign({}, h, { enumerator_id: moved.get(h.hhid).to, reason: 'mid_round', previous_enumerator: h.enumerator_id,
-      matched: M.matching ? (inp.matchedNow ? inp.matchedNow(h.hhid, moved.get(h.hhid).to) : undefined) : undefined }) : h));
+      matched: M.matching ? (inp.matchedNow ? inp.matchedNow(h.hhid, moved.get(h.hhid).to) : undefined) : undefined }) : h))
+      .concat(addH.map(a => R.clean({ hhid: a.hhid, enumerator_id: a.to, reason: 'added_mid_round', psu: a.psu || undefined, stratum: a.stratum || undefined, added_at: at,
+        matched: M.matching && inp.matchedNow ? inp.matchedNow(a.hhid, a.to) : undefined })));
     const files = [];
     for (const e of [...affected].sort(cmpStr)) {
       const mine = households.filter(h => h.enumerator_id === e).sort((a, b) => cmpStr(a.hhid, b.hhid));
@@ -1469,8 +1524,11 @@
           history: s ? R.clean({ joined_round: s.joined_round === null ? M.round : s.joined_round, last_interview: li, last3: s.last3 || undefined, last_enumerator: s.last_interview ? s.last_interview.enumerator : undefined }) : undefined,
           assignment: R.clean({ reason: h.reason, previous_enumerator: h.previous_enumerator, matched: h.matched }),
           criteria: crit && Object.keys(crit).length ? crit : undefined,
-          plan: m ? R.clean({ first_dial_date: first, target_hour: pl && Number.isInteger(pl.target_hour) ? pl.target_hour : (li && Number.isInteger(li.hour) ? li.hour : undefined) }) : pl || undefined,
+          plan: m || addedIds.has(h.hhid) ? R.clean({ first_dial_date: first, target_hour: pl && Number.isInteger(pl.target_hour) ? pl.target_hour : (li && Number.isInteger(li.hour) ? li.hour : undefined) }) : fitPlan(pl) || undefined,
+          note: (v => (v ? `Field visit ${v.at.slice(0, 10)}: ${L.VISIT_OUTCOMES[v.outcome] || v.outcome}${v.note ? `. ${v.note}` : ''}` : undefined))(lastVisit.get(h.hhid)),
           handover: m ? R.clean({ from: m.from, moved_at: at, dials: c ? c.n : 0, last_status: last ? last.status : undefined, last_ts: last ? last.ts : undefined, appointment_ts: c ? callbackOf(c) : undefined }) : undefined,
+          replacement_release: (d => (d && d.decision === 'released' ? R.clean({ hhid: d.replacement, at: d.at, by: d.by }) : undefined))(lastDecision.get(h.hhid)),
+          replacement_declined: (d => (d && d.decision === 'declined' ? R.clean({ at: d.at, by: d.by, note: d.note }) : undefined))(lastDecision.get(h.hhid)),
           replacements: reps.length ? reps : undefined,
         });
       });
@@ -1479,8 +1537,8 @@
         schema: R.SCHEMA.assign, tool_version: R.VERSION, program: M.program, country: M.country, round: M.round, enumerator_id: e,
         generated_by: inp.leader, generated_at: at, revision: (M.revision || 1) + 1, supersedes: old ? old.fingerprint : undefined,
         rule: M.rule, replacement_policy: M.replacement_policy, matching: matching ? { criteria: matching.criteria, enumerator: (matching.enumerators || {})[e] || {} } : undefined,
-        synthetic: M.synthetic ? true : undefined, note: `${joins ? 'You join this round. ' : ''}Revision ${(M.revision || 1) + 1} of this round's assignment: ${inp.moves.filter(x => x.to === e).length} household(s) moved to you, ${inp.moves.filter(x => x.from === e).length} moved from you.`,
-        calendar: M.calendar, households: entries,
+        synthetic: M.synthetic ? true : undefined, note: `${joins ? 'You join this round. ' : ''}Revision ${(M.revision || 1) + 1} of this round's assignment: ${inp.moves.filter(x => x.to === e).length} household(s) moved to you, ${inp.moves.filter(x => x.from === e).length} moved from you${addH.filter(a => a.to === e).length ? `, ${addH.filter(a => a.to === e).length} added to the round` : ''}${inp.calendar ? `; the round now runs ${cal.start} to ${cal.end}` : ''}${(n => (n.rel || n.dec ? `; your leader released ${n.rel} replacement(s) and declined ${n.dec} request(s)` : ''))(newDecisions.filter(d => (moved.has(d.main) ? moved.get(d.main).to : holderNow.get(d.main)) === e).reduce((o, d) => { o[d.decision === 'released' ? 'rel' : 'dec']++; return o; }, { rel: 0, dec: 0 }))}.`,
+        calendar: calOut, households: entries,
       });
       a.fingerprint = R.fingerprint(a);
       files.push({ enumerator_id: e, name: `${e}_assignment_R${p2(M.round)}.json`, obj: a });
@@ -1495,11 +1553,92 @@
         return R.clean(y);
       }),
       households, moves: (M.moves || []).concat(inp.moves.map(m => ({ hhid: m.hhid, from: m.from, to: m.to, at, by: inp.leader }))),
+      replacement_decisions: decisions.length ? decisions : undefined,
+      field_visits: visits.length ? visits : undefined, calendar: calOut,
     });
+    if (!manifest.field_visits) delete manifest.field_visits;
+    if (!manifest.replacement_decisions) delete manifest.replacement_decisions;
     if (!matching) delete manifest.matching;
     delete manifest.fingerprint;
     manifest.fingerprint = R.fingerprint(manifest);
-    return { files, manifest, affected: [...affected].sort(cmpStr), added: added.map(a => a.enumerator_id) };
+    return { files, manifest, affected: [...affected].sort(cmpStr), added: added.map(a => a.enumerator_id), decided: newDecisions.length, householdsAdded: addH.length, visited: visitsNew.length };
+  };
+
+  L.VISIT_OUTCOMES = { time_agreed: 'reached, a time to call agreed', new_number: 'a new number obtained', not_found: 'not found or moved away', refused: 'refused at the door', other: 'other outcome' };
+  // the households referred for a field visit, with what the leader needs to plan the visit (contacts come from the household list)
+  L.fieldVisits = (M, G, C) => {
+    const hh = new Map(M.households.map(h => [h.hhid, h])), done = new Map((M.field_visits || []).map(v => [v.hhid, v])), last = new Map();
+    G.actions.filter(a => a.action === 'FIELD_VISIT_REQUEST' && hh.has(a.hhid)).forEach(a => last.set(a.hhid, a));
+    return [...last.values()].sort((a, b) => cmpStr(a.logged_at, b.logged_at)).map(a => {
+      const h = hh.get(a.hhid), c = C.get(a.hhid), v = done.get(a.hhid), ld = c && c.dials.length ? c.dials[c.dials.length - 1] : null;
+      return { hhid: a.hhid, enumerator: h.enumerator_id, psu: h.psu || '', stratum: h.stratum || '', at: a.logged_at, reason: a.reason || '', dials: c ? c.n : 0, last: ld ? ld.status : '',
+        state: c ? c.state : '', outcome: v && Date.parse(v.at) >= Date.parse(a.logged_at) ? v : null };
+    });
+  };
+  // completes by area (PSU): this round so far and each earlier round loaded, so that areas with no interview stand out
+  L.areaView = (M, C, H, Hl) => {
+    const psuOf = id => { const x = (Hl && Hl.get && Hl.get(id)) || M.households.find(h => h.hhid === id) || {}; return x.psu || ''; };
+    const rows = new Map(), row = p => { if (!rows.has(p)) rows.set(p, { psu: p, stratum: '', households: 0, complete: 0, open: 0, earlier: {} }); return rows.get(p); };
+    for (const c of C.values()) { const r = row(c.psu || psuOf(c.hhid)); r.households++; if (c.state === 'complete') r.complete++; if (c.state === 'in_progress' || c.state === 'not_started') r.open++; if (!r.stratum && c.stratum) r.stratum = c.stratum; }
+    const rounds = H && H.rounds ? H.rounds.filter(x => x < M.round).slice(-3) : [];
+    // an area counts in an earlier round only if some of its households were in the panel then (a new area shows a dash, not a zero)
+    for (const rd of rounds) {
+      const cm = H.complete.get(rd) || new Map(), pres = (H.present && H.present.get(rd)) || new Set();
+      for (const id of pres) { const p = psuOf(id); if (rows.has(p)) { const r = rows.get(p); r.present = r.present || {}; r.present[rd] = true; if (!(rd in r.earlier)) r.earlier[rd] = 0; } }
+      for (const id of cm.keys()) { const p = psuOf(id); if (rows.has(p)) rows.get(p).earlier[rd] = (rows.get(p).earlier[rd] || 0) + 1; }
+    }
+    const list = [...rows.values()].map(r => { const seen = rounds.filter(rd => rd in r.earlier);
+      return Object.assign(r, { share: r.households ? r.complete / r.households : null, none_before: seen.length > 0 && seen.every(rd => !r.earlier[rd]), none_now: r.complete === 0 }); });
+    list.sort((a, b) => (Number(b.none_now && b.none_before) - Number(a.none_now && a.none_before)) || (a.share - b.share) || cmpStr(a.psu, b.psu));
+    return { rows: list, rounds };
+  };
+  // the households to be called on a day (first calls planned then, and callbacks booked then), for a text message the day before; holds numbers
+  L.SMS_COLS = ['hhid', 'enumerator_id', 'why', 'time', 'contact_name', 'phone', 'phone_label'];
+  L.smsList = (M, C, plans, Hl, day) => {
+    const tz = M.calendar.time_zone, out = [];
+    for (const c of C.values()) {
+      if (!(c.state === 'not_started' || c.state === 'in_progress')) continue;
+      const H = (Hl && Hl.get(c.hhid)) || {}, ph = (H.phones || [])[0] || {};
+      const last = c.dials[c.dials.length - 1], pl = plans && plans.get ? plans.get(c.hhid) : null;
+      let why = '', time = '';
+      if (last && last.appointment_ts && R.CALLBACK_STATUSES.includes(last.status) && R.partsIn(new Date(Date.parse(last.appointment_ts)), tz).key === day) { why = 'callback'; time = last.appointment_ts.slice(11, 16); }
+      else if (!c.dials.length && pl && pl.first_dial_date === day) { why = 'first call'; time = Number.isInteger(pl.target_hour) ? `${p2(pl.target_hour)}:00` : ''; }
+      if (why) out.push({ hhid: c.hhid, enumerator_id: c.enumerator_id, why, time, contact_name: H.name || '', phone: ph.number || '', phone_label: ph.label || '' });
+    }
+    return out.sort((a, b) => cmpStr(a.time, b.time) || cmpStr(a.hhid, b.hhid));
+  };
+  // households whose respondent blocked the caller's number: each to a colleague, those with spare days first, then the fewest open
+  L.blockedMoves = (pace, C, opts) => {
+    const o = Object.assign({ eligible: null, hh: null, planOf: null, exclude: null }, opts || {});
+    const planned = id => (o.planOf && o.planOf(id)) || '';
+    const takers = pace.rows.filter(r => !r.away).map(r => ({ id: r.enumerator_id, need: r.known ? r.need : null, open: r.open }));
+    const list = [...C.values()].filter(c => c.state === 'in_progress' && !c.replaces && c.dials.length && c.dials[c.dials.length - 1].status === 'BLOCKED' && !(o.exclude && o.exclude.has(c.hhid)));
+    const moves = [], stay = [];
+    for (const c of list) {
+      const ok = takers.filter(t => t.id !== c.enumerator_id && (!o.eligible || !o.hh || !o.hh.get(c.hhid) || o.eligible(o.hh.get(c.hhid), t.id)));
+      const spare = ok.filter(t => t.need !== null && t.need < -0.5).sort((a, b) => a.need - b.need || cmpStr(a.id, b.id));
+      const t = spare[0] || ok.slice().sort((a, b) => a.open - b.open || cmpStr(a.id, b.id))[0];
+      if (!t) { stay.push({ hhid: c.hhid, why: 'no other enumerator matches its criteria' }); continue; }
+      moves.push(moveRow(c, c.enumerator_id, t.id, planned, { blocked: true }));
+      if (t.need !== null) t.need += 1;
+      t.open += 1;
+    }
+    return { moves, stay };
+  };
+
+  // ---- replacement requests (replacement_policy.approval 'leader'): what the enumerators asked, and what is in line ----
+  L.replacementRequests = (M, G, C) => {
+    const hh = new Map(M.households.map(h => [h.hhid, h])), decs = M.replacement_decisions || [];
+    const used = new Set([...G.activatedBy.keys()].concat(decs.filter(d => d.decision === 'released').map(d => d.replacement)));
+    const last = new Map();
+    G.actions.filter(a => a.action === 'REPLACEMENT_REQUEST' && hh.has(a.hhid)).forEach(a => last.set(a.hhid, a));
+    return [...last.values()].sort((a, b) => cmpStr(a.logged_at, b.logged_at)).map(a => {
+      const h = hh.get(a.hhid), c = C.get(a.hhid), after = decs.filter(d => d.main === a.hhid && Date.parse(d.at) >= Date.parse(a.logged_at)).slice(-1)[0];
+      const next = (h.replacements || []).find(r => !used.has(r)) || null;
+      const lastDial = c && c.dials.length ? c.dials[c.dials.length - 1] : null;
+      return { main: a.hhid, enumerator: h.enumerator_id, asked_by: a.source || a.logged_by, at: a.logged_at, reason: a.reason || '', dials: c ? c.n : 0, last: lastDial ? lastDial.status : '',
+        next, status: after ? after.decision : 'pending', decided_at: after ? after.at : '', state: c ? c.state : '' };
+    });
   };
 
   // ---- the round's outputs (A.6) ----

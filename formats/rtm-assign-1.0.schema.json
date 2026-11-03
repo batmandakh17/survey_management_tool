@@ -43,7 +43,8 @@
       "type": "object",
       "properties": {
         "active": { "type": "boolean" },
-        "triggers": { "type": "array", "uniqueItems": true, "items": { "enum": ["REFUSAL_HARD", "ALL_NUMBERS_DEAD", "CAP_REACHED"] } }
+        "triggers": { "type": "array", "uniqueItems": true, "items": { "enum": ["REFUSAL_HARD", "ALL_NUMBERS_DEAD", "CAP_REACHED"] } },
+        "approval": { "enum": ["enumerator", "leader"], "description": "Who activates a replacement (3 November 2026): the enumerator when a trigger is met (the default), or the leader, who releases or declines each request (action REPLACEMENT_REQUEST) in a revised file." }
       }
     },
     "synthetic": { "type": "boolean", "description": "True for sample files: no real household, name or number." },
@@ -141,7 +142,7 @@
         "assignment": {
           "type": "object",
           "properties": {
-            "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "match", "mid_round", "replacement"] },
+            "reason": { "enum": ["keep", "rotation", "switch_hard_to_reach", "enumerator_unavailable", "new", "manual", "capacity", "rule", "match", "mid_round", "added_mid_round", "replacement"] },
             "previous_enumerator": { "type": "string" },
             "matched": { "type": "boolean", "description": "Only when the round has matching criteria: whether this enumerator matches the household. False when the leader moved it by hand regardless." }
           }
@@ -164,6 +165,10 @@
         },
         "note": { "type": "string", "description": "The leader's operational note." },
         "criteria": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Only when the round has matching criteria: the household's value for each, for example language: kk." },
+        "replacement_release": { "type": "object", "required": ["hhid", "at"], "description": "The leader released this replacement for the household (approval 'leader'): it is active from the release.",
+          "properties": { "hhid": { "type": "string" }, "at": { "$ref": "#/$defs/instant" }, "by": { "type": "string" } } },
+        "replacement_declined": { "type": "object", "required": ["at"], "description": "The leader declined the replacement asked for this household: a request made before this time no longer holds, and the household opens again.",
+          "properties": { "at": { "$ref": "#/$defs/instant" }, "by": { "type": "string" }, "note": { "type": "string" } } },
         "handover": {
           "type": "object",
           "description": "Only for a household moved to this enumerator during the round: what the previous enumerator did. Those dials count toward the dial cap.",

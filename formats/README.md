@@ -394,6 +394,23 @@ repository's history.
   of the day tried least: morning until 12:00, afternoon until 17:00, evening). Absent, the earlier rule applies: two
   hours apart, no daily or day limit. The enumerator's list shows a household past its days as "Protocol done", a
   decision like the dial cap; the replacement trigger `CAP_REACHED` covers both.
+- **Replacements the leader approves (3 November 2026).** `replacement_policy.approval`: `enumerator` (the default:
+  the enumerator activates a replacement when a trigger is met) or `leader`. With `leader`, the enumerator logs the
+  action `REPLACEMENT_REQUEST` (with `target_hhid`, the next replacement, and a reason), and the household waits; the
+  leader's decisions go into the manifest's `replacement_decisions` (`main`, `decision` released or declined,
+  `replacement`, `note`, `at`, `by`) and into the holder's revised file, on the household: `replacement_release`
+  (`hhid`, `at`, `by`) or `replacement_declined` (`at`, `by`, `note`). A release activates the replacement from its
+  time; a decline made after the request opens the household again. The KoBoToolbox lists then carry only released
+  replacements, and the merge asks about a replacement used without a release (`replacement_not_released`).
+- **Version 0.4.0 (3 November 2026).** The enumerator view places and times no call: each call is logged afterwards
+  with its start and length (minutes are required for a complete); the dial events are unchanged. New result
+  `BLOCKED` (our number is blocked by the respondent), which the leader can move to a colleague. New action
+  `FIELD_VISIT_REQUEST`. In the manifest: `field_visits` (`hhid`, `outcome` one of `time_agreed`, `new_number`,
+  `not_found`, `refused`, `other`, `note`, `at`, `by`), the household reason `added_mid_round` with `added_at`, and a
+  calendar whose `window_end` can change in a revision; the latest visit outcome reaches the household's `note` in its
+  enumerator's revised file. Leader session: `settings.platform.codes` may hold several codes per enumerator, separated
+  by commas, and `settings.platform.extra` maps new result values of a built-in layout. New leader outputs:
+  `{program}_R{nn}_field_visits.csv` and `{program}_R{nn}_messages_{date}.csv` (both hold phone numbers).
 - **L2PHL's result codes (3 November 2026, corrected).** In the L2PHL layout a complete is `X15` = 1 with consent
   (`Z9` = 1), as in the program's own processing; `X15` = 2 (partially complete, no more callback) closes the case as
   `REFUSAL_HARD`, the form's label kept in the note. A complete-coded record without consent is read as `OTHER`.

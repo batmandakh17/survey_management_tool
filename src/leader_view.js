@@ -19,7 +19,7 @@
   const WDN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const LV = window.LEAD = {};
   let st = null, cache = {};
-  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, readyKind: '', passphrases: null, busy: '', moves: null, movesInclude: 'not_started', movesStale: false, added: [] };
+  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, readyKind: '', passphrases: null, busy: '', moves: null, movesInclude: 'not_started', movesStale: false, added: [], rr: new Map(), rrNote: '', chg: { end: null, add: [], reissue: [] }, visits: new Map(), smsDay: '' };
   LV.state = () => st;
   LV.ui = ui;
   LV.unsavedCount = () => (st ? st.unsaved : 0);
@@ -54,7 +54,7 @@
       team: [], criteria: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
       spread: 0.5, margin: 0.15, policy: { active: true, triggers: ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'] }, protect: false,
       plan: null, generated: null, manifest: null, imports: [], resolutions: [], events: [], unsaved: 0,
-      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [], platform: { codes: {} },
+      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [], platform: { codes: {}, extra: {} },
     };
     st.genesis = R.sha256(R.canon({ program: st.program, round: st.round, leader: st.leader, started_at: st.started_at }));
     logEv('started', {});
@@ -361,16 +361,38 @@
     addToList([R.clean({ hhid, from: c.enumerator_id, to, state: c.state, dials: c.n, planned: planDateOf(hhid), callback, by_hand: true })]);
     render();
   }
-  async function writeMoves() {
-    const g = merged(), M = st.manifest, d = derived(), mv = ui.moves;
+  // the round's calendar with a new last day: holidays and Ramadan dates for the new window, the rest as written (3 November 2026)
+  function calendarForWindow(M, end) {
+    const c0 = M.calendar, start = c0.window_start, keep = new Map((c0.holidays || []).map(h => [h.date, h]));
+    R.bundledHolidays(st.country).filter(h => h.date >= start && h.date <= end && !keep.has(h.date) && !st.removedHolidays.includes(h.date))
+      .forEach(h => keep.set(h.date, { date: h.date, name: h.name, estimated: !!h.estimated, working: st.holidayWorking.includes(h.date) }));
+    st.customHolidays.filter(h => h.date >= start && h.date <= end && !keep.has(h.date)).forEach(h => keep.set(h.date, { date: h.date, name: h.name, estimated: false, working: st.holidayWorking.includes(h.date), added_by_leader: true }));
+    const out = Object.assign({}, c0, { window_end: end, holidays: [...keep.values()].filter(h => h.date >= start && h.date <= end).sort((x, y) => (x.date < y.date ? -1 : 1)) });
+    if (c0.ramadan) {
+      const ram = new Set(); R.bundledHolidays(st.country).filter(h => /fitr/i.test(h.name)).forEach(h => { for (let i = 1; i <= 30; i++) { const k = R.addDaysKey(h.date, -i); if (k >= start && k <= end) ram.add(k); } });
+      out.ramadan = Object.assign({}, c0.ramadan, { dates: [...ram].sort() });
+    }
+    return out;
+  }
+  // revised files for one kind of change at a time: 'moves' (with joins and an enumerator away), 'decisions' on replacement requests,
+  // 'changes' to the round (a new last day, households added, a file re-issued) and the outcomes of field 'visits'
+  async function writeMoves(group) {
+    group = group === true ? 'decisions' : (group || 'moves');
+    const g = merged(), M = st.manifest, d = derived();
+    const mv = group === 'moves' ? ui.moves : null;
     const moves = mv ? mv.list.filter((_, i) => mv.picked.has(i)) : [];
-    if (!moves.length) return;
+    const decisions = group === 'decisions' ? [...ui.rr.values()] : [];
+    const chg = group === 'changes' ? ui.chg : null;
+    const visits = group === 'visits' ? [...ui.visits.values()].filter(v => v.outcome) : [];
+    if (!(moves.length || decisions.length || visits.length || (chg && (chg.end || chg.add.length || chg.reissue.length)))) return;
     if (!d.hh || d.hh.errors.length) return toast('Open the household list on the Prepare tab first: the updated files need the contacts.', 'warn');
     const at = R.localISO(R.now()), tz = M.calendar.time_zone || null;
     const sumOf = st.plan && st.plan.sums ? id => st.plan.sums.get(id) || L.summaryOf(d.hist, id, M.round, tz) : (d.hist.rounds.length ? id => L.summaryOf(d.hist, id, M.round, tz) : null);
     const elig = manifestEligible(M);
     const B = L.reviseFiles({ M, moves, C: g.C, hh: d.hh.households, sumOf, plans: st.plan ? st.plan.plans : null, updates: g.G.updates, leader: st.leader, at, now: R.now(),
-      added: ui.added, away: mv.away || null, matchedNow: elig ? (id, e) => { const h = d.hh.households.get(id); return h ? elig(h, e) : undefined; } : null });
+      added: group === 'moves' ? ui.added : [], away: mv && mv.away || null, decisions, visits,
+      calendar: chg && chg.end ? calendarForWindow(M, chg.end) : null, addHouseholds: chg ? chg.add : [], reissue: chg ? chg.reissue : [],
+      matchedNow: elig ? (id, e) => { const h = d.hh.households.get(id); return h ? elig(h, e) : undefined; } : null });
     const files = [];
     ui.passphrases = null;
     if (st.protect) {
@@ -390,11 +412,28 @@
     files.push({ name: `${st.program}_R${p2(st.round)}_manifest.json`, text: JSON.stringify(B.manifest, null, 1), manifest: true });
     st.manifest = B.manifest;
     st.generated = { at, revision: B.manifest.revision, files: files.map(f => R.clean({ name: f.name, enumerator_id: f.enumerator_id, households: f.n, fingerprint: f.fingerprint, protected: f.protected })) };
-    ui.ready = files; ui.readyKind = 'moves'; ui.moves = null; ui.added = [];
-    logEv('households_moved_mid_round', { moves: moves.length, revision: B.manifest.revision, manifest_fingerprint: B.manifest.fingerprint, affected: B.affected,
-      hhids: moves.map(m => m.hhid).slice(0, 200), to: moves.map(m => m.to).slice(0, 200), away: mv.away || undefined, joined: B.added.length ? B.added : undefined, protected: st.protect ? 1 : undefined });
+    ui.ready = files; ui.readyKind = group;
+    const base = { revision: B.manifest.revision, manifest_fingerprint: B.manifest.fingerprint, affected: B.affected, protected: st.protect ? 1 : undefined };
+    let said = '';
+    if (group === 'moves') {
+      logEv('households_moved_mid_round', Object.assign({ moves: moves.length, hhids: moves.map(m => m.hhid).slice(0, 200), to: moves.map(m => m.to).slice(0, 200), away: mv && mv.away || undefined, joined: B.added.length ? B.added : undefined }, base));
+      said = `${R.plural(moves.length, 'household')} moved${B.added.length ? `, ${B.added.join(', ')} joined the round` : ''}${mv && mv.away ? `, ${mv.away} marked away` : ''}`;
+      ui.moves = null; ui.added = [];
+    } else if (group === 'decisions') {
+      logEv('replacement_decisions', Object.assign({ released: decisions.filter(x => x.decision === 'released').map(x => [x.main, x.replacement]), declined: decisions.filter(x => x.decision === 'declined').map(x => x.main) }, base));
+      said = `${R.plural(decisions.filter(x => x.decision === 'released').length, 'replacement')} released, ${R.plural(decisions.filter(x => x.decision === 'declined').length, 'request')} declined`;
+      ui.rr = new Map(); ui.rrNote = '';
+    } else if (group === 'changes') {
+      logEv('round_changed', Object.assign({ window_end: chg.end || undefined, households_added: chg.add.map(a => [a.hhid, a.to]), reissued: chg.reissue.length ? chg.reissue : undefined }, base));
+      said = [chg.end ? `the round now ends ${chg.end}` : '', chg.add.length ? `${R.plural(chg.add.length, 'household')} added` : '', chg.reissue.length ? `${chg.reissue.join(', ')}'s file re-issued` : ''].filter(Boolean).join(', ');
+      ui.chg = { end: null, add: [], reissue: [] };
+    } else {
+      logEv('field_visits_recorded', Object.assign({ visits: visits.map(v => [v.hhid, v.outcome]) }, base));
+      said = `${R.plural(visits.length, 'visit outcome')} written`;
+      ui.visits = new Map();
+    }
     invalidate();
-    toast(`${R.plural(moves.length, 'household')} moved${B.added.length ? `, ${B.added.join(', ')} joined the round` : ''}${mv.away ? `, ${mv.away} marked away` : ''}. ${R.plural(B.files.length, 'updated assignment file')} and revision ${B.manifest.revision} of the manifest are ready.`);
+    toast(`${said[0].toUpperCase() + said.slice(1)}. ${R.plural(B.files.length, 'updated assignment file')} and revision ${B.manifest.revision} of the manifest are ready.`);
     render();
   }
   async function saveAllToFolder(files) {
@@ -415,7 +454,7 @@
     if (!st.manifest) return null;
     const recs = st.imports.map(f => Object.assign(L.readImport(f.name, f.text, st.profiles), { opened: f.opened }));
     const d = derived();
-    const G = L.merge(st.manifest, recs, resolutionMap(), R.now(), { households: d.hh && !d.hh.errors.length ? d.hh.households : null, codes: st.platform.codes });
+    const G = L.merge(st.manifest, recs, resolutionMap(), R.now(), { households: d.hh && !d.hh.errors.length ? d.hh.households : null, codes: st.platform.codes, profileExtra: st.platform.extra });
     const C = L.cases(st.manifest, G), P = L.progress(st.manifest, C, G);
     cache.g = { G, C, P, recs };
     return cache.g;
@@ -480,6 +519,12 @@
         enumerator: c.complete ? (c.complete.operator || c.complete.source) : c.enumerator_id };
     });
   }
+  function smsDay() {
+    if (ui.smsDay && R.isDateKey(ui.smsDay)) return ui.smsDay;
+    const cal = R.calendarOf({ calendar: st.manifest.calendar }); let k = R.addDaysKey(R.partsIn(R.now(), cal.tz).key, 1), g = 0;
+    while (!cal.isWorking(k) && g++ < 60) k = R.addDaysKey(k, 1);
+    return k;
+  }
   function exportFile(what) {
     const M = st.manifest, base = `${M.program}_R${p2(M.round)}`, g = merged();
     const files = {
@@ -495,8 +540,12 @@
       kobo: () => ['households.csv', L.koboHouseholds(M, derived().hh.households, st.plan ? st.plan.plans : null)],
       choices: () => ['choices_households.csv', L.koboChoices(M, derived().hh.households, st.platform.codes)],
       review: () => [`${base}_kobo_review.csv`, R.toCSV(L.reviewRows(g.G), L.REVIEW_COLS)],
+      visits: () => [`${base}_field_visits.csv`, R.toCSV(L.fieldVisits(M, g.G, g.C).filter(v => !v.outcome).map(v => { const H = derived().hh.households.get(v.hhid) || {}, ph = H.phones || [];
+        return { hhid: v.hhid, enumerator_id: v.enumerator, psu: v.psu, stratum: v.stratum, contact_name: H.name || '', phone_1: (ph[0] || {}).number || '', phone_2: (ph[1] || {}).number || '', phone_3: (ph[2] || {}).number || '',
+          why: v.reason, dials: v.dials, last_result: v.last, asked_at: v.at }; }), ['hhid', 'enumerator_id', 'psu', 'stratum', 'contact_name', 'phone_1', 'phone_2', 'phone_3', 'why', 'dials', 'last_result', 'asked_at'])],
+      sms: () => [`${base}_messages_${smsDay()}.csv`, R.toCSV(L.smsList(M, g.C, st.plan ? st.plan.plans : null, derived().hh.households, smsDay()), L.SMS_COLS)],
     };
-    if (['kobo', 'choices'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: the files for the form need the contacts.', 'warn');
+    if (['kobo', 'choices', 'visits', 'sms'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: these files need the contacts.', 'warn');
     const [name, text] = files[what]();
     sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : 'application/json');
     logEv('exported', { file: name });
@@ -554,7 +603,7 @@
     st.risk = st.risk || { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } };
     st.criteria = Array.isArray(st.criteria) ? st.criteria : [];
     st.profiles = Array.isArray(st.profiles) ? st.profiles : [];
-    st.platform = { codes: st.platform && st.platform.codes && typeof st.platform.codes === 'object' ? st.platform.codes : {} };
+    st.platform = { codes: st.platform && st.platform.codes && typeof st.platform.codes === 'object' ? st.platform.codes : {}, extra: st.platform && st.platform.extra && typeof st.platform.extra === 'object' ? st.platform.extra : {} };
     (st.team || []).forEach(t => { t.attrs = t.attrs || {}; });
     if (st.cal && st.cal.day_list === undefined) st.cal.day_list = null;
     if (st.cal && !st.cal.self) st.cal.self = { reschedule: true, availability: true, push_first_calls: false };
@@ -692,7 +741,7 @@
   };
   const decisionLabel = i => { const c = (i.choices || []).find(x => x.value === i.decision); return c ? c.label : i.decision === 'acknowledged' ? 'Noted' : i.decision; };
   const REASON_WORD = { keep: 'kept', rotation: 'rotation', switch_hard_to_reach: 'hard to reach', enumerator_unavailable: 'enumerator away', new: 'new',
-    manual: 'by hand', capacity: 'capacity', match: 'matched', mid_round: 'moved mid-round', rule: 'by the round’s rule', replacement: 'replacement' };
+    manual: 'by hand', capacity: 'capacity', match: 'matched', mid_round: 'moved mid-round', added_mid_round: 'added mid-round', rule: 'by the round’s rule', replacement: 'replacement' };
   const list = arr => (arr && arr.length ? `<ul class="msgs">${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
   const errList = arr => (arr && arr.length ? `<div class="alert warn">${list(arr)}</div>` : '');
 
@@ -722,7 +771,9 @@
       <p class="muted">The sampling tool's <code>selection.csv</code> (rtmtools: <code>unit_id, stratum, selected, reserve</code>), or a program file <code>hhid, replacement_hhid, rank</code>. Each PSU's reserve is dealt round-robin to its households in selection order, so each replacement belongs to one household. Replacement households need their contacts in the household list.</p>
       <label class="btn subtle">${st.inputs.replacements ? 'Replace' : 'Open'} the replacement list<input type="file" id="lf-repl" accept=".csv,.txt,.xlsx"></label>${st.inputs.replacements ? ` <span class="muted">${esc(st.inputs.replacements.name)}</span> <button class="link" data-lact="clearrepl">Remove</button>` : ''}
       ${d.repl ? `${errList(d.repl.errors)}${d.repl.errors.length ? '' : `<p>${replSummary(d)}</p>`}${list(d.repl.warnings)}` : ''}
+      ${st.policy.approval === 'leader' ? '<p class="muted small">With the leader’s approval, an enumerator who meets one of the cases below asks for the replacement instead of activating it, and the household waits. You release or decline the requests in batches on the Progress tab, which writes the revised files; a team on KoBoToolbox gets a released replacement in the form’s list only after its release.</p>' : ''}
       <div class="row2"><label class="inline"><input type="checkbox" data-lset="policy.active" data-type="bool" ${st.policy.active ? 'checked' : ''}> Replacements in use this round</label>
+      <label>Who activates a replacement <select data-lset="policy.approval"><option value="enumerator" ${st.policy.approval !== 'leader' ? 'selected' : ''}>the enumerator, when allowed</option><option value="leader" ${st.policy.approval === 'leader' ? 'selected' : ''}>the leader approves each request</option></select></label>
       <span class="checks">Allowed after: ${[['REFUSAL_HARD', 'a hard refusal'], ['ALL_NUMBERS_DEAD', 'no working number'], ['CAP_REACHED', 'the dial cap or the contact protocol']].map(([k, l]) => `<label class="inline"><input type="checkbox" data-ltrig="${k}" ${st.policy.triggers.includes(k) ? 'checked' : ''}> ${l}</label>`).join(' ')}</span></div></section>`;
     const wd = [1, 2, 3, 4, 5, 6, 7].map(i => `<label class="inline"><input type="checkbox" data-lwd="${i}" ${c.working_weekdays.includes(i) ? 'checked' : ''}> ${WDN[i - 1]}</label>`).join(' ');
     const ram = ramadanDates();
@@ -925,7 +976,7 @@
   function progressTab() {
     if (!st.manifest) return '<p class="muted">Write the round’s files or open its manifest first (Prepare or Import tab).</p>';
     const g = merged(), P = g.P, M = st.manifest;
-    const cols = [['households', 'Households'], ['complete', 'Complete'], ['in_progress', 'In progress'], ['not_started', 'Not started'], ['released', 'Released'], ['replaced', 'Replaced'], ['remove_requested', 'Removal requested'], ['conflict', 'Two completes'], ['not_reported', 'Not reported'], ['dials', 'Dials'], ['enumerator_days', 'Enumerator-days'], ['moved_by_them', 'Calls they moved'], ['first_later', 'First calls moved later'], ['days_off', 'Days off marked']];
+    const cols = [['households', 'Households'], ['complete', 'Complete'], ['in_progress', 'In progress'], ['not_started', 'Not started'], ['released', 'Released'], ['replaced', 'Replaced'], ['remove_requested', 'Removal requested'], ['replacement_requested', 'Replacement asked'], ['conflict', 'Two completes'], ['not_reported', 'Not reported'], ['dials', 'Dials'], ['enumerator_days', 'Enumerator-days'], ['moved_by_them', 'Calls they moved'], ['first_later', 'First calls moved later'], ['days_off', 'Days off marked']];
     const always = new Set(['households', 'complete', 'in_progress', 'not_started', 'dials', 'enumerator_days']);
     const shownCols = cols.filter(([k]) => always.has(k) || P.list.some(r => r[k]));
     const row = r => `<tr${r.enumerator_id === 'All' ? ' class="total"' : ''}><td class="id">${esc(r.enumerator_id)}${r.enumerator_id === 'All' ? '' : `<div class="muted small nowrap">${r.last_export ? 'export ' + esc(r.last_export.slice(5, 16).replace('T', ' ')) : 'no export yet'}</div>`}</td>${shownCols.map(([k]) => `<td class="num">${r[k] || (k === 'households' ? 0 : '')}</td>`).join('')}<td class="num">${pc(r.households ? r.complete / r.households : null)}</td><td class="num">${nm(r.completes_per_day, 1)}</td></tr>`;
@@ -945,8 +996,13 @@
       <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th>${shownCols.map(([, l]) => `<th class="num">${l}</th>`).join('')}<th class="num">Share complete</th><th class="num">Completes per enumerator-day</th></tr></thead>
       <tbody>${P.list.map(row).join('')}${row(P.total)}</tbody></table></div></section>
       ${movesCard(g)}
+      ${requestsCard(g)}
+      ${visitsCard(g)}
+      ${changesCard(g)}
+      ${smsCard(g)}
       <section class="lcard"><h3>Completes over the window</h3>${chart}
       <table class="grid small"><thead><tr><th>Stratum</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Share</th></tr></thead><tbody>${P.strata.map(s => `<tr><td>${esc(s.stratum)}</td><td class="num">${s.households}</td><td class="num">${s.complete}</td><td class="num">${pc(s.households ? s.complete / s.households : null)}</td></tr>`).join('')}</tbody></table></section>
+      ${areaCard(g)}
       <section class="lcard"><h3>Households</h3>
       <div class="filters">${['all'].concat(states).map(k => `<button class="chip ${ui.hhFilter === k ? 'on' : ''}" data-lact="hhfilter" data-f="${k}">${k === 'all' ? 'All' : L.STATES[k]} <span class="count">${k === 'all' ? C.length : C.filter(c => c.state === k).length}</span></button>`).join('')}
         <select data-lset="__hhEnum"><option value="">every enumerator</option>${M.enumerators.map(e => `<option ${ui.hhEnum === e.enumerator_id ? 'selected' : ''}>${esc(e.enumerator_id)}</option>`).join('')}</select></div>
@@ -972,9 +1028,11 @@
         <label class="inline"><input type="checkbox" data-lset="__movesStale" data-type="bool" ${ui.movesStale ? 'checked' : ''}> also judge enumerators whose latest export is from an earlier day</label>
         <button class="subtle" data-lact="propose">Propose moves from the enumerators behind to those with spare days</button></div>
       <div class="row3"><label>Give <input id="lmv-n" class="tiny" type="number" min="1" step="1" value="5"> households to <select id="lmv-take">${rosterOpts(r => !r.away)}</select></label><button class="subtle" data-lact="take">Add to the list</button><span class="muted small">for an enumerator who finished early or joined the round: from the enumerators furthest behind, then those with most households waiting</span></div>
+      ${(() => { const bl = L.blockedMoves(pace, g.C, moveOpts(g, d, true)); const n = bl.moves.length + bl.stay.length;
+        return n ? `<div class="row3"><span class="warn small">${R.plural(n, 'household')} blocked their caller's number.</span><button class="subtle" data-lact="mvblocked">Move ${n === 1 ? 'it' : 'them'} to colleagues</button><span class="muted small">to those with spare days first, then the fewest open; criteria respected</span></div>` : ''; })()}
       <div class="row3"><label>An enumerator is away <select id="lmv-away">${rosterOpts(r => !r.away && !r.added)}</select></label><button class="subtle" data-lact="away">Move all their open households to the others</button><span class="muted small">to those with spare days first, then evenly; a booked callback goes with its household; a hard refusal stays</span></div>
       ${mv ? (mv.list.length ? `<table class="grid small"><thead><tr><th></th><th>Household</th><th>From</th><th>To</th><th>State</th><th class="num">Dials so far</th><th>Callback booked</th><th>First dial was planned</th></tr></thead><tbody>
-        ${mv.list.map((m, i) => `<tr><td><input type="checkbox" data-lmovesel="${i}" ${mv.picked.has(i) ? 'checked' : ''}></td><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc(L.STATES[m.state] || m.state)}${m.by_hand ? ' <span class="tag">by hand</span>' : ''}${m.away ? ' <span class="tag">away</span>' : ''}</td><td class="num">${m.dials}</td><td>${esc((m.callback || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(m.planned || '')}</td></tr>`).join('')}</tbody></table>
+        ${mv.list.map((m, i) => `<tr><td><input type="checkbox" data-lmovesel="${i}" ${mv.picked.has(i) ? 'checked' : ''}></td><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc(L.STATES[m.state] || m.state)}${m.by_hand ? ' <span class="tag">by hand</span>' : ''}${m.away ? ' <span class="tag">away</span>' : ''}${m.blocked ? ' <span class="tag">blocked</span>' : ''}</td><td class="num">${m.dials}</td><td>${esc((m.callback || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(m.planned || '')}</td></tr>`).join('')}</tbody></table>
         <p class="muted small">Untick a move to leave that household where it is. Latest-planned households move first, so the receiving enumerator's own plan is disturbed least. ${mv.away ? `${esc(mv.away)} will be marked away in the roster.` : ''} ${mv.stay && mv.stay.length ? `Staying with ${esc(mv.away)}: ${mv.stay.map(s => `${esc(s.hhid)} (${esc(s.why)})`).join('; ')}.` : ''} ${leftOut(mv.left_out)}</p>`
         : `<p class="muted">Nothing to move: ${mv.away ? `${esc(mv.away)} has no open household${mv.stay && mv.stay.length ? `; staying: ${mv.stay.map(s => `${esc(s.hhid)} (${esc(s.why)})`).join('; ')}` : ''}` : 'at the current pace every judged enumerator finishes inside the window'}. ${leftOut(mv.left_out)}</p>`) : ''}
       <div class="row3"><label>Or move one household <input id="lmv-hh" class="small" placeholder="household ID"></label><label>to <select id="lmv-to">${rosterOpts(() => true)}</select></label><button class="subtle" data-lact="addmove">Add to the list</button><span class="muted small">a booked callback goes with it; a move to an enumerator marked away brings them back</span></div>
@@ -989,6 +1047,130 @@
       ${ui.ready && ui.readyKind === 'moves' ? readyList('Give each updated assignment file to its enumerator, in their own folder; they open it with “Load updated assignment”, which keeps their log. Their earlier file is superseded. The new manifest replaces the one you had: the merge uses it from now on, and the saved session keeps it.') : ''}
       ${M.moves && M.moves.length ? `<details><summary>Moves so far this round (${M.moves.length})</summary><table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>When</th><th>By</th></tr></thead><tbody>${M.moves.map(m => `<tr><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc((m.at || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(m.by || '')}</td></tr>`).join('')}</tbody></table></details>` : ''}
     </section>`;
+  }
+
+  // the replacement requests (replacement_policy.approval 'leader'): released or declined in a batch, written as revised files
+  function requestsCard(g) {
+    const M = st.manifest, leader = (M.replacement_policy || {}).approval === 'leader';
+    const rq = L.replacementRequests(M, g.G, g.C);
+    if (!leader && !rq.length) return '';
+    const d = derived(), canWrite = !!(d.hh && !d.hh.errors.length);
+    const pending = rq.filter(r => r.status === 'pending');
+    const word = { pending: 'waiting', released: 'released', declined: 'declined' };
+    const rows = rq.map(r => { const q = ui.rr.get(r.main);
+      return `<tr><td>${r.status === 'pending' ? `<input type="checkbox" data-lrrsel="${esc(r.main)}" ${ui.rrSel && ui.rrSel.has(r.main) ? 'checked' : ''}>` : ''}</td><td class="id">${esc(r.main)}</td><td class="id">${esc(r.enumerator)}</td><td>${esc((r.at || '').slice(5, 16).replace('T', ' '))}</td><td>${esc(r.reason)}</td><td class="num">${r.dials}</td><td>${r.last ? esc(sh().statusLabel(r.last)) : ''}</td><td class="id">${esc(r.next || '–')}</td>
+        <td>${q ? `<b>${q.decision === 'released' ? `release ${esc(q.replacement)}` : 'decline'}</b> <button class="link" data-lact="rrundo" data-m="${esc(r.main)}">undo</button>` : `${esc(word[r.status])}${r.decided_at ? ' ' + esc(r.decided_at.slice(5, 16).replace('T', ' ')) : ''}`}</td></tr>`; }).join('');
+    return `<section class="lcard"><h3>Replacement requests${pending.length ? ` <span class="count warn">${pending.length}</span>` : ''}</h3>
+      <p class="muted small">${leader ? 'This round you approve each replacement. An enumerator who meets the round’s cases (step 3) asks for one, and the household waits, closed, until you decide. Tick the requests, release them or decline them with a note, then write the revised files: a released replacement comes into its enumerator’s list with its contacts, and a declined household opens again. Requests come with the JSON exports.' : 'Requests from an earlier setting of the round: the enumerators can activate replacements themselves now (step 3).'}</p>
+      ${rq.length ? `<div class="tablewrap"><table class="grid small"><thead><tr><th></th><th>Household</th><th>Enumerator</th><th>Asked</th><th>Why</th><th class="num">Dials</th><th>Last result</th><th>Next replacement</th><th>Decision</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">No request yet.</p>'}
+      ${pending.length ? `<div class="row3"><label>Note for a decline <input id="lrr-note" class="small" value="${esc(ui.rrNote)}" placeholder="for example: keep calling in the evening"></label>
+        <button class="subtle" data-lact="rrrelease">Release the ticked</button><button class="subtle" data-lact="rrdecline">Decline the ticked</button></div>` : ''}
+      ${leader ? `<div class="row3"><label>Or release a replacement for household <input id="lrr-hh" class="small" placeholder="household ID"></label><button class="subtle" data-lact="rrbyhand">Add</button><span class="muted small">without a request: for a team on KoBoToolbox, or a case you decide yourself</span></div>` : ''}
+      ${ui.rr.size ? `<div class="btnrow"><button class="primary" data-lact="rrwrite" ${canWrite ? '' : 'disabled'}>Write the updated files for ${R.plural(ui.rr.size, 'decision')}</button></div>${canWrite ? '' : '<p class="alert info">Open the household list on the Prepare tab (step 1): the revised files need the contacts.</p>'}` : ''}
+      ${ui.ready && ui.readyKind === 'decisions' ? readyList('Give each updated assignment file to its enumerator, in their own folder; they open it with “Load updated assignment”, which keeps their log. The new manifest replaces the one you had. For a team on KoBoToolbox, write the form’s list again (KoBoToolbox tab, step 4).') : ''}
+      ${(M.replacement_decisions || []).length ? `<details><summary>Decisions so far this round (${M.replacement_decisions.length})</summary><table class="grid small"><thead><tr><th>Household</th><th>Decision</th><th>Replacement</th><th>When</th><th>By</th><th>Note</th></tr></thead><tbody>${M.replacement_decisions.map(x => `<tr><td class="id">${esc(x.main)}</td><td>${esc(x.decision)}</td><td class="id">${esc(x.replacement || '')}</td><td>${esc((x.at || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(x.by || '')}</td><td>${esc(x.note || '')}</td></tr>`).join('')}</tbody></table></details>` : ''}
+    </section>`;
+  }
+  function decideRequests(decision) {
+    const g = merged(), M = st.manifest, rq = new Map(L.replacementRequests(M, g.G, g.C).map(r => [r.main, r]));
+    const sel = [...(ui.rrSel || new Set())].filter(h => rq.has(h) && rq.get(h).status === 'pending');
+    if (!sel.length) return toast('Tick the requests first.', 'warn');
+    const note = (($('#lrr-note') || {}).value || '').trim();
+    const taken = new Set([...ui.rr.values()].filter(x => x.replacement).map(x => x.replacement));
+    let skipped = 0;
+    sel.forEach(h => {
+      if (decision === 'declined') { ui.rr.set(h, { main: h, decision, note: note || undefined }); return; }
+      const hh = M.households.find(x => x.hhid === h), used = new Set([...g.G.activatedBy.keys()].concat((M.replacement_decisions || []).filter(x => x.decision === 'released').map(x => x.replacement)));
+      const next = (hh.replacements || []).find(r => !used.has(r) && !taken.has(r));
+      if (!next) { skipped++; return; }
+      taken.add(next); ui.rr.set(h, { main: h, decision, replacement: next });
+    });
+    ui.rrSel = new Set(); ui.rrNote = note;
+    if (skipped) toast(`${R.plural(skipped, 'household')} ${skipped === 1 ? 'has' : 'have'} no replacement left: decline ${skipped === 1 ? 'it' : 'them'}, or release ${skipped === 1 ? 'it' : 'them'} for the round instead.`, 'warn');
+    render();
+  }
+  function releaseByHand() {
+    const g = merged(), M = st.manifest, h = (($('#lrr-hh') || {}).value || '').trim(), hh = M.households.find(x => x.hhid === h);
+    if (!hh) return toast(`${h || 'That household'} is not a household of this round.`, 'warn');
+    const c = g.C.get(h);
+    if (c && ['complete', 'replaced'].includes(c.state)) return toast(`${h} is ${L.STATES[c.state].toLowerCase()}.`, 'warn');
+    const used = new Set([...g.G.activatedBy.keys()].concat((M.replacement_decisions || []).filter(x => x.decision === 'released').map(x => x.replacement)).concat([...ui.rr.values()].map(x => x.replacement).filter(Boolean)));
+    const next = (hh.replacements || []).find(r => !used.has(r));
+    if (!next) return toast(`${h} has no replacement left.`, 'warn');
+    ui.rr.set(h, { main: h, decision: 'released', replacement: next, note: 'released by the leader without a request' });
+    render();
+  }
+
+  // field visits the enumerators asked for: the list to plan them, and their outcomes written back as a note on the household
+  function visitsCard(g) {
+    const M = st.manifest, fv = L.fieldVisits(M, g.G, g.C);
+    if (!fv.length) return '';
+    const open = fv.filter(v => !v.outcome), d = derived(), canWrite = !!(d.hh && !d.hh.errors.length);
+    const sel = h => { const q = ui.visits.get(h) || {}; return `<select data-lvisit="${esc(h)}"><option value="">–</option>${Object.entries(L.VISIT_OUTCOMES).map(([k, l]) => `<option value="${k}" ${q.outcome === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select> <input class="small" data-lvisitnote="${esc(h)}" value="${esc(q.note || '')}" placeholder="note for the enumerator">`; };
+    return `<section class="lcard"><h3>Field visits${open.length ? ` <span class="count warn">${open.length}</span>` : ''}</h3>
+      <p class="muted small">Households an enumerator referred for a visit in person: to check numbers, agree a time to call, or reassure the household about the survey. Download the list to plan the visits (it holds contacts: keep it with you). Record each outcome, then write the updated files: the outcome reaches the enumerator as a note on the household. A new number obtained on a visit goes into the household list (step 1) so that the next files carry it.</p>
+      <div class="tablewrap"><table class="grid small"><thead><tr><th>Household</th><th>Enumerator</th><th>PSU</th><th>Asked</th><th>Why</th><th class="num">Dials</th><th>Last result</th><th>Outcome</th></tr></thead><tbody>
+      ${fv.map(v => `<tr><td class="id">${esc(v.hhid)}</td><td class="id">${esc(v.enumerator)}</td><td>${esc(v.psu)}</td><td>${esc((v.at || '').slice(5, 16).replace('T', ' '))}</td><td>${esc(v.reason)}</td><td class="num">${v.dials}</td><td>${v.last ? esc(sh().statusLabel(v.last)) : ''}</td>
+        <td>${v.outcome ? `${esc(L.VISIT_OUTCOMES[v.outcome.outcome] || v.outcome.outcome)} <span class="muted small">${esc(v.outcome.at.slice(5, 10))}</span>` : sel(v.hhid)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="btnrow">${open.length ? `<button class="subtle" data-lact="export" data-what="visits">Download the visit list (CSV)</button> <span class="tag warn">has phone numbers</span>` : ''}
+        ${[...ui.visits.values()].some(v => v.outcome) ? `<button class="primary" data-lact="visitwrite" ${canWrite ? '' : 'disabled'}>Write the updated files for ${R.plural([...ui.visits.values()].filter(v => v.outcome).length, 'outcome')}</button>` : ''}</div>
+      ${ui.ready && ui.readyKind === 'visits' ? readyList('Give each updated assignment file to its enumerator; the visit outcome shows as your note on the household.') : ''}</section>`;
+  }
+  // changes to the round once it has started: a new last day, households added, one enumerator's file re-issued
+  function changesCard(g) {
+    const M = st.manifest, d = derived(), canWrite = !!(d.hh && !d.hh.errors.length), c = ui.chg;
+    const ids = M.enumerators.filter(e => !e.away_from).map(e => e.enumerator_id);
+    const pend = [c.end ? `the last day becomes ${esc(c.end)}` : '', ...c.add.map(a => `add ${esc(a.hhid)} to ${esc(a.to)}`), ...c.reissue.map(e => `re-issue ${esc(e)}'s file`)].filter(Boolean);
+    return `<section class="lcard"><h3>Change the round</h3>
+      <p class="muted small">For what changes after the files are out. Each change goes into revised files (the same mechanism as moves): a new last day reaches every enumerator; an added household goes to its enumerator with a first call on the next working day; a re-issued file is a fresh copy of one enumerator's assignment, with a new passphrase when files are protected (a lost passphrase). An enumerator who opens a re-issued file starts a new session: the calls they exported before stay in the common folder.</p>
+      <div class="row3"><label>Last day of the round <input type="date" id="lchg-end" value="${esc(c.end || M.calendar.window_end)}" min="${esc(M.calendar.window_start)}"></label><button class="subtle" data-lact="chgwin">Change it</button><span class="muted small">now ${esc(M.calendar.window_end)}; first calls planned after a new, earlier last day move to its last working day</span></div>
+      <div class="row3"><label>Add households <input id="lchg-hh" placeholder="household IDs from the household list"></label><label>to <select id="lchg-to"><option value="">the enumerator with the fewest open</option>${ids.map(e => `<option>${esc(e)}</option>`).join('')}</select></label><button class="subtle" data-lact="chgadd">Add</button></div>
+      <div class="row3"><label>Re-issue the file of <select id="lchg-reissue">${ids.map(e => `<option>${esc(e)}</option>`).join('')}</select></label><button class="subtle" data-lact="chgreissue">Re-issue</button><span class="muted small">a lost passphrase or a lost file</span></div>
+      ${pend.length ? `<p class="small"><b>To write:</b> ${pend.join('; ')}. <button class="link" data-lact="chgclear">clear</button></p><div class="btnrow"><button class="primary" data-lact="chgwrite" ${canWrite ? '' : 'disabled'}>Write the updated files</button></div>` : ''}
+      ${!canWrite && pend.length ? '<p class="alert info">Open the household list on the Prepare tab (step 1): the revised files need the contacts.</p>' : ''}
+      ${ui.ready && ui.readyKind === 'changes' ? readyList('Give each updated assignment file to its enumerator; they open it with “Load updated assignment”. A re-issued file for a lost passphrase is opened as a new assignment instead.') : ''}</section>`;
+  }
+  // the households to call on a day, for a text message the day before (first calls planned then, and callbacks booked then)
+  function smsCard(g) {
+    const M = st.manifest, d = derived();
+    if (!(d.hh && !d.hh.errors.length)) return '';
+    const day = smsDay(), list = L.smsList(M, g.C, st.plan ? st.plan.plans : null, d.hh.households, day);
+    return `<section class="lcard"><h3>Text-message list</h3>
+      <p class="muted small">The households to be called on a day, for a message the day before: first calls planned that day${st.plan ? '' : ' (the plan is known only in the session that prepared the round)'} and callbacks booked that day. The tool sends nothing: give the list to whoever sends the messages. It holds phone numbers.</p>
+      <div class="row3"><label>Day <input type="date" data-lset="__smsDay" value="${esc(day)}" min="${esc(M.calendar.window_start)}" max="${esc(M.calendar.window_end)}"></label>
+        <button class="subtle" data-lact="export" data-what="sms" ${list.length ? '' : 'disabled'}>Download the list (${R.plural(list.length, 'household')})</button> <span class="tag warn">has phone numbers</span></div></section>`;
+  }
+  // completes by area (PSU), this round and the earlier rounds loaded: an area with no interview stands out
+  function areaCard(g) {
+    const M = st.manifest, d = derived(), A = L.areaView(M, g.C, d.hist, d.hh && !d.hh.errors.length ? d.hh.households : null);
+    if (A.rows.length < 2) return '';
+    const flag = r => (r.none_now && r.none_before ? '<span class="tag warn">none this round, none in the earlier rounds</span>' : r.none_now ? '<span class="tag">none yet this round</span>' : '');
+    const row = r => `<tr><td class="id">${esc(r.psu || '–')}</td><td>${esc(r.stratum || '')}</td><td class="num">${r.households}</td><td class="num">${r.complete}</td><td class="num">${pc(r.share)}</td><td class="num">${r.open}</td>${A.rounds.map(rd => `<td class="num">${rd in r.earlier ? r.earlier[rd] : '<span class="muted">–</span>'}</td>`).join('')}<td>${flag(r)}</td></tr>`;
+    const head = `<thead><tr><th>PSU</th><th>Stratum</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Share</th><th class="num">Open</th>${A.rounds.map(rd => `<th class="num">Round ${rd}</th>`).join('')}<th></th></tr></thead>`;
+    return `<section class="lcard"><h3>By area</h3>
+      <p class="muted small">Completes by PSU this round so far, and the completes of the same households in the earlier rounds loaded (step 2); a dash where the area was not yet in the panel. Areas with no interview come first: those with none in the earlier rounds either may need a field visit, a caller who knows the area, or the program's decision on the sample.</p>
+      <div class="tablewrap"><table class="grid small">${head}<tbody>${A.rows.slice(0, 40).map(row).join('')}</tbody></table></div>${A.rows.length > 40 ? `<details><summary>All ${A.rows.length} areas</summary><table class="grid small">${head}<tbody>${A.rows.slice(40).map(row).join('')}</tbody></table></details>` : ''}</section>`;
+  }
+  function queueAdd() {
+    const M = st.manifest, d = derived(), g = merged();
+    if (!(d.hh && !d.hh.errors.length)) return toast('Open the household list on the Prepare tab first.', 'warn');
+    const ids = L.splitVals((($('#lchg-hh') || {}).value || '')).map(x => x.trim()).filter(Boolean), to0 = ($('#lchg-to') || {}).value;
+    const inRound = new Set(M.households.map(h => h.hhid).concat(M.households.flatMap(h => h.replacements || [])).concat(ui.chg.add.map(a => a.hhid)));
+    const open = new Map(g.P.list.map(r => [r.enumerator_id, r.not_started + r.in_progress]));
+    ui.chg.add.forEach(a => open.set(a.to, (open.get(a.to) || 0) + 1));
+    const elig = manifestEligible(M), bad = [];
+    ids.forEach(id => {
+      const H = d.hh.households.get(id);
+      if (!H || H.status === 'removed') { bad.push(`${id}: not an active household of the list`); return; }
+      if (inRound.has(id)) { bad.push(`${id}: already in the round`); return; }
+      const pool = M.enumerators.filter(e => !e.away_from).map(e => e.enumerator_id).filter(e => !elig || elig(H, e));
+      const to = to0 || pool.sort((a, b) => (open.get(a) || 0) - (open.get(b) || 0) || (a < b ? -1 : 1))[0];
+      if (!to) { bad.push(`${id}: no enumerator matches its criteria`); return; }
+      if (elig && to0 && !elig(H, to0)) bad.push(`${id}: added to ${to0}, who does not match its criteria`);
+      ui.chg.add.push({ hhid: id, to, psu: H.psu || '', stratum: H.stratum || '' }); inRound.add(id); open.set(to, (open.get(to) || 0) + 1);
+    });
+    if (bad.length) toast(bad.join('; ') + '.', 'warn');
+    render();
   }
 
   // ---- Call log ----
@@ -1027,7 +1209,7 @@
       <p class="muted small">For a team that records its calls in a KoBoToolbox form rather than in this tool's enumerator view: the L2PHL layout, where the interview form is submitted once per call attempt, or the tool's own call-record form. The tool keeps the leader's side: the assignment, the plan, the merge, progress and the moves during the round. What crosses the boundary is a file each way, and this tab walks the round's cycle: the list goes to the form (2), the form's export comes in each day (3), moves follow (4), and the records to look at in KoBoToolbox go back (5).</p>
       ${ids.length ? `<table class="grid small"><thead><tr><th>Enumerator</th><th>Code in the form (or the KoBoToolbox account)</th></tr></thead><tbody>
         ${ids.map(id => `<tr><td class="id">${esc(id)}</td><td><input class="small" data-lpcode="${esc(id)}" value="${esc(codeOf(id) === id ? (pf.codes[id] || '') : codeOf(id))}" placeholder="CATI01"></td></tr>`).join('')}</tbody></table>
-        <p class="muted small">Empty means the enumerator's ID itself. The form's records are read under the tool's ID through the code, whatever its case or punctuation, and the list written for the form carries the code. A code entered before the files are written goes into the manifest (Prepare tab, step 5, shows the same column); one entered later is kept in this session.</p>` : '<p class="muted">Add the team on the Prepare tab (step 5), or open the round\'s manifest on the Import tab.</p>'}</section>`;
+        <p class="muted small">Empty means the enumerator's ID itself. Several codes for one interviewer, separated by commas, are all read as that interviewer (a typing slip, an old code); the first is written into the list. The form's records are read under the tool's ID through the code, whatever its case or punctuation, and the list written for the form carries the code. A code entered before the files are written goes into the manifest (Prepare tab, step 5, shows the same column); one entered later is kept in this session.</p>` : '<p class="muted">Add the team on the Prepare tab (step 5), or open the round\'s manifest on the Import tab.</p>'}</section>`;
     const need = !M ? 'Write the round\'s files (Prepare tab) or open its manifest (Import tab) first.' : !hasHH ? 'Open the household list on the Prepare tab (step 1): the files for the form need the contacts.' : '';
     const moved = M && M.moves && M.moves.length ? M.moves.length : 0;
     const listBtns = again => `<div class="btnrow"><button class="subtle" data-lact="export" data-what="choices" ${need ? 'disabled' : ''}>choices_households.csv${again ? ' again' : ' (the form\'s choices list)'}</button><button class="subtle" data-lact="export" data-what="kobo" ${need ? 'disabled' : ''}>households.csv${again ? ' again' : ' (media file of the tool\'s own form)'}</button> <span class="tag warn">the media file has phone numbers</span></div>`;
@@ -1040,6 +1222,10 @@
       <p class="muted small">Download the form's data (Data › Downloads › CSV with XML values and headers, or the project's export link) and add it: one submission per call attempt, the L2PHL layout or the tool's own form. The export is cumulative: add the latest download, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A form with other columns is mapped here once.</p>
       ${M ? `<label class="btn">Add the form's export<input type="file" id="lf-platform" accept=".csv,.txt" multiple></label>${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}` : '<p class="alert info">Write the round\'s files or open its manifest first: the merge checks every record against it.</p>'}
       ${G && G.unmapped && G.unmapped.length ? mappingCard(G.unmapped[0]) : ''}
+      ${(() => { const uk = g ? L.unknownPlatformCodes(g.recs, st.platform.extra) : []; const known = Object.entries(st.platform.extra || {}).flatMap(([pid, m]) => Object.entries(m).map(([v, to]) => ({ pid, v, to })));
+        return uk.length || known.length ? `<div class="alert ${uk.length ? 'warn' : 'info'}"><b>${uk.length ? 'New values in a known layout.' : 'Values you mapped in a known layout.'}</b> ${uk.length ? 'The form gives results its built-in map does not know (perhaps a new code after a redeploy); unmapped, they count as “Other”. Say what each means:' : ''}
+          <table class="grid small"><tbody>${uk.map(u => `<tr><td>${esc(u.name)}: <code>${esc(u.column)}</code> = <b>${esc(u.value)}</b> <span class="muted">(${u.n} rows)</span></td><td><select data-lxcode="${esc(u.profile)}|${esc(u.value)}"><option value="">Other</option>${R.STATUS.map(x => `<option value="${x.code}">${esc(x.label)}</option>`).join('')}</select></td></tr>`).join('')}
+          ${known.map(k => `<tr><td><code>${esc(k.v)}</code> <span class="muted">(${esc(k.pid)})</span></td><td><select data-lxcode="${esc(k.pid)}|${esc(k.v)}"><option value="">Other</option>${R.STATUS.map(x => `<option value="${x.code}" ${k.to === x.code ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : ''; })()}
       ${platRows.length ? `<table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th class="num">Rows</th><th>Used</th></tr></thead><tbody>${platRows.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table>` : ''}
       ${open.length ? `<h4>Needs your decision <span class="count warn">${open.length}</span></h4>${open.map(issueCard).join('')}` : (platRows.length ? '<p class="alert ok">No merge question is open.</p>' : '')}</section>`;
     const step4 = `<section class="lcard"><h3>4 · After moves during the round: the form follows</h3>
@@ -1235,6 +1421,22 @@
       case 'deladded': ui.added.splice(+el.dataset.i, 1); render(); break;
       case 'addmove': addMove(); break;
       case 'writemoves': writeMoves(); break;
+      case 'rrrelease': decideRequests('released'); break;
+      case 'rrdecline': decideRequests('declined'); break;
+      case 'rrbyhand': releaseByHand(); break;
+      case 'rrundo': ui.rr.delete(el.dataset.m); render(); break;
+      case 'rrwrite': writeMoves('decisions'); break;
+      case 'mvblocked': { const g = merged(), d = derived(), pace = L.pace(st.manifest, g.C, g.P, R.now()), P = L.blockedMoves(pace, g.C, moveOpts(g, d, true));
+        const n = addToList(P.moves); if (P.stay.length) toast(`Staying: ${P.stay.map(x => `${x.hhid} (${x.why})`).join('; ')}.`, 'warn'); else if (!n) toast('Those households are already in the list.', 'warn'); render(); break; }
+      case 'chgwin': { const v = (($('#lchg-end') || {}).value || ''), M = st.manifest, today = R.partsIn(R.now(), M.calendar.time_zone).key;
+        if (!R.isDateKey(v) || v < M.calendar.window_start) return toast('Choose a last day after the first day of the round.', 'warn');
+        if (v < today) return toast('The last day cannot be before today.', 'warn');
+        ui.chg.end = v === M.calendar.window_end ? null : v; render(); break; }
+      case 'chgadd': queueAdd(); break;
+      case 'chgreissue': { const e = ($('#lchg-reissue') || {}).value; if (e && !ui.chg.reissue.includes(e)) ui.chg.reissue.push(e); render(); break; }
+      case 'chgclear': ui.chg = { end: null, add: [], reissue: [] }; render(); break;
+      case 'chgwrite': writeMoves('changes'); break;
+      case 'visitwrite': writeMoves('visits'); break;
       case 'saveall': saveAllToFolder(ui.ready); break;
       case 'dlall': downloadAll(ui.ready); break;
       case 'dlone': { const f = ui.ready[+el.dataset.i]; sh().download(f.name, f.text, f.name.endsWith('.csv') ? 'text/csv' : 'application/json'); break; }
@@ -1329,6 +1531,11 @@
     }
     if (t.dataset.lprof !== undefined) { const k = t.dataset.lprof, m = ui.map; if (!m) return; if (k === 'name') m.name = t.value; else if (k.startsWith('col:')) { m.columns[k.slice(4)] = t.value; if (k === 'col:result' || k === 'col:consent') m.codes = {}; } else if (k.startsWith('code:')) m.codes[k.slice(5)] = t.value; return render(); }
     if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
+    if (t.dataset.lvisit !== undefined) { const h = t.dataset.lvisit, q = ui.visits.get(h) || { hhid: h }; q.outcome = t.value || undefined; ui.visits.set(h, q); return render(); }
+    if (t.dataset.lvisitnote !== undefined) { const h = t.dataset.lvisitnote, q = ui.visits.get(h) || { hhid: h }; q.note = t.value.trim(); ui.visits.set(h, q); return; }
+    if (t.dataset.lxcode !== undefined) { const [pid, val] = t.dataset.lxcode.split('|'); st.platform.extra[pid] = st.platform.extra[pid] || {}; if (t.value) st.platform.extra[pid][val] = t.value; else delete st.platform.extra[pid][val];
+      logEv('platform_code_mapped', { profile: pid, value: val, to: t.value || 'OTHER' }); invalidate(); return render(); }
+    if (t.dataset.lrrsel !== undefined) { ui.rrSel = ui.rrSel || new Set(); if (t.checked) ui.rrSel.add(t.dataset.lrrsel); else ui.rrSel.delete(t.dataset.lrrsel); return; }
     if (t.dataset.lmovesel !== undefined) { const i = +t.dataset.lmovesel; if (!ui.moves) return; if (t.checked) ui.moves.picked.add(i); else ui.moves.picked.delete(i); return render(); }
     if (t.dataset.lset !== undefined) {
       const path = t.dataset.lset, type = t.dataset.type;

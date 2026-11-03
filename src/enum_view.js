@@ -187,28 +187,15 @@
   }
   // bring the call box into view inside the household panel (it sits below the phone numbers)
   function showCallBox() { const el = $('.callbox'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
-  function startCall(hhid, slot) {
-    APP.call = { hhid, slot: +slot, start: R.now(), end: null };
-    APP.manual = false;
-    render();
-    showCallBox();
-    clearInterval(APP.timer);
-    APP.timer = setInterval(() => {
-      const el = $('#call-timer'); if (!el || !APP.call || APP.call.end) return;
-      const s = Math.floor((R.now() - APP.call.start) / 1000); el.textContent = `${R.p2(Math.floor(s / 60))}:${R.p2(s % 60)}`;
-    }, 1000);
-  }
-  function endCall() { if (!APP.call) return; APP.call.end = R.now(); clearInterval(APP.timer); render(); showCallBox(); }
-  function readCallForm(manual) {
+  // the tool does not place calls: the enumerator dials with the call center's own system, then logs the call here (3 November 2026)
+  function openLogForm(hhid, slot) { APP.call = { hhid, slot: +slot }; APP.plan = false; render(); showCallBox(); const el = $('#callform [name="minutes"]'); if (el) el.focus(); }
+  function readCallForm() {
     const f = $('#callform'); if (!f) return null;
     const g = n => { const el = f.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ''; };
     const status = (f.querySelector('input[name="status"]:checked') || {}).value || '';
-    const v = { status, note: g('note'), action: g('action'), appt: g('appointment') };
-    if (manual) {
-      v.slot = +g('slot'); v.start = fromLocalInput(g('start'));
-      const mins = parseFloat(g('minutes'));
-      v.end = v.start && !isNaN(mins) ? new Date(v.start.getTime() + mins * 60000) : null;
-    } else { v.slot = APP.call.slot; v.start = APP.call.start; v.end = APP.call.end; }
+    const v = { status, note: g('note'), action: g('action'), appt: g('appointment'), slot: +g('slot'), start: fromLocalInput(g('start')), minsRaw: g('minutes') };
+    v.mins = v.minsRaw === '' ? null : parseFloat(v.minsRaw);
+    v.end = v.start && v.mins !== null && !isNaN(v.mins) ? new Date(v.start.getTime() + v.mins * 60000) : null;
     return v;
   }
   // a missing entry is marked on the field itself and focused; the mark goes when the field is changed
@@ -223,21 +210,24 @@
     }
     toast(text, 'warn');
   }
-  function saveCall(manual) {
+  function saveCall() {
     const c = APP.C.map.get(APP.sel); if (!c) return;
-    const v = readCallForm(manual); if (!v) return;
+    const v = readCallForm(); if (!v) return;
     if (!v.status) return fieldError('#callform', 'status', 'Choose the result of the call.');
-    if (manual && !v.start) return fieldError('#callform', 'start', 'Enter when the call started.');
+    if (!v.start) return fieldError('#callform', 'start', 'Enter when the call started.');
+    if (v.start.getTime() > R.now().getTime() + 60000) return fieldError('#callform', 'start', 'The call cannot start in the future: check the date and time.');
+    if (v.mins !== null && (isNaN(v.mins) || v.mins < 0 || v.mins > 240)) return fieldError('#callform', 'minutes', 'Enter the length of the call in minutes, from 0 to 240.');
+    if (v.status === 'COMPLETE' && v.mins === null) return fieldError('#callform', 'minutes', `Enter how many minutes the interview took: a complete counts from ${R.MIN_COMPLETE_MIN} minutes (Box 3.0).`);
     if (v.status === 'OTHER' && !v.note) return fieldError('#callform', 'note', 'Write a note for "Other".');
     const appt = v.appt ? fromLocalInput(v.appt) : null;
     if (v.status === 'APPOINTMENT' && !appt) return fieldError('#callform', 'appointment', 'Enter the agreed callback time.');
     const fields = {
       hhid: c.hhid, phone_slot: v.slot, ts: R.localISO(v.start), end_ts: v.end ? R.localISO(v.end) : undefined,
       status: v.status, operator: APP.S.assignment.enumerator_id, appointment_ts: appt ? R.localISO(appt) : undefined,
-      action: v.action || undefined, note: v.note || undefined, replaces: c.h.replaces || undefined, entered: manual ? 'after the call' : undefined,
+      action: v.action || undefined, note: v.note || undefined, replaces: c.h.replaces || undefined,
     };
     const mins = v.end ? (v.end - v.start) / 60000 : null;
-    APP.call = null; APP.manual = false;
+    APP.call = null;
     log('dial', fields, null, `Call saved: ${statusLabel(v.status)} (dial ${c.n + 1} for ${c.hhid}).`);
     if (v.status === 'COMPLETE' && mins !== null && mins < R.MIN_COMPLETE_MIN) toast(`This complete lasted under ${R.MIN_COMPLETE_MIN} minutes. Box 3.0 counts it as an appointment contact, not a complete, so the household stays open. Correct the time if it is wrong.`, 'warn');
   }
@@ -308,6 +298,7 @@
     const texts = {
       RELEASE: `Stop calling ${c.hhid} for this round. It stays in the panel and is called again next round (handbook 3.3.5: release, never delete).`,
       SWITCH_REQUEST: `Ask the leader to give ${c.hhid} to another enumerator next round. You can keep calling it this round.`,
+      FIELD_VISIT_REQUEST: `Ask the leader to have ${c.hhid} visited in person: to check its numbers, agree a time to call, or reassure it about the survey. You can keep calling it meanwhile; the visit's outcome comes back as a note from your leader.`,
       REMOVE_REQUEST: c.flags.no_phone ? `Ask the leader to remove ${c.hhid}: it has no phone number. The leader decides.` : `Ask the leader to remove ${c.hhid}: none of its numbers works. The leader decides.`,
     };
     confirmModal(R.ACTIONS[action], texts[action], { input: needReason ? 'Why? (required)' : 'Reason (optional)', required: needReason, okLabel: R.ACTIONS[action] }, reason => {
@@ -321,6 +312,16 @@
       { input: 'Why? (required)', required: true, okLabel: 'Activate ' + r.hhid }, reason => {
         log('action', { hhid: c.hhid, action: 'ACTIVATE_REPLACEMENT', target_hhid: r.hhid, reason }, null, `${r.hhid} activated as a replacement for ${c.hhid}.`);
         APP.sel = r.hhid; render();
+      });
+  }
+  // with replacement_policy.approval 'leader', the enumerator asks and the leader releases the replacement in a revised file
+  const leaderApproves = () => ((APP.S.assignment.replacement_policy || {}).approval === 'leader');
+  function askReplacement(c) {
+    const r = c.replacements.find(x => !x.active);
+    if (!r) return toast('No replacement left for this household.', 'warn');
+    confirmModal('Ask the leader for a replacement', `Your leader decides whether ${r.hhid} (replacement ${r.rank}) replaces ${c.hhid}. Until then ${c.hhid} waits, and you stop calling it. When the leader releases the replacement, it comes in your next updated file; if the leader declines, ${c.hhid} opens again.`,
+      { input: 'Why? (required)', required: true, okLabel: 'Ask the leader' }, reason => {
+        log('action', { hhid: c.hhid, action: 'REPLACEMENT_REQUEST', target_hhid: r.hhid, reason }, null, `Replacement asked for ${c.hhid}. It waits for your leader; you can undo the request under Actions.`);
       });
   }
   function replacementAllowed(c) {
@@ -388,8 +389,8 @@
     return `<section class="summary">
       <div class="who"><b>${esc(A.enumerator_id)}</b> · ${esc(A.program)} round ${A.round} · window ${dayLabel(cal.start)} – ${w(cal.end)} · ${left} working day${left === 1 ? '' : 's'} left</div>
       <div class="prog" aria-label="Progress">
-        <div class="bar">${seg(p.complete, 'ok')}${seg(p.released + p.replaced + p.remove_requested, 'rel')}${seg(p.in_progress, 'prog')}${seg(p.not_started, 'none')}</div>
-        <div class="legend"><b>${p.complete}</b> complete · <b>${p.in_progress}</b> in progress · <b>${p.not_started}</b> not started · <b>${p.released + p.replaced + p.remove_requested}</b> released or closed · ${p.total} households${p.reassigned ? ` · ${p.reassigned} no longer assigned to you` : ''}</div>
+        <div class="bar">${seg(p.complete, 'ok')}${seg(p.released + p.replaced + p.remove_requested + p.replacement_requested, 'rel')}${seg(p.in_progress, 'prog')}${seg(p.not_started, 'none')}</div>
+        <div class="legend"><b>${p.complete}</b> complete · <b>${p.in_progress}</b> in progress · <b>${p.not_started}</b> not started · <b>${p.released + p.replaced + p.remove_requested + p.replacement_requested}</b> released or closed${p.replacement_requested ? ` (${p.replacement_requested} waiting for a replacement)` : ''} · ${p.total} households${p.reassigned ? ` · ${p.reassigned} no longer assigned to you` : ''}</div>
       </div>
       <div class="actions">
         <button class="primary" data-act="save"${APP.unsaved ? ` title="${R.plural(APP.unsaved, 'change')} not saved yet"` : ''}>Save session${APP.unsaved ? ` <span class="pill" aria-label="${R.plural(APP.unsaved, 'change')} not saved yet">${APP.unsaved}</span>` : ''}</button>
@@ -407,7 +408,7 @@
     const t = [['today', 'Today', q.due.length], ['households', 'Households', C.list.length], ['calendar', 'Calendar'], ['performance', 'My performance'], ['log', 'Log']];
     return `<nav class="tabs" role="tablist">${t.map(([k, l, n]) => `<button role="tab" aria-selected="${APP.tab === k}" data-act="tab" data-t="${k}" class="${APP.tab === k ? 'on' : ''}">${l}${n !== undefined ? ` <span class="count">${n}</span>` : ''}</button>`).join('')}</nav>`;
   }
-  const kindLabel = { callback: 'Callback', mine: 'Moved by you', first: 'First dial', overdue: 'Overdue', redial: 'Redial', next_day: 'Redial', cap: 'Cap reached', protocol_end: 'Protocol done', refusal: 'Refusal', dead: 'No number', window_end: 'Window ends' };
+  const kindLabel = { callback: 'Callback', mine: 'Moved by you', first: 'First dial', overdue: 'Overdue', redial: 'Redial', next_day: 'Redial', cap: 'Cap reached', protocol_end: 'Protocol done', blocked: 'Number blocked', refusal: 'Refusal', dead: 'No number', window_end: 'Window ends' };
   function card(c, showDate) {
     const s = c.next;
     const t = s.at ? (showDate ? when(s.at) : hm(s.at)) : '';
@@ -465,16 +466,16 @@
     return 'Kept with you: you had it last round';
   }
   const reasonShort = { keep: 'Kept with you', rotation: 'Rotation', switch_hard_to_reach: 'Switched: hard to reach', enumerator_unavailable: 'Previous enumerator away',
-    new: 'New to the panel', manual: 'Assigned by hand', capacity: 'Workload balance', match: 'Matched to you', mid_round: 'Moved to you mid-round', replacement: 'Replacement' };
+    new: 'New to the panel', manual: 'Assigned by hand', capacity: 'Workload balance', match: 'Matched to you', mid_round: 'Moved to you mid-round', added_mid_round: 'Added mid-round', replacement: 'Replacement' };
   // the criteria the leader matched on (language, sex, area…): the household's values and the enumerator's
   const criteriaText = h => { const A = APP.S && APP.S.assignment, m = A && A.matching; if (!m || !h.criteria) return '';
     return Object.entries(h.criteria).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · '); };
   const shortReason = h => { const r = (h.assignment || {}).reason || '';
     return r === 'rule' || (ruleName() !== 'keep_same' && r === 'rotation') ? (byBlocks() ? 'By a block of the list' : 'Dealt at random') : reasonShort[r] || r.replace(/_/g, ' '); };
-  const stateLabel = { reassigned: 'No longer yours', complete: 'Complete', in_progress: 'In progress', not_started: 'Not started', released: 'Released', replaced: 'Replaced', remove_requested: 'Removal requested' };
+  const stateLabel = { reassigned: 'No longer yours', complete: 'Complete', in_progress: 'In progress', not_started: 'Not started', released: 'Released', replaced: 'Replaced', remove_requested: 'Removal requested', replacement_requested: 'Replacement asked' };
   function householdsPanel(C) {
     const f = APP.filter, q = APP.q.toLowerCase();
-    const keep = c => (f === 'all' || (f === 'open' && c.open) || (f === 'closed' && !c.open && c.state !== 'complete') || f === c.state || (f === 'leader' && (c.flags.switch_requested || c.state === 'remove_requested' || c.flags.all_dead)))
+    const keep = c => (f === 'all' || (f === 'open' && c.open) || (f === 'closed' && !c.open && c.state !== 'complete') || f === c.state || (f === 'leader' && (c.flags.switch_requested || c.flags.visit_requested || c.flags.blocked || c.state === 'remove_requested' || c.state === 'replacement_requested' || c.flags.all_dead)))
       && (!q || c.hhid.toLowerCase().includes(q) || ((c.h.contact || {}).name || '').toLowerCase().includes(q));
     const chips = [['open', 'Open'], ['not_started', 'Not started'], ['in_progress', 'In progress'], ['complete', 'Complete'], ['closed', 'Released or closed'], ['leader', 'Needs the leader'], ['all', 'All']];
     return `<div class="filters">${chips.map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-act="filter" data-f="${k}">${l}</button>`).join('')}
@@ -633,10 +634,9 @@
         <div class="pnum"><span class="num-big">${esc(s.number || '(number not given)')}</span>
           <button class="subtle" data-act="copy" data-txt="${esc(s.number)}" aria-label="Copy number">Copy</button></div>
         <div class="pstate">${s.dials ? `${s.dials} dial${s.dials > 1 ? 's' : ''} this round, last: ${esc(statusLabel(s.last))}` : s.prior ? `last round: ${esc(statusLabel(s.prior))}` : 'not dialed this round'}${s.dead ? ' · <b>not working</b>' : ''}</div>
-        ${c.open && !inCall && !APP.call ? `<button class="primary" data-act="call" data-slot="${s.slot}">Start call</button>` : ''}
+        ${c.open && !APP.call ? `<button class="primary" data-act="call" data-slot="${s.slot}">Log a call</button>` : ''}
       </div>`).join('') || '<p class="muted">No phone number for this household.</p>';
-    const callBox = inCall ? callPanel(c) : '';
-    const manual = APP.manual && !APP.call ? manualForm(c) : '';
+    const callBox = inCall ? logForm(c) : '';
     const dialRows = c.dials.map(d => {
       const isCorr = APP.correct === d.event_id;
       return `<li class="dial"><div><b>${d.attempt}.</b> ${hm(R.parseTS(d.ts))}${d.end_ts ? '–' + hm(R.parseTS(d.end_ts)) : ''} ${dayLabel(R.partsIn(R.parseTS(d.ts), C.cal.tz).key)} · number ${d.phone_slot} · <b>${esc(statusLabel(d.status))}</b>${d.dur_min !== null ? ` · ${num(d.dur_min, 1)} min` : ''}${d.appointment_ts ? ` · callback ${isoWhen(d.appointment_ts)}` : ''}${d.action ? ` · ${esc(R.ACTIONS[d.action])}` : ''}${d.corrected ? ' <span class="tag">corrected</span>' : ''}</div>
@@ -646,16 +646,20 @@
     const acts = c.actions.filter(a => a.via !== 'dial').map(a => `<li>${esc(R.ACTIONS[a.action] || a.action)}${a.target_hhid ? ' ' + esc(a.target_hhid) : ''} · ${isoWhen(a.logged_at)}${a.reason ? ' · ' + esc(a.reason) : ''}
         ${APP.correct === a.event_id ? correctionForm(null, a) : `<button class="link" data-act="correct" data-ev="${a.event_id}">Undo</button>`}</li>`).join('');
     const ra = replacementAllowed(c);
-    const repl = c.replacements.length ? `<section class="sec"><h4>Replacements, in order</h4><ol class="repl">${c.replacements.map(r => `<li class="${r.active ? 'active' : ''}"><span class="id">${esc(r.hhid)}</span> ${esc((r.contact || {}).name || '')} ${r.active ? '<span class="tag ok">activated</span>' : ''}</li>`).join('')}</ol>
-        ${c.open ? `<button ${ra.ok ? '' : 'disabled'} data-act="replace">Activate the next replacement</button> <span class="muted">${ra.ok ? '' : esc(ra.why)}</span>` : ''}</section>` : '';
+    const la = leaderApproves();
+    const repl = c.replacements.length ? `<section class="sec"><h4>Replacements, in order</h4><ol class="repl">${c.replacements.map(r => `<li class="${r.active ? 'active' : ''}"><span class="id">${esc(r.hhid)}</span> ${esc((r.contact || {}).name || '')} ${r.active ? `<span class="tag ok">${h.replacement_release && h.replacement_release.hhid === r.hhid ? 'released by your leader' : 'activated'}</span>` : ''}</li>`).join('')}</ol>
+        ${c.open ? `<button ${ra.ok ? '' : 'disabled'} data-act="${la ? 'askrepl' : 'replace'}">${la ? 'Ask the leader for a replacement' : 'Activate the next replacement'}</button> <span class="muted">${ra.ok ? (la ? 'Your leader approves each replacement this round.' : '') : esc(ra.why)}</span>` : ''}
+        ${c.state === 'replacement_requested' ? `<p class="muted small">Asked ${esc(isoWhen(c.request.logged_at))}: waiting for your leader. To call it again, undo the request under Actions.</p>` : ''}</section>` : '';
     const next = c.next;
     return `<aside class="drawer" aria-label="Household ${esc(c.hhid)}">
       <div class="dhead"><div><div class="id big">${esc(c.hhid)}</div><div>${esc((h.contact || {}).name || '')}</div></div>
         <button class="subtle" data-act="closehh" aria-label="Close">✕</button></div>
-      <div class="badges"><span class="st st-${c.state}">${stateLabel[c.state]}</span> <span class="tag">${esc(reasonText(h))}</span>${c.kind === 'replacement' ? ` <span class="tag">replaces ${esc(h.replaces)}</span>` : ''}${c.flags.switch_requested ? ' <span class="tag">switch asked</span>' : ''}</div>
+      <div class="badges"><span class="st st-${c.state}">${stateLabel[c.state]}</span> <span class="tag">${esc(reasonText(h))}</span>${c.kind === 'replacement' ? ` <span class="tag">replaces ${esc(h.replaces)}</span>` : ''}${c.flags.switch_requested ? ' <span class="tag">switch asked</span>' : ''}${c.flags.visit_requested ? ' <span class="tag">field visit asked</span>' : ''}</div>
       ${ruleName() !== 'keep_same' && RULE_WHY[ruleName()] ? `<details class="why"><summary>Why is this household with me?</summary><p class="muted small">${RULE_WHY[ruleName()]}</p></details>`
         : RULE_REASONS.has((h.assignment || {}).reason) ? `<details class="why"><summary>Why is this household with me?</summary><p class="muted small">${RULE_NOTE}</p></details>` : ''}
       ${c.flags.complete_short && c.open ? `<div class="alert warn">The complete you logged lasted under ${R.MIN_COMPLETE_MIN} minutes. Box 3.0 counts it as an appointment contact, not a complete, so the household stays open: call again, or correct the time if it is wrong.</div>` : ''}
+      ${h.replacement_release && h.replacement_release.hhid ? `<div class="alert info">Your leader released replacement ${esc(h.replacement_release.hhid)} for this household${h.replacement_release.at ? ` on ${isoWhen(h.replacement_release.at)}` : ''}: call the replacement instead.</div>` : ''}
+      ${c.declined ? `<div class="alert info">Your leader declined the replacement${c.declined.at ? ` on ${isoWhen(c.declined.at)}` : ''}${c.declined.note ? ` (“${esc(c.declined.note)}”)` : ''}: keep calling this household.</div>` : ''}
       ${c.kind === 'removed' ? `<div class="alert info">This household is no longer in your assignment${h.removed_at ? ` (your leader's update, opened ${isoWhen(h.removed_at)})` : ''}. The calls you logged stay in your log and in your exports; you cannot log new calls for it.</div>` : ''}
       ${c.prior ? `<div class="alert info">Moved to you by your leader${c.prior.moved_at ? ` on ${isoWhen(c.prior.moved_at)}` : ''}${c.prior.from ? ` from ${esc(c.prior.from)}` : ''}, who made ${R.plural(c.prior.dials, 'dial')}${c.prior.last_status ? ` (last: ${esc(statusLabel(c.prior.last_status))}${c.prior.last_ts ? ', ' + isoWhen(c.prior.last_ts) : ''})` : ''}. ${c.prior.dials ? `Those dials count toward the cap of ${C.cal.cap}: ${Math.max(0, C.cal.cap - c.nAll)} left.` : ''}${c.prior.appointment_ts ? ` The household booked a callback for ${isoWhen(c.prior.appointment_ts)}${c.n ? '' : ': keep it'}.` : ''}</div>` : ''}
       ${c.open ? `<div class="next k-${next.kind}"><b>Next:</b> ${next.at ? (next.at < R.now() ? 'overdue since ' : '') + when(next.at) + ' · ' : ''}${esc(next.text)}${next.holiday ? ` <span class="tag">${esc(next.holiday.name)}</span>` : ''}
@@ -672,12 +676,12 @@
         ${h.note ? `<dt>Leader's note</dt><dd>${esc(h.note)}</dd>` : ''}
       </dl>
       <section class="sec"><h4>Phone numbers</h4>${phones}
-        ${c.open && !APP.call ? `<button class="link" data-act="manual">Log a call made earlier</button> · ` : ''}${c.kind === 'removed' ? '' : '<button class="link" data-act="contact">Add or correct a number</button>'}
+        ${c.kind === 'removed' ? '' : '<button class="link" data-act="contact">Add or correct a number</button>'}
         ${APP.contact ? contactForm(c) : ''}</section>
-      ${callBox}${manual}
+      ${callBox}
       <section class="sec"><h4>Calls this round</h4>${dialRows ? `<ol class="dials">${dialRows}</ol>` : '<p class="muted">No call yet.</p>'}</section>
       ${c.open || acts ? `<section class="sec"><h4>Actions</h4>${acts ? `<ul class="acts">${acts}</ul>` : ''}
-        ${c.open ? `<div class="btnrow"><button data-act="release">${R.ACTIONS.RELEASE}</button><button data-act="switch">Ask for another enumerator</button><button ${c.flags.all_dead || c.flags.no_phone ? '' : 'disabled title="Only when no number works"'} data-act="remove">Ask the leader to remove</button></div>` : ''}</section>` : ''}
+        ${c.open ? `<div class="btnrow"><button data-act="release">${R.ACTIONS.RELEASE}</button><button data-act="switch">Ask for another enumerator</button>${c.flags.visit_requested ? '' : '<button data-act="visit">Refer for a field visit</button>'}<button ${c.flags.all_dead || c.flags.no_phone ? '' : 'disabled title="Only when no number works"'} data-act="remove">Ask the leader to remove</button></div>` : ''}</section>` : ''}
       ${repl}
     </aside>`;
   }
@@ -686,7 +690,7 @@
     const rules = R.selfRules(APP.S.assignment);
     if (!rules.reschedule || APP.call) return '';
     if (c.appointment) return '<div class="muted small">A callback is booked: to change it, correct the call’s callback time.</div>';
-    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end'].includes(c.next.kind)) return '';
+    if (['refusal', 'dead', 'cap', 'window_end', 'protocol_end', 'blocked'].includes(c.next.kind)) return '';
     return `<div class="planlinks">${APP.plan ? '' : '<button class="link" data-act="plan">Move the next call</button>'}${c.mine ? ' · <button class="link" data-act="clearplan">Undo my change</button>' : ''}</div>`;
   }
   function planForm(c) {
@@ -704,27 +708,17 @@
   const afterFields = (defAppt) => `<div class="row2"><label>Callback time, if one was agreed <input type="datetime-local" name="appointment" value="${defAppt || ''}"></label>
       <label>After this call <select name="action"><option value="">Keep calling</option><option value="RELEASE">${R.ACTIONS.RELEASE}</option><option value="SWITCH_REQUEST">Ask for another enumerator next round</option></select></label></div>
       <label>Note <input type="text" name="note" maxlength="300" placeholder="Operational only: no personal details"></label>`;
-  function callPanel(c) {
-    const k = APP.call;
-    if (!k.end) {
-      return `<section class="sec callbox live"><h4>On the phone · ${esc(c.hhid)} · number ${k.slot}</h4>
-        <div class="timer"><span id="call-timer">00:00</span> since ${hm(k.start)}</div>
-        <div class="btnrow"><button class="primary" data-act="endcall">End call</button><button class="subtle" data-act="cancelcall">Cancel (no call made)</button></div></section>`;
-    }
-    const mins = (k.end - k.start) / 60000;
-    return `<section class="sec callbox"><h4>Call ended · ${esc(c.hhid)} · ${hm(k.start)}–${hm(k.end)} · ${num(mins, 1)} min · number ${k.slot}</h4>
-      <form id="callform" novalidate onsubmit="return false">${statusButtons('')}${afterFields('')}
-      <div class="btnrow"><button class="primary" data-act="savecall">Save call</button><button class="subtle" data-act="cancelcall">Discard</button></div></form></section>`;
-  }
-  function manualForm(c) {
-    const now = R.now();
-    return `<section class="sec callbox"><h4>Log a call made earlier</h4><p class="muted">The time you enter is the call's time; the log also records when you entered it.</p>
+  // the call log form: the number, when the call started, how long it lasted, the result (one form for a call just made or made earlier)
+  function logForm(c) {
+    const k = APP.call, now = R.now();
+    return `<section class="sec callbox"><h4>Log a call · ${esc(c.hhid)}</h4>
+      <p class="muted small">Dial with your call center's phone system, then log the call here: when it started, how many minutes it lasted, and what happened. The tool records when you logged it too. A complete counts from ${R.MIN_COMPLETE_MIN} minutes (Box 3.0).</p>
       <form id="callform" novalidate onsubmit="return false">
-      <div class="row2"><label>Number <select name="slot">${c.slots.map(s => `<option value="${s.slot}">${s.slot}${s.label ? ' · ' + esc(s.label) : ''}</option>`).join('')}</select></label>
-      <label>Started <input type="datetime-local" name="start" value="${toLocalInput(new Date(now.getTime() - 15 * 60000))}"></label>
-      <label>Minutes <input type="number" name="minutes" min="0" step="0.1" value="1"></label></div>
+      <div class="row2"><label>Number <select name="slot">${c.slots.map(s => `<option value="${s.slot}" ${s.slot === k.slot ? 'selected' : ''}>${s.slot}${s.label ? ' · ' + esc(s.label) : ''}</option>`).join('')}</select></label>
+      <label>Call started <input type="datetime-local" name="start" value="${toLocalInput(now)}"></label>
+      <label>Minutes <input type="number" name="minutes" min="0" max="240" step="0.5" placeholder="length of the call"></label></div>
       ${statusButtons('')}${afterFields('')}
-      <div class="btnrow"><button class="primary" data-act="savemanual">Save call</button><button class="subtle" data-act="cancelmanual">Cancel</button></div></form></section>`;
+      <div class="btnrow"><button class="primary" data-act="savecall">Save call</button><button class="subtle" data-act="cancelcall">Cancel</button></div></form></section>`;
   }
   function correctionForm(d, a) {
     if (a) {
@@ -796,7 +790,6 @@
     const panels = { today: todayPanel, households: householdsPanel, calendar: calendarPanel, performance: perfPanel, log: logPanel };
     root.innerHTML = topbar() + summary(C, now) + tabs(C, now) + `<div class="body ${APP.sel ? 'with-drawer' : ''}"><main class="panel">${panels[APP.tab](C, now)}</main>${drawer(C, now)}</div>` + modal();
     renderToasts();
-    if (APP.call && !APP.call.end) { const el = $('#call-timer'); if (el) { const s = Math.floor((now - APP.call.start) / 1000); el.textContent = `${R.p2(Math.floor(s / 60))}:${R.p2(s % 60)}`; } }
   }
   APP.render = render;
   // shared with the leader view (leader_view.js)
@@ -813,25 +806,23 @@
     switch (act) {
       case 'view': APP.view = el.dataset.v; render(); break;
       case 'tab': APP.tab = el.dataset.t; render(); break;
-      case 'open': APP.sel = el.dataset.hh; APP.correct = null; APP.contact = false; APP.manual = false; APP.plan = false; render(); break;
-      case 'closehh': if (APP.call && !APP.call.end) return toast('End the call first.', 'warn'); APP.sel = null; APP.call = null; render(); break;
+      case 'open': APP.sel = el.dataset.hh; APP.correct = null; APP.contact = false; APP.call = null; APP.plan = false; render(); break;
+      case 'closehh': APP.sel = null; APP.call = null; render(); break;
       case 'filter': APP.filter = el.dataset.f; render(); break;
       case 'day': { const d = +el.dataset.d; APP.day = d === 0 ? null : R.addDaysKey(APP.day || todayKey(), d); if (APP.day === todayKey()) APP.day = null; render(); break; }
       case 'gotoday': APP.day = el.dataset.k === todayKey() ? null : el.dataset.k; APP.tab = 'today'; render(); break;
-      case 'call': startCall(APP.sel, el.dataset.slot); break;
-      case 'endcall': endCall(); break;
-      case 'cancelcall': clearInterval(APP.timer); APP.call = null; render(); break;
-      case 'savecall': saveCall(false); break;
-      case 'manual': APP.manual = true; render(); break;
-      case 'cancelmanual': APP.manual = false; render(); break;
-      case 'savemanual': saveCall(true); break;
+      case 'call': openLogForm(APP.sel, el.dataset.slot); break;
+      case 'cancelcall': APP.call = null; render(); break;
+      case 'savecall': saveCall(); break;
       case 'correct': APP.correct = el.dataset.ev; render(); break;
       case 'cancelcorr': APP.correct = null; render(); break;
       case 'savecorr': saveCorrection(el.dataset.ev, !!el.dataset.isaction); break;
       case 'release': if (c) doAction(c, 'RELEASE'); break;
       case 'switch': if (c) doAction(c, 'SWITCH_REQUEST'); break;
+      case 'visit': if (c) doAction(c, 'FIELD_VISIT_REQUEST'); break;
       case 'remove': if (c) doAction(c, 'REMOVE_REQUEST'); break;
       case 'replace': if (c) activateReplacement(c); break;
+      case 'askrepl': if (c) askReplacement(c); break;
       case 'plan': APP.plan = true; render(); { const el = $('#planform [name="when"]'); if (el) el.focus(); } break;
       case 'cancelplan': APP.plan = false; render(); break;
       case 'saveplan': savePlan(); break;
@@ -882,7 +873,7 @@
   });
   window.addEventListener('beforeunload', e => { if (APP.unsaved > 0 || (window.LEAD && window.LEAD.unsavedCount() > 0)) { e.preventDefault(); e.returnValue = ''; } });
   // refresh what is due every minute, without disturbing a form in progress
-  setInterval(() => { if (APP.S && !APP.call && !APP.manual && !APP.correct && !APP.contact && !APP.modal && !document.activeElement.matches('input,select,textarea')) render(); }, 60000);
+  setInterval(() => { if (APP.S && !APP.call && !APP.correct && !APP.contact && !APP.modal && !document.activeElement.matches('input,select,textarea')) render(); }, 60000);
   document.addEventListener('DOMContentLoaded', render);
   if (document.readyState !== 'loading') render();
 })();

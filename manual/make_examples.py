@@ -5,6 +5,7 @@ Run from the tool folder, after build.py:  python3 manual/make_examples.py
 Writes manual/img/x*.png. Needs Google Chrome. Port 9352 (the manual's screens use 9346, the tests 9339 to 9347).
 """
 import csv
+import datetime as dt
 import glob
 import json
 import os
@@ -50,10 +51,11 @@ def main():
     crop, view, setv, tick = sh.crop, sh.view, sh.setv, sh.tick
 
     def log_call(slot, status, start, end, extra_js=""):
-        b.js(f"RTM.setNow('{start}'); true")
-        b.click(f'[data-act="call"][data-slot="{slot}"]'); b.wait("APP.call && !APP.call.end")
+        # the tool places no call: log the call just made, with its start and its length in minutes
         b.js(f"RTM.setNow('{end}'); true")
-        b.click('[data-act="endcall"]'); b.wait("!!document.querySelector('#callform')")
+        b.click(f'[data-act="call"][data-slot="{slot}"]'); b.wait("!!document.querySelector('#callform')")
+        mins = round((dt.datetime.fromisoformat(end) - dt.datetime.fromisoformat(start)).total_seconds() / 60, 1)
+        b.js(f"(() => {{ const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '{start[:16]}'; f.querySelector('[name=minutes]').value = '{mins}'; return true; }})()")
         b.js(f"document.querySelector('input[name=status][value={status}]').checked = true; {extra_js} true")
         b.click('[data-act="savecall"]'); b.wait("!document.querySelector('#callform')")
 
@@ -108,6 +110,30 @@ def main():
         b.click('[data-act="closehh"]'); time.sleep(0.2)
         b.click('[data-act="tab"][data-t="calendar"]'); time.sleep(0.3)
         view("x05_callback_saturday")
+        # more results from a calling day: someone else answers, a language barrier, a partial interview, a soft refusal
+        b.click('[data-act="tab"][data-t="today"]'); time.sleep(0.2)
+        used = [h, h2, h3]
+        def fresh():
+            hx = b.js(f"APP.C.list.find(c => c.open && c.n === 0 && !c.appointment && !{json.dumps(used)}.includes(c.hhid)).hhid")
+            used.append(hx); b.js(f"APP.sel = {json.dumps(hx)}; APP.render(); true"); b.wait(f"APP.sel === {json.dumps(hx)}"); return hx
+        fresh(); log_call(1, "NOT_AVAILABLE", "2026-10-27T10:30:00+08:00", "2026-10-27T10:31:00+08:00", "document.querySelector('#callform [name=appointment]').value = '2026-10-27T19:00'; document.querySelector('#callform [name=note]').value = 'spouse answered; respondent back after 7';")
+        crop("x30_not_available", ["document.querySelector('.drawer .next')", "__sec('Calls this round')"], inside=True)
+        b.click('[data-act="closehh"]')
+        fresh(); log_call(1, "LANGUAGE", "2026-10-27T10:40:00+08:00", "2026-10-27T10:41:00+08:00", "document.querySelector('#callform [name=action]').value = 'SWITCH_REQUEST'; document.querySelector('#callform [name=note]').value = 'speaks Kazakh only';")
+        crop("x31_language", ["document.querySelector('.drawer .badges')", "__sec('Calls this round')"], inside=True)
+        b.click('[data-act="closehh"]')
+        fresh(); log_call(1, "PARTIAL", "2026-10-27T10:50:00+08:00", "2026-10-27T11:02:00+08:00", "document.querySelector('#callform [name=appointment]').value = '2026-10-28T18:00'; document.querySelector('#callform [name=note]').value = 'stopped at the income module';")
+        crop("x32_partial", ["document.querySelector('.drawer .next')", "__sec('Calls this round')"], inside=True)
+        b.click('[data-act="closehh"]')
+        fresh(); log_call(1, "REFUSAL_SOFT", "2026-10-27T11:10:00+08:00", "2026-10-27T11:11:00+08:00", "document.querySelector('#callform [name=note]').value = 'busy at work this week';")
+        crop("x33_soft_refusal", ["document.querySelector('.drawer .next')", "__sec('Calls this round')"], inside=True)
+        b.click('[data-act="closehh"]')
+        fresh(); log_call(1, "BLOCKED", "2026-10-27T11:20:00+08:00", "2026-10-27T11:20:30+08:00", "document.querySelector('#callform [name=note]').value = 'call rejected at once; number seems blocked';")
+        crop("x34_blocked", ["document.querySelector('.drawer .next')", "__sec('Calls this round')"], inside=True)
+        b.click('[data-act="closehh"]')
+        fresh(); log_call(1, "NO_ANSWER", "2026-10-27T11:30:00+08:00", "2026-10-27T11:31:00+08:00")
+        crop("x35_visit", ["__sec('Actions')"], hls=["document.querySelector('[data-act=\"visit\"]')"], inside=True)
+        b.click('[data-act="closehh"]')
         b.click('[data-act="tab"][data-t="today"]'); time.sleep(0.2)
         close_enum()
 
@@ -116,11 +142,21 @@ def main():
         start_leader("2026-11-07T09:00:00+08:00")
         b.set_files("#lf-hh", [os.path.join(S, "leader", "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
         b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
+        b.click('[data-lact="tab"][data-t="prepare"]'); time.sleep(0.2)
+        b.set_files("#lf-hist", sorted(glob.glob(os.path.join(S, "leader", "history", "*")))); b.wait("LEAD.state().inputs.history.length > 0")
+        b.click('[data-lact="tab"][data-t="import"]'); time.sleep(0.2)
         b.set_files("#lf-manifest", [os.path.join(S, "leader", "L2MN-DEMO_R05_manifest.json")]); b.wait("!!LEAD.state().manifest")
         # one enumerator's export has not arrived
         part = [f for f in EXPORTS if os.path.basename(f).startswith(("E01_", "E02_"))]
         b.set_files("#lf-imports", part); b.wait(f"LEAD.state().imports.length === {len(part)}"); time.sleep(0.4)
         crop("x10_missing_export", ["__card('Needs your decision')"], max_h=520)
+        MC = os.path.join(S, "leader", "merge_cases")
+        for case, shot, card in (("duplicate", "x40_duplicate", "^Files"), ("csv_only", "x41_csv_only", "^Files"), ("wrong_round", "x42_wrong_round", "Needs your decision"), ("edited", "x43_edited", "Needs your decision")):
+            b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+            extra = sorted(glob.glob(os.path.join(MC, case, "*")))
+            b.set_files("#lf-imports", EXPORTS); b.wait(f"LEAD.state().imports.length === {len(EXPORTS)}")
+            b.set_files("#lf-imports", extra); b.wait(f"LEAD.state().imports.length === {len(EXPORTS) + len(extra)}"); time.sleep(0.4)
+            crop(shot, [f"__card('{card}')"], max_h=620)
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
         b.set_files("#lf-imports", EXPORTS); b.wait(f"LEAD.state().imports.length === {len(EXPORTS)}"); time.sleep(0.4)
         # an enumerator's own changes reach the leader: E07's export with two moved calls and time off ahead (3 November 2026)
@@ -137,6 +173,35 @@ def main():
             f.orig = f.text; f.text = JSON.stringify(j); LEAD.refresh(); return true; })()"""); time.sleep(0.3)
         crop("x14_self_changes", ["__card('^Team')", "__card('Move waiting households').querySelector('.tablewrap')"], max_h=900)
         b.js("(() => { const f = LEAD.state().imports.find(x => x.orig); f.text = f.orig; delete f.orig; LEAD.refresh(); return true; })()")
+        # the features of 3 November 2026: a blocked number, a field visit, the round's changes, the message list, the areas
+        b.js("""(() => { const st = LEAD.state(), f = st.imports.find(x => /E07_2026-11-06\\.json$/.test(x.name)), j = JSON.parse(f.text);
+            const S2 = { assignment: { program: j.program, round: j.round, enumerator_id: j.enumerator_id }, events: j.events, genesis: j.chain_genesis };
+            const ip = [...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E07' && c.state === 'in_progress' && !c.replaces).map(c => c.hhid);
+            const now0 = RTM.now().toISOString(); RTM.setNow('2026-11-06T17:00:00+08:00');
+            RTM.append(S2, 'dial', { hhid: ip[0], ts: '2026-11-06T16:00:00+08:00', end_ts: '2026-11-06T16:01:00+08:00', status: 'BLOCKED', phone_slot: 1, operator: 'E07' });
+            RTM.append(S2, 'action', { hhid: ip[1], action: 'FIELD_VISIT_REQUEST', reason: 'never answers; numbers may be wrong' });
+            RTM.setNow(now0); j.events = S2.events.map(RTM.exportEvent); j.event_count = j.events.length; j.last_hash = j.events[j.events.length - 1].hash;
+            f.orig2 = f.text; f.text = JSON.stringify(j); LEAD.refresh(); window.__visit = ip[1]; return true; })()""")
+        b.click('[data-lact="tab"][data-t="progress"]'); time.sleep(0.3)
+        crop("x52_blocked", ["[...document.querySelectorAll('[data-lact=\"mvblocked\"]')].map(x => x.closest('.row3'))[0]"], hls=["document.querySelector('[data-lact=\"mvblocked\"]')"], pad=14)
+        b.js("(() => { const el = document.querySelector(`[data-lvisit=\"${window.__visit}\"]`); el.value = 'time_agreed'; el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()"); time.sleep(0.2)
+        b.js("(() => { const el = document.querySelector(`[data-lvisitnote=\"${window.__visit}\"]`); el.value = 'call after 6 pm'; el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()"); time.sleep(0.2)
+        crop("x51_field_visits", ["__card('Field visits')"], hls=["document.querySelector('[data-lact=\"visitwrite\"]')"], max_h=700)
+        b.js("LEAD.ui.visits = new Map(); true")
+        setv("#lchg-end", "2026-11-27"); b.click('[data-lact="chgwin"]'); time.sleep(0.1)
+        b.js("""(() => { const st = LEAD.state(), t = st.inputs.households.text.replace(/\\s+$/, ''), head = t.split(/\\r?\\n/)[0].split(',');
+            const row = head.map(c => ({ hhid: '0199-001', psu: '0199', stratum: '1', phone_1: '+000 99 001 0001', phone_1_label: 'respondent', contact_name: 'Contact 0199-001 (synthetic)', status: 'active' })[c] || '');
+            st.inputs.households.text = t + '\\n' + row.join(',') + '\\n'; LEAD.refresh(); return true; })()""")
+        setv("#lchg-hh", "0199-001"); b.click('[data-lact="chgadd"]'); time.sleep(0.1)
+        b.js("document.querySelector('#lchg-reissue').value = 'E01'; true"); b.click('[data-lact="chgreissue"]'); time.sleep(0.2)
+        crop("x50_change_round", ["__card('Change the round')"], hls=["document.querySelector('[data-lact=\"chgwrite\"]')"], max_h=700)
+        b.click('[data-lact="chgclear"]'); time.sleep(0.1)
+        smsd_ = b.js("""(() => { const g = LEAD.merged(); for (const c of g.C.values()) { const l = c.dials[c.dials.length - 1]; if (c.state === 'in_progress' && l && l.appointment_ts && RTM.CALLBACK_STATUSES.includes(l.status)) return RTM.partsIn(new Date(Date.parse(l.appointment_ts)), 'Asia/Ulaanbaatar').key; } return null; })()""")
+        if smsd_:
+            setv('[data-lset="__smsDay"]', smsd_); time.sleep(0.2)
+        crop("x53_sms", ["__card('Text-message list')"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"sms\"]')"])
+        crop("x54_areas", ["__card('By area')"], max_h=560)
+        b.js("(() => { const f = LEAD.state().imports.find(x => x.orig2); f.text = f.orig2; delete f.orig2; LEAD.refresh(); return true; })()")
         # an enumerator finished early: give them five households
         b.js("RTM.setNow('2026-11-13T09:00:00+08:00'); true")
         b.click('[data-lact="tab"][data-t="progress"]'); time.sleep(0.3)
@@ -178,6 +243,27 @@ def main():
         b.click('[data-lact="tab"][data-t="platform"]'); time.sleep(0.3)
         b.set_files("#lf-platform", [phl2]); b.wait("LEAD.state().imports.length === 1"); time.sleep(0.5)
         crop("x20_kobo_review", ["__card('3 · Each day').querySelector('h4')", "__card('5 · Records')"], max_h=1100)
+        # an interviewer typed a code the tool does not know
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        prow2 = [dict(r) for r in prow]
+        k = next(i for i, r in enumerate(prow2) if r["int_id"] == "CATI07")
+        for r in prow2[k:k + 3]: r["int_id"] = "CATI70"
+        phl3 = os.path.join(DL, os.path.basename(phl).replace("2026-11-06", "2026-11-15"))
+        with open(phl3, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(prow[0].keys()), delimiter=";", lineterminator="\n"); w.writeheader(); w.writerows(prow2)
+        b.set_files("#lf-platform", [phl3]); b.wait("LEAD.state().imports.length === 1"); time.sleep(0.5)
+        crop("x44_unknown_code", ["__card('3 · Each day').querySelector('h4')", "__card('3 · Each day').querySelector('.issue')"], max_h=500)
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        prow3 = [dict(r) for r in prow]
+        k3 = next(i for i, r in enumerate(prow3) if r["X15"] == "6")
+        for r in prow3[k3:k3 + 2]: r["X15"] = "11"
+        phl4 = os.path.join(DL, os.path.basename(phl).replace("2026-11-06", "2026-11-16"))
+        with open(phl4, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(prow[0].keys()), delimiter=";", lineterminator="\n"); w.writeheader(); w.writerows(prow3)
+        b.set_files("#lf-platform", [phl4]); b.wait("LEAD.state().imports.length === 1"); time.sleep(0.5)
+        crop("x55_new_code", ["document.querySelector('[data-lxcode]').closest('.alert')"], hls=["document.querySelector('[data-lxcode]')"])
+        b.js("(() => { const el = document.querySelector('[data-lpcode=\"E07\"]'); el.value = 'CATI07, CATI70'; el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()"); time.sleep(0.3)
+        crop("x56_two_codes", ["__card('1 · The form')"], hls=["document.querySelector('[data-lpcode=\"E07\"]')"], max_h=700)
         close_leader()
 
         # ================================ the enumerator receives and loses households ================================

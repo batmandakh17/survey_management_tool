@@ -204,7 +204,7 @@ def other_csv(header, rows, errs, warns):
         warns.append("a KoBoToolbox export of the call-record form: holds the numbers the form pulled in; for the leader's KoBoToolbox tab, never for the common folder")
         return f"KoBoToolbox call-record export, {len(rows)} records"
     if header == ACOLS:
-        bad = [r for r in rows if r["action"] not in ("RELEASE", "SWITCH_REQUEST", "REMOVE_REQUEST", "ACTIVATE_REPLACEMENT")]
+        bad = [r for r in rows if r["action"] not in ("RELEASE", "SWITCH_REQUEST", "REMOVE_REQUEST", "ACTIVATE_REPLACEMENT", "REPLACEMENT_REQUEST", "FIELD_VISIT_REQUEST")]
         if bad:
             errs.append(f"{len(bad)} row(s) with an unknown action")
         return f"actions, {len(rows)} rows"

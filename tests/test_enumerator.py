@@ -132,13 +132,12 @@ def main():
         vis = []
 
         def call(h, slot, start, mins, status, appt=None, note=None, action=None, shot=None):
-            b.js(f"RTM.setNow('{start}'); true")
+            # the tool does not place calls: the enumerator logs the call just made, with its start and its length (3 November 2026)
+            b.js(f"RTM.setNow(new Date(Date.parse('{start}') + {mins} * 60000).toISOString()); true")
             open_hh(h)
             b.click(f'[data-act="call"][data-slot="{slot}"]')
-            b.wait("APP.call && !APP.call.end")
-            b.js(f"RTM.setNow(new Date(Date.parse('{start}') + {mins} * 60000).toISOString()); true")
-            b.click('[data-act="endcall"]')
             b.wait("!!document.querySelector('#callform')")
+            b.js(f"(() => {{ const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '{start[:16]}'; f.querySelector('[name=minutes]').value = '{mins}'; return true; }})()")
             vis.append(b.js("(() => { const r = document.querySelector('.callbox').getBoundingClientRect(); return r.top >= 0 && r.top < window.innerHeight - 120; })()"))
             b.js(f"document.querySelector('input[name=status][value={status}]').checked = true; true")
             if appt:
@@ -279,15 +278,26 @@ def main():
         # ---------- 10. a call logged afterwards ----------
         h5 = b.js(f"APP.C.list.filter(c => c.open && c.n === 0 && c.kind !== 'replacement' && !{json.dumps(due[:4])}.includes(c.hhid)).map(c => c.hhid)[0]")
         open_hh(h5)
-        b.click('[data-act="manual"]')
+        b.click('[data-act="call"][data-slot="1"]')
         b.wait("!!document.querySelector('#callform [name=start]')")
+        nostop = not b.js("!!document.querySelector('[data-act=\"endcall\"]') || !!document.querySelector('#call-timer')")
         b.js("""(() => { const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '2026-10-27T10:15'; f.querySelector('[name=minutes]').value = '3';
+                f.querySelector('input[name=status][value=COMPLETE]').checked = true; f.querySelector('[name=minutes]').value = ''; return true; })()""")
+        n_before = b.js("APP.S.events.length")
+        b.click('[data-act="savecall"]'); time.sleep(0.2)
+        refused = b.js("APP.S.events.length") == n_before and b.js("document.querySelector('#callform [name=minutes]').classList.contains('invalid')")
+        b.js("""(() => { const f = document.querySelector('#callform'); f.querySelector('[name=start]').value = '2099-10-27T10:15'; f.querySelector('[name=minutes]').value = '3';
                 f.querySelector('input[name=status][value=NOT_AVAILABLE]').checked = true; return true; })()""")
-        b.click('[data-act="savemanual"]')
+        b.click('[data-act="savecall"]'); time.sleep(0.2)
+        future = b.js("APP.S.events.length") == n_before
+        b.js("document.querySelector('#callform [name=start]').value = '2026-10-27T10:15'; true")
+        b.click('[data-act="savecall"]')
         b.wait(f"APP.C.map.get('{h5}').n === 1")
         e = b.js("APP.S.events[APP.S.events.length - 1]")
+        check("the tool places no call: one form logs a call made with the call center's own system, with its start and minutes; a complete needs its minutes and a call cannot start in the future",
+              nostop and refused and future, [nostop, refused, future])
         check("a call logged afterwards keeps its own time and records when it was entered",
-              e["ts"] == "2026-10-27T10:15:00+08:00" and e["logged_at"] > e["ts"] and e.get("entered") == "after the call", e)
+              e["ts"] == "2026-10-27T10:15:00+08:00" and e["end_ts"] == "2026-10-27T10:18:00+08:00" and e["logged_at"] > e["ts"], e)
 
         # ---------- 11. a new phone number ----------
         open_hh(h2)
@@ -656,6 +666,43 @@ def main():
         check("varied times: each new day starts in the part of the day tried least (afternoon after a morning call, then evening), and a booked callback is never limited by the protocol; a malformed protocol is refused",
               unitk["vary"]["at"] == "2026-10-29T12:00:00+08:00" and "afternoon" in unitk["vary"]["text"] and unitk["vary2"]["at"] == "2026-10-30T17:00:00+08:00" and "evening" in unitk["vary2"]["text"]
               and unitk["cb"]["kind"] == "callback" and unitk["bad"] is True, unitk)
+        # ---------- replacements the leader approves (3 November 2026): the enumerator asks, the household waits, a revised file releases or declines ----------
+        unitr = b.js("""(() => { const base = JSON.parse(JSON.stringify(APP.S.assignment)); delete base.fingerprint; base.replacement_policy = Object.assign({}, base.replacement_policy, { approval: 'leader' });
+            const now = RTM.now(), h0 = base.households.find(h => (h.replacements || []).length >= 1), r1 = h0.replacements[0].hhid;
+            const mk = f => { const A = JSON.parse(JSON.stringify(base)); if (f) f(A.households.find(h => h.hhid === h0.hhid)); return RTM.newSession(A); };
+            const out = {};
+            const S = mk(); RTM.append(S, 'dial', { hhid: h0.hhid, ts: '2026-10-27T10:00:00+08:00', end_ts: '2026-10-27T10:02:00+08:00', status: 'REFUSAL_HARD', phone_slot: 1, operator: 'E07' });
+            const req = RTM.append(S, 'action', { hhid: h0.hhid, action: 'REPLACEMENT_REQUEST', target_hhid: r1, reason: 'refused firmly' });
+            const c = RTM.cases(S, now).map.get(h0.hhid); out.asked = [c.state, c.open];
+            const S2 = mk(h => { h.replacement_release = { hhid: r1, at: '2026-10-28T09:00:00+08:00', by: 'L01' }; }); S2.events = S.events.slice(); S2.genesis = S.genesis;
+            const C2 = RTM.cases(S2, now), r = C2.map.get(r1);
+            out.released = [C2.map.get(h0.hhid).state, r ? r.kind : null, r ? r.h.replaces : null, r ? r.h.activated_at : null, C2.map.get(h0.hhid).replacements[0].active];
+            const S3 = mk(h => { h.replacement_declined = { at: '2026-10-28T09:00:00+08:00', by: 'L01', note: 'keep calling' }; }); S3.events = S.events.slice();
+            const c3 = RTM.cases(S3, now).map.get(h0.hhid); out.declined = [c3.state, c3.open, !!c3.declined && c3.declined.note];
+            const S4 = mk(h => { h.replacement_declined = { at: '2026-10-20T09:00:00+08:00', by: 'L01' }; }); S4.events = S.events.slice();
+            out.old_decline = RTM.cases(S4, now).map.get(h0.hhid).state;
+            out.progress = RTM.progress(RTM.cases(S, now)).replacement_requested;
+            return out; })()""")
+        check("with the leader's approval, a replacement request closes the household while it waits; a revised file's release activates the replacement and closes the household as replaced; a decline made after the request opens it again; an older decline does not",
+              unitr["asked"] == ["replacement_requested", False] and unitr["released"][0] == "replaced" and unitr["released"][1] == "replacement" and unitr["released"][3] == "2026-10-28T09:00:00+08:00" and unitr["released"][4] is True
+              and unitr["declined"] == ["in_progress", True, "keep calling"] and unitr["old_decline"] == "replacement_requested" and unitr["progress"] == 1, unitr)
+        # in the view: the button asks instead of activating, the request can be undone
+        b.js("APP.S.assignment.replacement_policy = Object.assign({}, APP.S.assignment.replacement_policy, { approval: 'leader' }); APP.render(); true")
+        hr = b.js("APP.C.list.find(c => c.open && c.n === 0 && c.replacements.length && !c.appointment).hhid")
+        b.js(f"RTM.append(APP.S, 'dial', {{ hhid: {json.dumps(hr)}, ts: RTM.localISO(RTM.now()), end_ts: RTM.localISO(new Date(RTM.now().getTime() + 60000)), status: 'REFUSAL_HARD', phone_slot: 1, operator: 'E07' }}); APP.unsaved++; APP.sel = {json.dumps(hr)}; APP.render(); true")
+        btn = b.js("(el => el ? [el.dataset.act, el.innerText, el.disabled] : null)(document.querySelector('[data-act=\"askrepl\"]'))")
+        b.click('[data-act="askrepl"]'); b.wait("APP.modal")
+        b.js("document.querySelector('#modal-input').value = 'refused firmly, twice'; true"); b.click('[data-act="modalok"]'); time.sleep(0.2)
+        rq = b.js(f"(c => [c.state, c.open, (APP.S.events.slice(-1)[0] || {{}}).action, (APP.S.events.slice(-1)[0] || {{}}).target_hhid === c.replacements[0].hhid, document.querySelector('.drawer').innerText.includes('waiting for your leader')])(APP.C.map.get({json.dumps(hr)}))")
+        check("with the leader's approval the household panel offers 'Ask the leader for a replacement'; asking logs the request with the next replacement, and the household waits",
+              btn == ["askrepl", "Ask the leader for a replacement", False] and rq == ["replacement_requested", False, "REPLACEMENT_REQUEST", True, True], [btn, rq])
+        reqid = b.js("APP.S.events.slice(-1)[0].event_id")
+        b.click(f'[data-act="correct"][data-ev="{reqid}"]'); b.wait("!!document.querySelector('#corrform')")
+        b.js("document.querySelector('#corrform [name=reason]').value = 'reached the respondent after all'; true"); b.click('[data-act="savecorr"]'); time.sleep(0.2)
+        check("undoing the request opens the household again", b.js(f"APP.C.map.get({json.dumps(hr)}).state") == "in_progress")
+        b.click('[data-act="closehh"]')
+        b.js("delete APP.S.assignment.replacement_policy.approval; APP.render(); true")
+
         # the same in the view: the household panel's link and form, the Calendar tab's time off, the Log tab, and the export
         hp = b.js("APP.C.list.find(c => c.open && c.n === 0 && !c.appointment && c.h.plan && c.h.plan.first_dial_date > '2026-10-28' && c.h.plan.first_dial_date <= RTM.selfRules(APP.S.assignment).first_calls_by).hhid")
         b.js(f"APP.sel = {json.dumps(hp)}; APP.render(); true"); b.wait(f"APP.sel === {json.dumps(hp)}")

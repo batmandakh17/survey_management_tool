@@ -402,6 +402,8 @@ def main():
         iss = issues()
         check("a file edited after export: its chain fails, the differing event is a conflict", any(i[0] == "chain_broken" for i in iss) and any(i[0] == "event_conflict" for i in iss))
         ec = next(i for i in iss if i[0] == "event_conflict")
+        labels = b.js("LEAD.merged().G.issues.find(i => i.type === 'event_conflict').choices.map(c => c.label)")
+        check("when the two files share a name, the choices say which one passes its integrity check", len(set(labels)) == len(labels) and "integrity check passed" in labels[0] and "integrity check failed" in labels[1], labels)
         b.click(f'[data-lact="resolve"][data-key="{ec[2]}"][data-v="{ec[5][0]}"]')
         b.wait("LEAD.state().resolutions.length === 2")
         check("the leader keeps the verified version: the event counts again", not any(i[0] == "event_conflict" and i[1] == "open" for i in issues()))
@@ -857,6 +859,142 @@ def main():
                      return {{ iss, holder: LCORE.cases(M, G).get({json.dumps(gone7)}).enumerator_id, kept: ['a', 'b', 'c'].map(x => G.dials.some(d => d.event_id === '00000000-0000-4000-8000-00000000000' + x)) }}; }})()""")
         check("a household moved back to its first enumerator: their dial while the other held it is still flagged as a double call; dials before the move and after the return are theirs",
               [t for t, _, _ in g11["iss"]] == ["after_move"] and g11["iss"][0][1] == "E07" and "1 dial" in g11["iss"][0][2] and "moved to E02 on 2026-11-13 09:00" in g11["iss"][0][2] and g11["holder"] == "E07" and g11["kept"] == [True, True, True], g11)
+
+        # ================= D2. replacements the leader approves (3 November 2026) =================
+        start()
+        b.set_files("#lf-hh", [os.path.join(S, "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
+        b.click('[data-lact="tab"][data-t="import"]')
+        b.js("RTM.setNow('2026-11-13T09:00:00+08:00'); true")
+        b.set_files("#lf-manifest", [MANIFEST]); b.wait("!!LEAD.state().manifest")
+        b.set_files("#lf-imports", EXPORTS); b.wait(f"LEAD.state().imports.length === {len(EXPORTS)}")
+        pre = b.js("""(() => { const st = LEAD.state(); st.manifest.replacement_policy = Object.assign({}, st.manifest.replacement_policy, { approval: 'leader' });
+            const f = st.imports.find(x => /E07_2026-11-06\\.json$/.test(x.name)), j = JSON.parse(f.text);
+            const S = { assignment: { program: j.program, round: j.round, enumerator_id: j.enumerator_id }, events: j.events, genesis: j.chain_genesis };
+            LEAD.refresh();
+            const used = new Set(LEAD.merged().G.activatedBy.keys());
+            const cand = [...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E07' && c.state === 'in_progress' && !c.replaces
+              && (st.manifest.households.find(h => h.hhid === c.hhid).replacements || []).some(r => !used.has(r)));
+            RTM.setNow('2026-11-06T17:00:00+08:00');
+            RTM.append(S, 'action', { hhid: cand[0].hhid, action: 'REPLACEMENT_REQUEST', target_hhid: st.manifest.households.find(h => h.hhid === cand[0].hhid).replacements[0], reason: 'refused firmly' });
+            RTM.append(S, 'action', { hhid: cand[1].hhid, action: 'REPLACEMENT_REQUEST', target_hhid: st.manifest.households.find(h => h.hhid === cand[1].hhid).replacements[0], reason: 'no working number' });
+            RTM.setNow('2026-11-13T09:00:00+08:00');
+            j.events = S.events.map(RTM.exportEvent); j.event_count = j.events.length; j.last_hash = j.events[j.events.length - 1].hash; f.text = JSON.stringify(j); LEAD.refresh();
+            const g = LEAD.merged();
+            return { a: cand[0].hhid, b: cand[1].hhid, next: (st.manifest.households.find(h => h.hhid === cand[0].hhid).replacements || []).find(r => !used.has(r)),
+              states: [g.C.get(cand[0].hhid).state, g.C.get(cand[1].hhid).state], notrel: g.G.issues.filter(i => i.type === 'replacement_not_released').length, acts: used.size,
+              rq: LCORE.replacementRequests(st.manifest, g.G, g.C).map(r => [r.main, r.status, r.next]) }; })()""")
+        check("with the leader's approval, the enumerators' requests wait on the Progress tab with the next replacement in line, the households count as 'Replacement asked', and a replacement used without a release is a question",
+              pre["states"] == ["replacement_requested", "replacement_requested"] and sorted(r[1] for r in pre["rq"]) == ["pending", "pending"] and {r[0]: r[2] for r in pre["rq"]}[pre["a"]] == pre["next"]
+              and pre["notrel"] == pre["acts"], pre)
+        b.click('[data-lact="tab"][data-t="progress"]'); time.sleep(0.2)
+        rtxt = b.js("document.querySelector('.panel').innerText")
+        tick(f'[data-lrrsel="{pre["a"]}"]', True); b.click('[data-lact="rrrelease"]'); time.sleep(0.2)
+        tick(f'[data-lrrsel="{pre["b"]}"]', True); setv("#lrr-note", "keep calling in the evening"); b.click('[data-lact="rrdecline"]'); time.sleep(0.2)
+        queued = b.js("[...LEAD.ui.rr.values()].map(x => [x.main, x.decision, x.replacement || '', x.note || ''])")
+        before = snapshot()
+        b.click('[data-lact="rrwrite"]'); b.wait("!!LEAD.ui.ready && LEAD.ui.readyKind === 'decisions'", timeout=30)
+        b.click('[data-lact="dlall"]')
+        f07 = wait_new("E07_assignment_R05.json", before); fm = wait_new("L2MN-DEMO_R05_manifest.json", before)
+        A7 = json.load(open(f07, encoding="utf-8")); M7 = json.load(open(fm, encoding="utf-8"))
+        ha = next(h for h in A7["households"] if h["hhid"] == pre["a"]); hb = next(h for h in A7["households"] if h["hhid"] == pre["b"])
+        check("the leader releases one request and declines the other in a batch; the revised file of their enumerator carries the release and the decline, and the manifest records both decisions",
+              "Replacement requests" in rtxt and queued == [[pre["a"], "released", pre["next"], ""], [pre["b"], "declined", "", "keep calling in the evening"]]
+              and ha.get("replacement_release", {}).get("hhid") == pre["next"] and hb.get("replacement_declined", {}).get("note") == "keep calling in the evening"
+              and [(d["main"], d["decision"]) for d in M7["replacement_decisions"]] == [(pre["a"], "released"), (pre["b"], "declined")] and M7["revision"] == 2 and "released 1 replacement(s) and declined 1" in A7["note"], [queued, ha.get("replacement_release"), hb.get("replacement_declined"), M7.get("replacement_decisions")])
+        post = b.js(f"""(() => {{ const g = LEAD.merged(), st = LEAD.state(), hh = LEAD.state().inputs.households ? null : null;
+            const rel = g.C.get({json.dumps(pre["next"])});
+            return {{ a: g.C.get({json.dumps(pre["a"])}).state, b: g.C.get({json.dumps(pre["b"])}).state, rel: rel ? [rel.enumerator_id, rel.replaces] : null,
+              rq: Object.fromEntries(LCORE.replacementRequests(st.manifest, g.G, g.C).map(r => [r.main, r.status])) }}; }})()""")
+        check("with the new manifest the released replacement is active for the household's enumerator and the household counts as replaced; the declined one is in progress again",
+              post["a"] == "replaced" and post["rel"] == ["E07", pre["a"]] and post["b"] == "in_progress" and post["rq"] == {pre["a"]: "released", pre["b"]: "declined"}, post)
+        b.click('[data-lact="tab"][data-t="platform"]'); time.sleep(0.2)
+        before = snapshot(); b.click('[data-lact="export"][data-what="choices"]'); fch = wait_new("choices_households*.csv", before)
+        chr_ = [r for r in csv.DictReader(open(fch, encoding="utf-8")) if r["kind"] == "replacement"]
+        check("for a team on KoBoToolbox, the form's list carries only the replacements the leader released", [r["name"] for r in chr_] == [pre["next"]], [r["name"] for r in chr_][:5])
+
+        # ================= D3. the round's changes, field visits, blocked numbers, areas, messages, codes (3 November 2026) =================
+        start()
+        b.set_files("#lf-hh", [os.path.join(S, "household_list.csv")]); b.wait("!!LEAD.state().inputs.households")
+        b.set_files("#lf-hist", HIST); b.wait(f"LEAD.state().inputs.history.length === {len(HIST)}")
+        b.click('[data-lact="tab"][data-t="import"]')
+        b.js("RTM.setNow('2026-11-13T09:00:00+08:00'); true")
+        b.set_files("#lf-manifest", [MANIFEST]); b.wait("!!LEAD.state().manifest")
+        b.set_files("#lf-imports", EXPORTS); b.wait(f"LEAD.state().imports.length === {len(EXPORTS)}")
+        d3 = b.js("""(() => { const st = LEAD.state(), f = st.imports.find(x => /E07_2026-11-06\\.json$/.test(x.name)), j = JSON.parse(f.text);
+            const S = { assignment: { program: j.program, round: j.round, enumerator_id: j.enumerator_id }, events: j.events, genesis: j.chain_genesis };
+            const ip = [...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E07' && c.state === 'in_progress' && !c.replaces).map(c => c.hhid);
+            RTM.setNow('2026-11-06T17:00:00+08:00');
+            RTM.append(S, 'dial', { hhid: ip[0], ts: '2026-11-06T16:00:00+08:00', end_ts: '2026-11-06T16:01:00+08:00', status: 'BLOCKED', phone_slot: 1, operator: 'E07' });
+            RTM.append(S, 'action', { hhid: ip[1], action: 'FIELD_VISIT_REQUEST', reason: 'never answers' });
+            RTM.setNow('2026-11-13T09:00:00+08:00');
+            j.events = S.events.map(RTM.exportEvent); j.event_count = j.events.length; j.last_hash = j.events[j.events.length - 1].hash; f.text = JSON.stringify(j); LEAD.refresh();
+            return { blocked: ip[0], visit: ip[1] }; })()""")
+        b.click('[data-lact="tab"][data-t="progress"]'); time.sleep(0.3)
+        ptx = b.js("document.querySelector('.panel').innerText")
+        b.click('[data-lact="mvblocked"]'); time.sleep(0.2)
+        bm = b.js("(LEAD.ui.moves ? LEAD.ui.moves.list : []).map(m => [m.hhid, m.from, m.to, !!m.blocked])")
+        check("a household whose respondent blocked the caller's number shows on the Progress tab, and one click lists its move to a colleague",
+              "blocked their caller's number" in ptx and len(bm) == 1 and bm[0][0] == d3["blocked"] and bm[0][1] == "E07" and bm[0][2] != "E07" and bm[0][3], [bm, d3])
+        b.js("LEAD.ui.moves = null; true")
+        # the round's changes: a later last day, a household added, E01's file re-issued
+        # a top-up household, added to the household list (every household of the sample list is already in the round)
+        add_id = "0199-001"
+        b.js(f"""(() => {{ const st = LEAD.state(), t = st.inputs.households.text.replace(/\\s+$/, ''), head = t.split(/\\r?\\n/)[0].split(',');
+            const row = head.map(c => ({{ hhid: {json.dumps(add_id)}, psu: '0199', stratum: '1', phone_1: '+000 99 001 0001', phone_1_label: 'respondent', contact_name: 'Contact 0199-001 (synthetic)', status: 'active' }})[c] || '');
+            st.inputs.households.text = t + '\\n' + row.join(',') + '\\n'; LEAD.refresh(); return true; }})()""")
+        setv("#lchg-end", "2026-11-25"); b.click('[data-lact="chgwin"]')
+        setv("#lchg-hh", add_id); b.click('[data-lact="chgadd"]')
+        b.js("document.querySelector('#lchg-reissue').value = 'E01'; true"); b.click('[data-lact="chgreissue"]'); time.sleep(0.2)
+        chg = b.js("JSON.parse(JSON.stringify(LEAD.ui.chg))")
+        before = snapshot()
+        b.click('[data-lact="chgwrite"]'); b.wait("!!LEAD.ui.ready && LEAD.ui.readyKind === 'changes'", timeout=30)
+        b.click('[data-lact="dlall"]')
+        fm3 = wait_new("L2MN-DEMO_R05_manifest.json", before); M3c = json.load(open(fm3, encoding="utf-8"))
+        to = chg["add"][0]["to"]
+        fa = {e: json.load(open(wait_new(f"{e}_assignment_R05.json", before), encoding="utf-8")) for e in ("E01", "E02", "E07")}
+        addh = next(h for h in fa[to]["households"] if h["hhid"] == add_id)
+        cfx = b.js(f"""(() => RTM.validateAssignment({json.dumps(fa[to])}).errors)()""")
+        check("changing the round: the new last day reaches every enumerator's revised file and the manifest; the added household goes to the enumerator with the fewest open, with a first call on the next working day; E01's file is re-issued",
+              chg["end"] == "2026-11-25" and chg["reissue"] == ["E01"] and M3c["calendar"]["window_end"] == "2026-11-25" and all(a["calendar"]["window_end"] == "2026-11-25" for a in fa.values())
+              and any(h["hhid"] == add_id and h["reason"] == "added_mid_round" and h["enumerator_id"] == to for h in M3c["households"])
+              and addh["assignment"]["reason"] == "added_mid_round" and addh["plan"]["first_dial_date"] == "2026-11-13" and "runs 2026-10-26 to 2026-11-25" in fa[to]["note"] and cfx == [], [chg, M3c["calendar"]["window_end"], addh.get("plan"), cfx])
+        lft = {r["enumerator_id"]: r["days_left"] for r in b.js("LCORE.pace(LEAD.state().manifest, LEAD.merged().C, LEAD.merged().P, RTM.now()).rows")}
+        check("with the new manifest the pace counts the longer window", all(v == 11 for v in lft.values()), lft)
+        # field visits: the referral, the list, the outcome written as a note
+        vtx = b.js("document.querySelector('.panel').innerText")
+        before = snapshot(); b.click('[data-lact="export"][data-what="visits"]'); fv = list(csv.DictReader(open(wait_new("L2MN-DEMO_R05_field_visits*.csv", before), encoding="utf-8")))
+        setv(f'[data-lvisit="{d3["visit"]}"]', "time_agreed"); setv(f'[data-lvisitnote="{d3["visit"]}"]', "call after 6 pm")
+        before = snapshot()
+        b.click('[data-lact="visitwrite"]'); b.wait("!!LEAD.ui.ready && LEAD.ui.readyKind === 'visits'", timeout=30)
+        b.click('[data-lact="dlall"]')
+        fe7 = json.load(open(wait_new("E07_assignment_R05.json", before), encoding="utf-8")); fm4 = json.load(open(wait_new("L2MN-DEMO_R05_manifest.json", before), encoding="utf-8"))
+        vh = next(h for h in fe7["households"] if h["hhid"] == d3["visit"])
+        check("a field visit asked by an enumerator is listed with what is needed to plan it, its outcome is recorded, and the revised file carries it as a note on the household",
+              "Field visits" in vtx and len(fv) == 1 and fv[0]["hhid"] == d3["visit"] and fv[0]["phone_1"].startswith("+000") and fm4["field_visits"][0]["outcome"] == "time_agreed"
+              and vh.get("note", "").startswith("Field visit 2026-11-13: reached, a time to call agreed. call after 6 pm") and fm4["calendar"]["window_end"] == "2026-11-25", [fv[:1], vh.get("note"), fm4.get("field_visits")])
+        # the text-message list for a day with a booked callback
+        smsd = b.js("""(() => { const g = LEAD.merged(); for (const c of g.C.values()) { const l = c.dials[c.dials.length - 1]; if ((c.state === 'in_progress') && l && l.appointment_ts && RTM.CALLBACK_STATUSES.includes(l.status)) return [c.hhid, RTM.partsIn(new Date(Date.parse(l.appointment_ts)), 'Asia/Ulaanbaatar').key]; } return null; })()""")
+        setv('[data-lset="__smsDay"]', smsd[1])
+        before = snapshot(); b.click('[data-lact="export"][data-what="sms"]'); sl = list(csv.DictReader(open(wait_new(f"L2MN-DEMO_R05_messages_{smsd[1]}*.csv", before), encoding="utf-8")))
+        check("the text-message list for a day holds the households with a callback booked that day, with their number", any(r["hhid"] == smsd[0] and r["why"] == "callback" and r["phone"].startswith("+000") for r in sl), [smsd, sl[:2]])
+        # areas
+        ar = b.js("(() => { const st = LEAD.state(), g = LEAD.merged(); const A = LCORE.areaView(st.manifest, g.C, null, null); return [A.rows.length, A.rows.reduce((a, r) => a + r.households, 0), g.C.size]; })()")
+        atx = b.js("document.querySelector('.panel').innerText")
+        check("the Progress tab shows completes by area, every household counted once, with the earlier rounds loaded", ar[1] == ar[2] and ar[0] >= 2 and "By area" in atx and "Round 4" in atx, [ar, atx[-300:]])
+        # interviewer codes: an alias, and a new value in a built-in layout
+        PHLx = os.path.join(ROOT, "samples", "kobo", "L2MN-DEMO_CATI_R05_-_all_versions_-_False_-_2026-11-06-18-00-00.csv")
+        prow = list(csv.DictReader(open(PHLx, encoding="utf-8"), delimiter=";"))
+        k = next(i for i, r in enumerate(prow) if r["X15"] == "6"); prow[k]["X15"] = "11"
+        j7 = next(i for i, r in enumerate(prow) if r["int_id"] == "CATI07" and i != k); prow[j7]["int_id"] = "CATI70"
+        buf2 = io.StringIO(); w2 = csv.DictWriter(buf2, fieldnames=list(prow[0].keys()), delimiter=";", lineterminator="\n"); w2.writeheader(); w2.writerows(prow)
+        cx = b.js(f"""(() => {{ const st = LEAD.state(), rec = LCORE.readImport('x.csv', {json.dumps(buf2.getvalue())}, st.profiles);
+            const uk = LCORE.unknownPlatformCodes([rec], {{}});
+            const G1 = LCORE.merge(st.manifest, [rec], new Map(), RTM.now(), {{ profileExtra: {{ phl_kobo: {{ '11': 'NO_ANSWER' }} }}, codes: {{ E07: 'CATI07, CATI70' }} }});
+            const d = G1.dials.find(x => x.event_id === {json.dumps(prow[k]["_uuid"])}) || {{}};
+            return {{ uk: uk.map(u => [u.value, u.n]), st: d.status, alias: LCORE.enumMapper(st.manifest, {{ E07: 'CATI07, CATI70' }})('cati-70'), first: LCORE.codeOf(st.manifest, {{ E07: 'CATI07, CATI70' }})('E07'),
+              unknownE: G1.issues.filter(i => i.type === 'unknown_enumerator').length }}; }})()""")
+        check("a new value in a built-in layout is found and, once mapped, read as that result; an interviewer's second code reads as the same interviewer, and the first is written",
+              cx["uk"] == [["11", 1]] and cx["st"] == "NO_ANSWER" and cx["alias"] == "E07" and cx["first"] == "CATI07" and cx["unknownE"] == 0, cx)
 
         # ================= E. exports of KoBoToolbox (proposal K) =================
         # the same round-5 calls as the enumerators' exports, in the form's layouts (samples/kobo)

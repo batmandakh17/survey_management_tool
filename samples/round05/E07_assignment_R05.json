@@ -1,6 +1,6 @@
 {
  "schema": "rtm-assign-1.0",
- "tool_version": "0.3.7",
+ "tool_version": "0.4.0",
  "program": "L2MN-DEMO",
  "country": "MN",
  "round": 5,
@@ -2208,5 +2208,5 @@
    }
   }
  ],
- "fingerprint": "f43c2e3131ac77a76f1d79a5a1d1163a59fdd1596d7d1006b67256656004329d"
+ "fingerprint": "19c80c12793bbe62d451c8bea0e5e9ba99061c1aa3c76fda18ac5d6c84b8bd01"
 }
