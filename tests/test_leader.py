@@ -596,6 +596,32 @@ def main():
         check("called households without a booked callback move only when the leader allows it; a booked callback or a complete never moves", unit["r2"] == [["a2", "A", "B"], ["a1", "A", "B"], ["a3", "A", "B"]], unit)
         check("a household moves only to an enumerator who matches its criteria", unit["r3"] == [["a1", "A", "B"]], unit)
         check("an enumerator whose export is from an earlier day is not judged unless the leader says so", unit["left"] == [{"id": "D", "why": "last export 2026-11-01, not today"}] and unit["r4"][0] == ["a2", "A", "D"], unit)
+        # more cases during the round (3 November 2026): an enumerator who finished early, one who is given households, one who leaves
+        unit2 = b.js("""(() => { const rows = [
+            { enumerator_id: 'A', known: true, fresh: true, open: 4, need: 3.4 }, { enumerator_id: 'B', known: true, fresh: true, open: 1, need: -2.6 },
+            { enumerator_id: 'C', known: true, fresh: true, open: 2, need: -0.4 }, { enumerator_id: 'D', known: true, fresh: false, open: 1, export_day: '2026-11-01', need: -9, why: 'last export 2026-11-01, not today' },
+            { enumerator_id: 'F', known: true, fresh: false, open: 0, export_day: '2026-11-01', need: -3, why: '' },
+            { enumerator_id: 'G', known: true, fresh: true, open: 0, need: -1, away: true, why: 'away since 2026-11-02' } ];
+          const C = new Map(); const add = (h, e, state, extra) => C.set(h, Object.assign({ hhid: h, enumerator_id: e, state, dials: [], n: 0 }, extra || {}));
+          add('a1', 'A', 'not_started'); add('a2', 'A', 'not_started'); add('a3', 'A', 'in_progress', { dials: [{ status: 'NO_ANSWER' }], n: 1 }); add('a4', 'A', 'complete');
+          add('a5', 'A', 'in_progress', { dials: [{ status: 'APPOINTMENT', appointment_ts: '2026-11-10T10:00:00+08:00' }], n: 1 });
+          add('a6', 'A', 'in_progress', { dials: [{ status: 'REFUSAL_HARD' }], n: 1 }); add('a7', 'A', 'not_started'); add('b1', 'B', 'not_started'); add('c1', 'C', 'not_started'); add('c2', 'C', 'not_started'); add('d1', 'D', 'not_started');
+          const mv = r => r.moves.map(m => [m.hhid, m.from, m.to]);
+          const r1 = LCORE.proposeMoves({ rows }, C, { include: 'not_started' });
+          const r5 = LCORE.proposeMoves({ rows }, C, { include: 'not_started', take: { id: 'C', n: 2 } });
+          const r6 = LCORE.proposeMoves({ rows }, C, { include: 'not_started', take: { id: 'N', n: 9 }, exclude: new Set(['a7']) });
+          const r7 = LCORE.coverAway({ rows }, C, { away: 'A' });
+          const r8 = LCORE.coverAway({ rows }, C, { away: 'A', eligible: (h, e) => e === 'C', hh: new Map([['a1', { hhid: 'a1' }]]) });
+          return { r1: mv(r1), judged1: r1.judged, left1: r1.left_out.map(x => x.id), r5: mv(r5), r6: mv(r6), short6: r6.short, r7: mv(r7), cb7: r7.moves.map(m => m.callback || ''), stay7: r7.stay, r8: mv(r8) }; })()""")
+        check("an enumerator who finished early (nothing open) is judged on any export and takes households; one marked away never does",
+              unit2["r1"] == [["a7", "A", "F"], ["a2", "A", "B"], ["a1", "A", "F"]] and unit2["judged1"] == ["A", "B", "C", "F"] and unit2["left1"] == ["D", "G"], unit2)
+        check("'give n households to X': X alone takes n, from the enumerator furthest behind, whether or not X is short", unit2["r5"] == [["a7", "A", "C"], ["a2", "A", "C"]], unit2)
+        check("given to a newcomer, with one household excluded: from those behind, then those with most waiting; the shortfall is reported when nobody judged has more",
+              unit2["r6"] == [["a2", "A", "N"], ["a1", "A", "N"], ["c2", "C", "N"], ["c1", "C", "N"], ["b1", "B", "N"]] and unit2["short6"] == 4, unit2)
+        check("an enumerator who leaves: every open household goes to the others, those with spare days first and then evenly, a booked callback with its household; a hard refusal stays",
+              unit2["r7"] == [["a7", "A", "F"], ["a2", "A", "B"], ["a1", "A", "F"], ["a5", "A", "B"], ["a3", "A", "F"]] and unit2["cb7"] == ["", "", "", "2026-11-10T10:00:00+08:00", ""]
+              and unit2["stay7"] == [{"hhid": "a6", "why": "hard refusal: nobody calls it again"}], unit2)
+        check("covering an enumerator who leaves respects the criteria: a household goes only to an enumerator who matches it", unit2["r8"][2] == ["a1", "A", "C"], unit2)
 
         # moving households during the round: the sample's exports of 6 November, judged on Friday 13 November with 7 working days left
         start()
@@ -717,6 +743,81 @@ def main():
               b.js(f"[APP.S.events.find(e => e.what === 'assignment_updated').households_removed, APP.C.map.get({json.dumps(gone7)}).kind]") == [1, "removed"])
         b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
         b.click('[data-act="view"][data-v="leader"]')
+
+        # ---- more cases during the round (3 November 2026), on revision 2: E01 leaves, E09 joins and is given households ----
+        b.click('[data-lact="tab"][data-t="progress"]')
+        e01_open = b.js("[...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E01' && !c.replaces && (c.state === 'not_started' || c.state === 'in_progress') && !c.dials.some(d => d.status === 'REFUSAL_HARD')).map(c => c.hhid).sort()")
+        e01_cb = b.js(f"(() => {{ const open = new Set({json.dumps(e01_open)}); return [...LEAD.merged().C.values()].filter(c => open.has(c.hhid) && c.dials.length && c.dials[c.dials.length - 1].appointment_ts && RTM.CALLBACK_STATUSES.includes(c.dials[c.dials.length - 1].status)).map(c => [c.hhid, c.dials[c.dials.length - 1].appointment_ts]); }})()")
+        not_open_cb = b.js("[...LEAD.merged().C.values()].filter(c => c.enumerator_id === 'E01' && c.dials.length && c.dials[c.dials.length - 1].appointment_ts && !(c.state === 'not_started' || c.state === 'in_progress')).map(c => [c.hhid, c.state])")
+        open_before = {r["enumerator_id"]: r["open"] for r in b.js("LCORE.pace(LEAD.state().manifest, LEAD.merged().C, LEAD.merged().P, RTM.now()).rows")}
+        b.js("document.querySelector('#lmv-away').value = 'E01'; true"); b.click('[data-lact="away"]'); time.sleep(0.3)
+        mv2 = b.js("LEAD.ui.moves.list")
+        got_by = {e: sum(1 for m in mv2 if m["to"] == e) for e in ("E02", "E07")}
+        check("an enumerator who leaves (E01): every open household moves to the others, the booked callbacks with them, spread evenly when nobody has spare days",
+              len(e01_open) > 2 and e01_cb and sorted(m["hhid"] for m in mv2) == e01_open and all(m["from"] == "E01" and m["to"] in ("E02", "E07") and m["away"] for m in mv2)
+              and all(next(m for m in mv2 if m["hhid"] == h)["callback"] == ts for h, ts in e01_cb) and b.js("LEAD.ui.moves.away") == "E01"
+              and all(h not in {m["hhid"] for m in mv2} for h, _ in not_open_cb)
+              and abs((open_before["E02"] + got_by["E02"]) - (open_before["E07"] + got_by["E07"])) <= 1, [len(mv2), e01_cb, not_open_cb, open_before, got_by])
+        b.js("document.querySelector('#lnew-id').value = 'E09'; document.querySelector('#lnew-name').value = 'New hire'; document.querySelector('#lnew-pid').value = 'CATI09'; true")
+        b.click('[data-lact="addjoin"]'); time.sleep(0.3)
+        check("an enumerator who joins mid-round (E09) is added with their platform code and offered as a taker",
+              b.js("LEAD.ui.added.length === 1 && LEAD.ui.added[0].enumerator_id === 'E09' && LEAD.ui.added[0].platform_id === 'CATI09'") and "E09 (new)" in b.js("document.querySelector('#lmv-take').innerText"))
+        n_before = b.js("LEAD.ui.moves.list.length")
+        b.js("document.querySelector('#lmv-n').value = '4'; document.querySelector('#lmv-take').value = 'E09'; true"); b.click('[data-lact="take"]'); time.sleep(0.3)
+        mv3 = b.js(f"LEAD.ui.moves.list.slice({n_before})")
+        check("'give 4 households to E09' adds four moves to the newcomer from the enumerators furthest behind, none already in the list",
+              len(mv3) == 4 and all(m["to"] == "E09" and m["from"] in ("E02", "E07") and m["state"] == "not_started" for m in mv3) and len({m["hhid"] for m in b.js("LEAD.ui.moves.list")}) == n_before + 4, mv3)
+        unit3 = b.js("""(() => { const st = LEAD.state(), M = JSON.parse(JSON.stringify(st.manifest));
+            M.matching = { criteria: ['language'], enumerators: { E01: { language: ['kk', 'mn'] }, E02: { language: ['mn'] }, E07: { language: ['mn'] } } };
+            const B = LCORE.reviseFiles({ M, moves: [], C: LEAD.merged().C, hh: new Map(), sumOf: null, plans: null, updates: [], leader: 'L01', at: '2026-11-13T09:30:00+08:00', now: RTM.now(),
+              added: [{ enumerator_id: 'E09', name: 'New hire', platform_id: 'CATI09', attrs: { language: 'MN, kk' } }], away: null });
+            const e = B.manifest.enumerators.find(x => x.enumerator_id === 'E09');
+            return { values: B.manifest.matching.enumerators.E09, e09: e, files: B.files.length, rev: B.manifest.revision }; })()""")
+        check("a newcomer's criteria values are recorded in the manifest's matching, lower-cased and sorted; without a move they join the roster with no file",
+              unit3["values"] == {"language": ["kk", "mn"]} and unit3["e09"]["households"] == 0 and unit3["e09"]["joined_at"] == "2026-11-13T09:30:00+08:00" and unit3["files"] == 0 and unit3["rev"] == 3, unit3)
+        before = snapshot()
+        b.click('[data-lact="writemoves"]'); b.wait("!!LEAD.ui.ready && LEAD.ui.readyKind === 'moves'", timeout=30)
+        b.click('[data-lact="dlall"]')
+        got3 = [wait_new(n, before) for n in ("E01_assignment_R05.json", "E02_assignment_R05.json", "E07_assignment_R05.json", "E09_assignment_R05.json", "L2MN-DEMO_R05_manifest.json")]
+        M3 = json.load(open(got3[-1], encoding="utf-8")); R3 = {e: json.load(open(f, encoding="utf-8")) for e, f in zip(("E01", "E02", "E07", "E09"), got3[:-1])}
+        ros = {e["enumerator_id"]: e for e in M3["enumerators"]}
+        check("revision 3: E01 is marked away in the roster, with only closed households left in their file; E09 joins the roster with their platform code and a first file that supersedes nothing",
+              M3["revision"] == 3 and ros["E01"]["away_from"].startswith("2026-11-13") and all(h["hhid"] not in e01_open for h in R3["E01"]["households"]) and ros["E01"]["households"] == len(R3["E01"]["households"])
+              and ros["E09"]["platform_id"] == "CATI09" and ros["E09"]["name"] == "New hire" and ros["E09"]["joined_at"].startswith("2026-11-13") and ros["E09"]["households"] == 4
+              and R3["E09"]["revision"] == 3 and "supersedes" not in R3["E09"] and R3["E09"]["note"].startswith("You join") and len(R3["E09"]["households"]) == 4 and all(h["handover"]["from"] in ("E02", "E07") for h in R3["E09"]["households"]),
+              [M3["revision"], ros.get("E01"), ros.get("E09")])
+        taken = {h["hhid"]: h for e in ("E02", "E07") for h in R3[e]["households"]}
+        check("a household moved with a booked callback carries it in the handover, and the manifest's moves list has grown by every move",
+              all(taken[h]["handover"]["appointment_ts"] == ts and taken[h]["handover"]["from"] == "E01" for h, ts in e01_cb) and len(M3["moves"]) == 3 + len(mv2) + 4, [e01_cb, len(M3["moves"])])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = cfm.main(got3)
+        check("the revision-3 files and the manifest, with the newcomer and the enumerator away, pass the format checker", code == 0 and "warning" not in buf.getvalue(), buf.getvalue())
+        check("after the write, the roster offers E09 and marks E01 away, and the pace table says since when",
+              "E09" in b.js("document.querySelector('#lmv-to').innerText") and "E01 (away)" in b.js("document.querySelector('#lmv-to').innerText") and "away since 2026-11-13" in b.js("document.querySelector('.panel').innerText") and b.js("LEAD.ui.added.length") == 0)
+        # the newcomer opens their first file; the enumerator who received a household with a callback is due at that time
+        b.click('[data-act="view"][data-v="enum"]')
+        b.set_files("#f-assign", [got3[3]]); b.wait("!!APP.S")
+        check("the newcomer opens their first file: four households, each showing who had it before", b.js("APP.C.list.filter(c => c.kind === 'main').length") == 4 and b.js("APP.C.list.every(c => c.kind !== 'main' || (c.prior && c.prior.from))"))
+        b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        cb_h, cb_ts = e01_cb[0]; cb_e = "E02" if any(h["hhid"] == cb_h for h in R3["E02"]["households"]) else "E07"
+        b.set_files("#f-assign", [os.path.join(ROOT, "samples", "round05", f"{cb_e}_assignment_R05.json")]); b.wait("!!APP.S")
+        b.set_files("#f-update", [got3[1] if cb_e == "E02" else got3[2]]); b.wait("APP.S.events.some(e => e.what === 'assignment_updated')")
+        cbc = b.js(f"(() => {{ const c = APP.C.map.get({json.dumps(cb_h)}); return [c.prior.from, c.prior.appointment_ts, c.next.kind, c.appointment ? c.appointment.getTime() === Date.parse({json.dumps(cb_ts)}) : null]; }})()")
+        check("the enumerator who receives a household with a booked callback sees it due at that time, with who booked it", cbc == ["E01", cb_ts, "callback", True], cbc)
+        b.click('[data-act="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("APP.S === null")
+        b.click('[data-act="view"][data-v="leader"]')
+        # a household moved back to its first enumerator (E07 → E02 → E07): the dial E07 made while E02 held it is still a double call
+        later7b = "\n".join(rows7 + [dial_row("2026-11-06 15:00:00", "00000000-0000-4000-8000-00000000000a"), dial_row("2026-11-13 10:00:00", "00000000-0000-4000-8000-00000000000b"), dial_row("2026-11-14 11:00:00", "00000000-0000-4000-8000-00000000000c")]) + "\n"
+        g11 = b.js(f"""(() => {{ const st = LEAD.state(), M = {json.dumps(M2)};
+                     M.moves.push({{ hhid: {json.dumps(gone7)}, from: 'E02', to: 'E07', at: '2026-11-14T09:00:00+08:00', by: 'L01' }});
+                     M.households.forEach(h => {{ if (h.hhid === {json.dumps(gone7)}) {{ h.enumerator_id = 'E07'; h.previous_enumerator = 'E02'; }} }});
+                     const base = st.imports.map(f => LCORE.readImport(f.name, f.text)).concat([LCORE.readImport('E07_2026-11-14.csv', {json.dumps(later7b)})]);
+                     const G = LCORE.merge(M, base, new Map(), new Date('2026-11-14T12:00:00+08:00'));
+                     const iss = G.issues.filter(i => i.hhid === {json.dumps(gone7)}).map(i => [i.type, i.enumerator, i.detail]);
+                     return {{ iss, holder: LCORE.cases(M, G).get({json.dumps(gone7)}).enumerator_id, kept: ['a', 'b', 'c'].map(x => G.dials.some(d => d.event_id === '00000000-0000-4000-8000-00000000000' + x)) }}; }})()""")
+        check("a household moved back to its first enumerator: their dial while the other held it is still flagged as a double call; dials before the move and after the return are theirs",
+              [t for t, _, _ in g11["iss"]] == ["after_move"] and g11["iss"][0][1] == "E07" and "1 dial" in g11["iss"][0][2] and "moved to E02 on 2026-11-13 09:00" in g11["iss"][0][2] and g11["holder"] == "E07" and g11["kept"] == [True, True, True], g11)
 
         # ================= E. exports of KoBoToolbox, Survey Solutions and a calling service (proposal K) =================
         # the same round-5 calls as the enumerators' exports, in the three platforms' layouts (samples/kobo, samples/suso, samples/calls)

@@ -4,7 +4,7 @@
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.3.2';
+  RTM.VERSION = '0.3.3';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -225,7 +225,8 @@
         if (plan.first_dial_date && !RTM.isDateKey(plan.first_dial_date)) err(`Household ${h.hhid} has an invalid first-dial date.`);
         if (c && plan.first_dial_date && RTM.isDateKey(c.window_start) && (plan.first_dial_date < c.window_start || plan.first_dial_date > c.window_end)) warn(`Household ${h.hhid}'s first dial is planned outside the window.`);
         if (plan.target_hour !== undefined && (!Number.isInteger(plan.target_hour) || plan.target_hour < 0 || plan.target_hour > 23)) err(`Household ${h.hhid} has an invalid target hour.`);
-        if (h.handover !== undefined && (!h.handover || typeof h.handover !== 'object' || !Number.isInteger(h.handover.dials) || h.handover.dials < 0)) err(`Household ${h.hhid} has an invalid handover record (dials made before the move).`);
+        if (h.handover !== undefined && (!h.handover || typeof h.handover !== 'object' || !Number.isInteger(h.handover.dials) || h.handover.dials < 0
+          || (h.handover.appointment_ts !== undefined && !RTM.parseTS(h.handover.appointment_ts)))) err(`Household ${h.hhid} has an invalid handover record (dials made before the move, or its callback).`);
         (h.replacements || []).forEach(r => {
           if (!r || !r.hhid) err(`Household ${h.hhid} has a replacement without an ID.`);
           else if (rseen.has(r.hhid)) err(`Replacement ${r.hhid} is listed for two households.`);
@@ -340,6 +341,9 @@
     return slots.sort((a, b) => a.slot - b.slot);
   }
 
+  // the results whose callback time books a call: a moved household takes such a callback with it
+  RTM.CALLBACK_STATUSES = ['APPOINTMENT', 'PARTIAL', 'NOT_AVAILABLE', 'REFUSAL_SOFT', 'OTHER', 'LANGUAGE'];
+
   // ---- the case universe: assigned households plus activated replacements ----
   RTM.householdsOf = (S, eff) => {
     const A = S.assignment, cal = RTM.calendarOf(A);
@@ -406,7 +410,9 @@
         complete_short: !!(cmpAny && !cmp),
         cap_reached: nAll >= cal.cap,
       };
-      const appointment = last && last.appointment_ts && ['APPOINTMENT', 'PARTIAL', 'NOT_AVAILABLE', 'REFUSAL_SOFT', 'OTHER', 'LANGUAGE'].includes(last.status) ? RTM.parseTS(last.appointment_ts) : null;
+      // a booked callback: the last dial's, or, before this enumerator's first dial, the one the household brought with it when moved
+      const appointment = last && last.appointment_ts && RTM.CALLBACK_STATUSES.includes(last.status) ? RTM.parseTS(last.appointment_ts)
+        : !last && prior && prior.appointment_ts ? RTM.parseTS(prior.appointment_ts) : null;
       const myRepl = (h.replacements || []).map((r, i) => Object.assign({ rank: r.rank || i + 1 }, r, { active: false }));
       const c = { h, hhid: h.hhid, kind: h.kind, dials: ds, n: ds.length, nAll, prior, last, actions: as, slots, state, open, flags, appointment, replacements: myRepl, complete: cmp || null };
       c.next = RTM.suggest(c, cal, now);

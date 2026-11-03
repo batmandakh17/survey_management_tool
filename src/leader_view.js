@@ -19,7 +19,7 @@
   const WDN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const LV = window.LEAD = {};
   let st = null, cache = {};
-  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, readyKind: '', passphrases: null, busy: '', moves: null, movesInclude: 'not_started', movesStale: false };
+  const ui = { tab: 'prepare', hhFilter: 'all', hhEnum: '', logEnum: '', logStatus: '', logQ: '', logMore: 0, ready: null, readyKind: '', passphrases: null, busy: '', moves: null, movesInclude: 'not_started', movesStale: false, added: [] };
   LV.state = () => st;
   LV.ui = ui;
   LV.unsavedCount = () => (st ? st.unsaved : 0);
@@ -267,15 +267,68 @@
     render();
   }
   // ---- moving waiting households between enumerators during the round ----
+  // the round's enumerators for a move: the manifest's roster, and anyone added in this session who joins with the next files
   const manifestEligible = M => (M.matching && M.matching.criteria ? L.eligibleFn(M.matching.criteria, M.enumerators.map(e => ({ id: e.enumerator_id,
-    attrs: Object.fromEntries(Object.entries((M.matching.enumerators || {})[e.enumerator_id] || {}).map(([k, v]) => [k, (v || []).join(' ')])) }))) : null);
+    attrs: Object.fromEntries(Object.entries((M.matching.enumerators || {})[e.enumerator_id] || {}).map(([k, v]) => [k, (v || []).join(' ')])) }))
+    .concat(ui.added.map(a => ({ id: a.enumerator_id, attrs: a.attrs || {} })))) : null);
+  const roster = M => M.enumerators.map(e => ({ id: e.enumerator_id, away: !!e.away_from })).concat(ui.added.map(a => ({ id: a.enumerator_id, added: true })));
   const planDateOf = id => (st.plan && st.plan.plans && st.plan.plans.get(id) ? st.plan.plans.get(id).first_dial_date || '' : '');
+  const moveOpts = (g, d, keepList) => ({ include: ui.movesInclude, allowStale: ui.movesStale, eligible: manifestEligible(st.manifest), hh: d.hh && !d.hh.errors.length ? d.hh.households : null, planOf: planDateOf,
+    exclude: keepList && ui.moves ? new Set(ui.moves.list.map(m => m.hhid)) : null });
+  // a proposal starts the list afresh; "give" and "away" add to it, as does a move by hand
+  const addToList = (moves, extra) => {
+    if (!ui.moves) ui.moves = { list: [], picked: new Set(), left_out: [], judged: [] };
+    const have = new Set(ui.moves.list.map(m => m.hhid));
+    let n = 0;
+    moves.forEach(m => { if (have.has(m.hhid)) return; ui.moves.list.push(m); ui.moves.picked.add(ui.moves.list.length - 1); n++; });
+    Object.assign(ui.moves, extra || {});
+    return n;
+  };
   function proposeMoves() {
-    const g = merged(), M = st.manifest, d = derived();
-    const pace = L.pace(M, g.C, g.P, R.now());
-    const P = L.proposeMoves(pace, g.C, { include: ui.movesInclude, allowStale: ui.movesStale, eligible: manifestEligible(M), hh: d.hh && !d.hh.errors.length ? d.hh.households : null, planOf: planDateOf });
+    const g = merged(), d = derived();
+    const pace = L.pace(st.manifest, g.C, g.P, R.now());
+    const P = L.proposeMoves(pace, g.C, moveOpts(g, d));
     ui.moves = { list: P.moves, picked: new Set(P.moves.map((_, i) => i)), left_out: P.left_out, judged: P.judged };
     logEv('moves_proposed', { moves: P.moves.length, include: ui.movesInclude, earlier_exports: ui.movesStale ? 1 : undefined, judged: P.judged });
+    render();
+  }
+  // "give n households to X": an enumerator who finished early, or one who joined the round
+  function takeMoves() {
+    const g = merged(), d = derived(), n = Math.round(+(($('#lmv-n') || {}).value || 0)), to = ($('#lmv-take') || {}).value;
+    if (!(n >= 1)) return toast('Say how many households to give.', 'warn');
+    if (!to) return toast('Choose the enumerator who takes them.', 'warn');
+    const pace = L.pace(st.manifest, g.C, g.P, R.now());
+    const P = L.proposeMoves(pace, g.C, Object.assign(moveOpts(g, d, true), { take: { id: to, n } }));
+    const got = addToList(P.moves, { left_out: P.left_out, judged: P.judged });
+    if (P.short > 0) toast(`${n - P.short} of ${n} households can be given to ${to}: the enumerators judged have no more waiting${ui.movesStale ? '' : ', and an enumerator whose export is not from today is not judged unless you tick the box'}.`, 'warn');
+    else if (!got) toast(`Nothing to add: ${P.moves.length ? 'those households are already in the list' : `no judged enumerator has a household that may move to ${to}`}.`, 'warn');
+    logEv('moves_proposed', { moves: P.moves.length, give_to: to, asked: n, short: P.short || undefined, include: ui.movesInclude, earlier_exports: ui.movesStale ? 1 : undefined, judged: P.judged });
+    render();
+  }
+  // an enumerator who leaves during the round: all their open households go to the others, booked callbacks with them
+  function coverAway() {
+    const g = merged(), d = derived(), id = ($('#lmv-away') || {}).value;
+    if (!id) return toast('Choose the enumerator who is away.', 'warn');
+    const pace = L.pace(st.manifest, g.C, g.P, R.now());
+    const P = L.coverAway(pace, g.C, Object.assign(moveOpts(g, d, true), { away: id }));
+    addToList(P.moves, { away: id, stay: P.stay, judged: P.takers });
+    if (!P.moves.length) toast(`${id} has no open household to move${P.stay.length ? `; ${R.plural(P.stay.length, 'household')} stay${P.stay.length === 1 ? 's' : ''} (hard refusals or no matching enumerator)` : ''}. The roster will still mark ${id} as away.`, 'warn');
+    logEv('moves_proposed', { moves: P.moves.length, away: id, stay: P.stay.length || undefined, earlier_exports: ui.movesStale ? 1 : undefined, judged: P.takers });
+    render();
+  }
+  // an enumerator who joins the round: in the roster with the next files written, then given households like anyone else
+  function addEnumerator() {
+    const M = st.manifest, v = sel => ((($(sel) || {}).value) || '').trim();
+    const id = v('#lnew-id'), name = v('#lnew-name'), pid = v('#lnew-pid');
+    if (!id) return toast('Give the new enumerator an ID.', 'warn');
+    if (roster(M).some(r => r.id === id)) return toast(`${id} is already in the round.`, 'warn');
+    const crit = M.matching && M.matching.criteria ? M.matching.criteria : [];
+    const attrs = Object.fromEntries(crit.map(c => [c, (($(`[data-lnewattr="${c}"]`) || {}).value || '').trim()]));
+    const missing = crit.filter(c => !L.splitVals(attrs[c]).length);
+    if (missing.length) return toast(`Give ${id} a value for ${missing.join(', ')}: the round matches households by it.`, 'warn');
+    ui.added.push(R.clean({ enumerator_id: id, name: name || undefined, platform_id: pid || undefined, attrs: crit.length ? attrs : undefined }));
+    logEv('enumerator_added_mid_round', { id, platform_id: pid || undefined });
+    toast(`${id} joins the round with the next files you write. Give them households above, or move households to them by hand.`);
     render();
   }
   function addMove() {
@@ -284,13 +337,16 @@
     const c = g.C.get(hhid);
     if (!c) return toast(`${hhid || 'That household'} is not in this round's manifest.`, 'warn');
     if (c.enumerator_id === to) return toast(`${hhid} is already with ${to}.`, 'warn');
-    if (!L.movable(c, 'in_progress')) return toast(`${hhid} cannot move: it is ${L.STATES[c.state] || c.state}${c.state === 'in_progress' ? ' with a booked callback or a hard refusal' : ''}.`, 'warn');
-    if (!ui.moves) ui.moves = { list: [], picked: new Set(), left_out: [], judged: [] };
-    if (ui.moves.list.some(m => m.hhid === hhid)) return toast(`${hhid} is already in the list.`, 'warn');
+    // by hand, a booked callback moves with the household (the leader knows why); a hard refusal, a complete, a released or
+    // replaced household and a replacement never move
+    const hard = c.state === 'in_progress' && c.dials.some(dl => dl.status === 'REFUSAL_HARD');
+    if (!L.movable(c, 'in_progress') && !(c.state === 'in_progress' && !hard && !c.replaces)) return toast(`${hhid} cannot move: it is ${c.replaces ? 'a replacement' : L.STATES[c.state] || c.state}${hard ? ' with a hard refusal' : ''}.`, 'warn');
+    if (ui.moves && ui.moves.list.some(m => m.hhid === hhid)) return toast(`${hhid} is already in the list.`, 'warn');
     const elig = manifestEligible(M), d = derived(), h = d.hh && !d.hh.errors.length ? d.hh.households.get(hhid) : null;
     if (elig && h && !elig(h, to)) toast(`${hhid} does not match ${to}'s values (${elig.criteria.map(k => `${k} ${L.hhValue(h, k) || '–'}`).join(', ')}). Added anyway; it will be marked as not matched.`, 'warn');
-    ui.moves.list.push({ hhid, from: c.enumerator_id, to, state: c.state, dials: c.n, planned: planDateOf(hhid), by_hand: true });
-    ui.moves.picked.add(ui.moves.list.length - 1);
+    const last = c.dials[c.dials.length - 1], callback = last && last.appointment_ts && R.CALLBACK_STATUSES.includes(last.status) ? last.appointment_ts : undefined;
+    if (callback) toast(`${hhid} has a callback booked for ${callback.slice(0, 16).replace('T', ' ')}: it goes with the household.`);
+    addToList([R.clean({ hhid, from: c.enumerator_id, to, state: c.state, dials: c.n, planned: planDateOf(hhid), callback, by_hand: true })]);
     render();
   }
   async function writeMoves() {
@@ -302,7 +358,7 @@
     const sumOf = st.plan && st.plan.sums ? id => st.plan.sums.get(id) || L.summaryOf(d.hist, id, M.round, tz) : (d.hist.rounds.length ? id => L.summaryOf(d.hist, id, M.round, tz) : null);
     const elig = manifestEligible(M);
     const B = L.reviseFiles({ M, moves, C: g.C, hh: d.hh.households, sumOf, plans: st.plan ? st.plan.plans : null, updates: g.G.updates, leader: st.leader, at, now: R.now(),
-      matchedNow: elig ? (id, e) => { const h = d.hh.households.get(id); return h ? elig(h, e) : undefined; } : null });
+      added: ui.added, away: mv.away || null, matchedNow: elig ? (id, e) => { const h = d.hh.households.get(id); return h ? elig(h, e) : undefined; } : null });
     const files = [];
     ui.passphrases = null;
     if (st.protect) {
@@ -322,11 +378,11 @@
     files.push({ name: `${st.program}_R${p2(st.round)}_manifest.json`, text: JSON.stringify(B.manifest, null, 1), manifest: true });
     st.manifest = B.manifest;
     st.generated = { at, revision: B.manifest.revision, files: files.map(f => R.clean({ name: f.name, enumerator_id: f.enumerator_id, households: f.n, fingerprint: f.fingerprint, protected: f.protected })) };
-    ui.ready = files; ui.readyKind = 'moves'; ui.moves = null;
+    ui.ready = files; ui.readyKind = 'moves'; ui.moves = null; ui.added = [];
     logEv('households_moved_mid_round', { moves: moves.length, revision: B.manifest.revision, manifest_fingerprint: B.manifest.fingerprint, affected: B.affected,
-      hhids: moves.map(m => m.hhid).slice(0, 200), to: moves.map(m => m.to).slice(0, 200), protected: st.protect ? 1 : undefined });
+      hhids: moves.map(m => m.hhid).slice(0, 200), to: moves.map(m => m.to).slice(0, 200), away: mv.away || undefined, joined: B.added.length ? B.added : undefined, protected: st.protect ? 1 : undefined });
     invalidate();
-    toast(`${R.plural(moves.length, 'household')} moved. ${R.plural(B.files.length, 'updated assignment file')} and revision ${B.manifest.revision} of the manifest are ready.`);
+    toast(`${R.plural(moves.length, 'household')} moved${B.added.length ? `, ${B.added.join(', ')} joined the round` : ''}${mv.away ? `, ${mv.away} marked away` : ''}. ${R.plural(B.files.length, 'updated assignment file')} and revision ${B.manifest.revision} of the manifest are ready.`);
     render();
   }
   async function saveAllToFolder(files) {
@@ -893,18 +949,27 @@
     const mv = ui.moves;
     const picked = mv ? mv.list.filter((_, i) => mv.picked.has(i)) : [];
     const leftOut = x => (x && x.length ? `Not judged: ${x.map(y => `${esc(y.id)} (${esc(y.why)})`).join('; ')}.` : '');
+    const crit = M.matching && M.matching.criteria ? M.matching.criteria : [];
+    const rosterOpts = keep => roster(M).filter(keep).map(r => `<option value="${esc(r.id)}">${esc(r.id)}${r.away ? ' (away)' : ''}${r.added ? ' (new)' : ''}</option>`).join('');
     const rows = pace.rows.map(r => `<tr><td class="id">${esc(r.enumerator_id)}</td><td class="num">${r.households}</td><td class="num">${r.complete}</td><td class="num">${r.waiting}</td><td class="num">${r.in_progress}</td><td class="num">${nm(r.pace, 2)}</td><td class="num">${r.known ? nm(r.capacity, 0) : '–'}</td><td class="num ${r.known && r.need > 0.5 ? 'warn' : ''}">${r.known ? (r.need > 0.5 ? `${nm(r.need, 0)} short` : r.need < -0.5 ? `${nm(-r.need, 0)} spare` : 'on time') : '–'}</td><td class="small">${r.why ? `<span class="muted">${esc(r.why)}</span>` : `export ${esc((r.export_at || '').slice(5, 16).replace('T', ' '))}`}</td></tr>`).join('');
     return `<section class="lcard"><h3>Move waiting households</h3>
-      <p class="muted small">Part-way through the round, households not yet called can move from an enumerator who will not finish to one with spare days, with no household in two files and no double call: each move is recorded in the manifest, the previous enumerator's dials up to the move stay theirs, and any dial they make after it is flagged in the merge. Pace: completes per enumerator-day so far (Box 3.0). Capacity: pace × the ${pace.days_left} working days left from today. Only enumerators whose export is from today, with two or more enumerator-days, are judged.</p>
+      <p class="muted small">Part-way through the round, households not yet called can move from an enumerator who will not finish to one with spare days, with no household in two files and no double call: each move is recorded in the manifest, the previous enumerator's dials up to the move stay theirs, and any dial they make after it is flagged in the merge. Pace: completes per enumerator-day so far (Box 3.0). Capacity: pace × the ${pace.days_left} working days left from today. Only enumerators whose export is from today, with two or more enumerator-days, are judged; an enumerator with nothing left open is judged on any export. Below the proposal: give households to an enumerator who finished early or joined the round, cover one who is away, add one who joins.</p>
       <div class="tablewrap"><table class="grid small"><thead><tr><th>Enumerator</th><th class="num">Households</th><th class="num">Complete</th><th class="num">Not started</th><th class="num">In progress</th><th class="num">Completes per day</th><th class="num">Can still complete</th><th class="num">At this pace</th><th>Export</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="row3"><label>Which households may move <select data-lset="__movesInclude"><option value="not_started" ${ui.movesInclude === 'not_started' ? 'selected' : ''}>not yet called</option><option value="in_progress" ${ui.movesInclude === 'in_progress' ? 'selected' : ''}>also called, without a booked callback or a hard refusal</option></select></label>
         <label class="inline"><input type="checkbox" data-lset="__movesStale" data-type="bool" ${ui.movesStale ? 'checked' : ''}> also judge enumerators whose latest export is from an earlier day</label>
         <button class="subtle" data-lact="propose">Propose moves from the enumerators behind to those with spare days</button></div>
-      ${mv ? (mv.list.length ? `<table class="grid small"><thead><tr><th></th><th>Household</th><th>From</th><th>To</th><th>State</th><th class="num">Dials so far</th><th>First dial was planned</th></tr></thead><tbody>
-        ${mv.list.map((m, i) => `<tr><td><input type="checkbox" data-lmovesel="${i}" ${mv.picked.has(i) ? 'checked' : ''}></td><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc(L.STATES[m.state] || m.state)}${m.by_hand ? ' <span class="tag">by hand</span>' : ''}</td><td class="num">${m.dials}</td><td>${esc(m.planned || '')}</td></tr>`).join('')}</tbody></table>
-        <p class="muted small">Untick a move to leave that household where it is. Latest-planned households move first, so the receiving enumerator's own plan is disturbed least. ${leftOut(mv.left_out)}</p>`
-        : `<p class="muted">Nothing to move: at the current pace every judged enumerator finishes inside the window. ${leftOut(mv.left_out)}</p>`) : ''}
-      <div class="row3"><label>Or move one household <input id="lmv-hh" class="small" placeholder="household ID"></label><label>to <select id="lmv-to">${M.enumerators.map(e => `<option>${esc(e.enumerator_id)}</option>`).join('')}</select></label><button class="subtle" data-lact="addmove">Add to the list</button></div>
+      <div class="row3"><label>Give <input id="lmv-n" class="tiny" type="number" min="1" step="1" value="5"> households to <select id="lmv-take">${rosterOpts(r => !r.away)}</select></label><button class="subtle" data-lact="take">Add to the list</button><span class="muted small">for an enumerator who finished early or joined the round: from the enumerators furthest behind, then those with most households waiting</span></div>
+      <div class="row3"><label>An enumerator is away <select id="lmv-away">${rosterOpts(r => !r.away && !r.added)}</select></label><button class="subtle" data-lact="away">Move all their open households to the others</button><span class="muted small">to those with spare days first, then evenly; a booked callback goes with its household; a hard refusal stays</span></div>
+      ${mv ? (mv.list.length ? `<table class="grid small"><thead><tr><th></th><th>Household</th><th>From</th><th>To</th><th>State</th><th class="num">Dials so far</th><th>Callback booked</th><th>First dial was planned</th></tr></thead><tbody>
+        ${mv.list.map((m, i) => `<tr><td><input type="checkbox" data-lmovesel="${i}" ${mv.picked.has(i) ? 'checked' : ''}></td><td class="id">${esc(m.hhid)}</td><td class="id">${esc(m.from)}</td><td class="id">${esc(m.to)}</td><td>${esc(L.STATES[m.state] || m.state)}${m.by_hand ? ' <span class="tag">by hand</span>' : ''}${m.away ? ' <span class="tag">away</span>' : ''}</td><td class="num">${m.dials}</td><td>${esc((m.callback || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(m.planned || '')}</td></tr>`).join('')}</tbody></table>
+        <p class="muted small">Untick a move to leave that household where it is. Latest-planned households move first, so the receiving enumerator's own plan is disturbed least. ${mv.away ? `${esc(mv.away)} will be marked away in the roster.` : ''} ${mv.stay && mv.stay.length ? `Staying with ${esc(mv.away)}: ${mv.stay.map(s => `${esc(s.hhid)} (${esc(s.why)})`).join('; ')}.` : ''} ${leftOut(mv.left_out)}</p>`
+        : `<p class="muted">Nothing to move: ${mv.away ? `${esc(mv.away)} has no open household${mv.stay && mv.stay.length ? `; staying: ${mv.stay.map(s => `${esc(s.hhid)} (${esc(s.why)})`).join('; ')}` : ''}` : 'at the current pace every judged enumerator finishes inside the window'}. ${leftOut(mv.left_out)}</p>`) : ''}
+      <div class="row3"><label>Or move one household <input id="lmv-hh" class="small" placeholder="household ID"></label><label>to <select id="lmv-to">${rosterOpts(() => true)}</select></label><button class="subtle" data-lact="addmove">Add to the list</button><span class="muted small">a booked callback goes with it; a move to an enumerator marked away brings them back</span></div>
+      <details ${ui.added.length ? 'open' : ''}><summary>An enumerator joins the round${ui.added.length ? ` (${ui.added.length} to add)` : ''}</summary>
+        <div class="row3"><label>ID <input id="lnew-id" class="small" placeholder="E09"></label><label>Name <input id="lnew-name" class="small" placeholder="optional"></label><label>Platform code <input id="lnew-pid" class="small" placeholder="CATI09"></label>${crit.map(c => `<label>${esc(c.replace(/_/g, ' '))} <input class="small" data-lnewattr="${esc(c)}" placeholder="values"></label>`).join('')}<button class="subtle" data-lact="addjoin">Add</button></div>
+        <p class="muted small">They enter the roster with the next files you write, with their own assignment file. Give them households with “Give … households to”, or move households to them by hand.${crit.length ? ' The round matches households by ' + esc(crit.join(', ')) + ': give their values, several separated by spaces or commas.' : ''}</p>
+        ${ui.added.length ? `<ul class="small">${ui.added.map((a, i) => `<li><b>${esc(a.enumerator_id)}</b>${a.name ? ` ${esc(a.name)}` : ''}${a.platform_id ? `, platform code ${esc(a.platform_id)}` : ''}${a.attrs ? `, ${esc(Object.entries(a.attrs).map(([k, v]) => `${k} ${v}`).join('; '))}` : ''} <button class="link" data-lact="deladded" data-i="${i}">remove</button></li>`).join('')}</ul>` : ''}
+      </details>
       ${!canWrite ? '<p class="alert info">To write the updated assignment files, open the household list on the Prepare tab (step 1): the files need the contacts. Opening the earlier rounds (step 2) adds each household’s history.</p>' : ''}
       ${picked.length ? `<div class="btnrow"><button class="primary" data-lact="writemoves" ${canWrite ? '' : 'disabled'}>Write the updated files for ${R.plural(picked.length, 'move')}</button></div>` : ''}
       ${ui.busy ? `<p class="alert info">${esc(ui.busy)}</p>` : ''}
@@ -1116,6 +1181,10 @@
       case 'balance': balance(); break;
       case 'write': writeFiles(); break;
       case 'propose': proposeMoves(); break;
+      case 'take': takeMoves(); break;
+      case 'away': coverAway(); break;
+      case 'addjoin': addEnumerator(); break;
+      case 'deladded': ui.added.splice(+el.dataset.i, 1); render(); break;
       case 'addmove': addMove(); break;
       case 'writemoves': writeMoves(); break;
       case 'saveall': saveAllToFolder(ui.ready); break;

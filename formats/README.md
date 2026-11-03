@@ -118,7 +118,9 @@ the fingerprint of the file it replaces. The enumerator opens it with "Load upda
 log; a file older than the one in the session is refused. A revised file may omit `plan` and `history` for
 households the enumerator already had: the view keeps them from the earlier file, beside the new one, so that the
 new file's fingerprint still verifies. A household moved in carries `handover`: the previous enumerator's dials,
-which count toward the dial cap.
+which count toward the dial cap, and `appointment_ts` when the household had booked a callback, which the new
+enumerator's view keeps until their own first dial. An enumerator who joins the round receives such a file as
+their first one (`revision` 2, 3…, no `supersedes`).
 
 **Replacement policy.** `active` turns replacements on for the round. `triggers` lists when the enumerator
 may activate the next replacement: `REFUSAL_HARD`, `ALL_NUMBERS_DEAD`, `CAP_REACHED`.
@@ -264,7 +266,11 @@ has `matched`. When households are moved during the round, the leader view write
 their previous enumerator, `moves` lists every move with the household, from, to, when and by whom, and each
 revised enumerator's roster entry keeps `previous_fingerprints`, so that a log begun from the earlier file still
 belongs to the round. The merge accepts the previous enumerator's dials on a moved household up to the move and
-flags any made after it as a double call (`after_move`), for the leader to keep or leave out.
+flags any made after it as a double call (`after_move`), for the leader to keep or leave out; a household moved
+back to an earlier enumerator keeps that rule for the time in between. An enumerator who leaves during the round
+keeps their roster entry with `away_from` (when the leader moved their open households out); one who joins is
+added to the roster with `joined_at`, their `name` and `platform_id` when given, and their values under
+`matching.enumerators` when the round has criteria.
 
 ## The leader's outputs for the round
 
@@ -361,4 +367,7 @@ are read under the tool's enumerator ID and the files written for the platform c
 - **Moves during the round.** `revision` and `supersedes` in the assignment file and the manifest; `handover` for a
   moved household; the reason `mid_round`; `moves` and `previous_fingerprints` in the manifest; the merge issue
   `after_move`. The enumerator's saved session gains `carry`, the plans and history kept from an earlier file.
+- **More cases during the round (3 November 2026).** `handover.appointment_ts`, the booked callback a moved
+  household brings; in the manifest's roster, `away_from` for an enumerator who left and `joined_at` (with `name`,
+  `platform_id`) for one who joined.
 - Files written before these additions read as before: every new field is optional.

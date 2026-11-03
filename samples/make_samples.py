@@ -33,7 +33,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 PROGRAM, COUNTRY, TZNAME = "L2MN-DEMO", "MN", "Asia/Ulaanbaatar"
 TZ = dt.timezone(dt.timedelta(hours=8))
 OFF = "+08:00"

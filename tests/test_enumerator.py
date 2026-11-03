@@ -559,6 +559,14 @@ def main():
             return { nAll: c.nAll, cap: c.flags.cap_reached, kind: c.next.kind, prior: c.prior.from, kind8: c8.next.kind, text8: c8.next.text }; })()""")
         check("a household moved mid-round brings the previous enumerator's dials: 7 of a cap of 8 leave one; 8 reach the cap, and the suggestion says whose dials they were",
               unith["nAll"] == 7 and unith["cap"] is False and unith["kind"] in ("first", "overdue") and unith["prior"] == "E02" and unith["kind8"] == "cap" and "8 of the dials by E02" in unith["text8"], unith)
+        unitc = b.js("""(() => { const A = JSON.parse(JSON.stringify(APP.S.assignment)); const h = A.households[0];
+            h.handover = { from: 'E02', moved_at: '2026-10-27T09:00:00+08:00', dials: 2, last_status: 'APPOINTMENT', last_ts: '2026-10-26T18:00:00+08:00', appointment_ts: '2026-10-28T15:00:00+08:00' }; delete A.fingerprint;
+            const S = RTM.newSession(A), c = RTM.cases(S, RTM.now()).map.get(h.hhid);
+            RTM.append(S, 'dial', { hhid: h.hhid, ts: '2026-10-27T14:00:00+08:00', end_ts: '2026-10-27T14:01:00+08:00', status: 'NO_ANSWER', phone_slot: 1, attempt: 1 });
+            const c2 = RTM.cases(S, RTM.now()).map.get(h.hhid);
+            return { kind: c.next.kind, appt: c.appointment ? c.appointment.getTime() === Date.parse('2026-10-28T15:00:00+08:00') : null, kind2: c2.next.kind, appt2: c2.appointment }; })()""")
+        check("a household moved with a booked callback is due at that callback until this enumerator's own first dial replaces it",
+              unitc["kind"] == "callback" and unitc["appt"] is True and unitc["kind2"] != "callback" and unitc["appt2"] is None, unitc)
         # a revised file that omits the plans of households already held: they are carried beside it, and survive a save
         U = json.load(open(A07, encoding="utf-8"))
         U["generated_at"] = "2026-10-27T12:00:00+08:00"; U["revision"] = 2; U["supersedes"] = U["fingerprint"]

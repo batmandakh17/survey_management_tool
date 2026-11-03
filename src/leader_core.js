@@ -1065,7 +1065,14 @@
     // households moved during the round: the previous holder's dials up to the move were theirs to make
     const movesOf = new Map();
     (M.moves || []).forEach(m => { if (!movesOf.has(m.hhid)) movesOf.set(m.hhid, []); movesOf.get(m.hhid).push(m); });
-    const heldBefore = (e, h, ts) => (movesOf.get(h) || []).some(m => m.from === e && Date.parse(ts) <= Date.parse(m.at));
+    // who held a household at a given time: its first holder until the first move, then each move's receiver in turn
+    const holderAt = (h, ts) => {
+      const ms = movesOf.get(h);
+      if (!ms || !ms.length) return assignedTo.get(h);
+      let who = ms[0].from; const t = Date.parse(ts);
+      for (const m of ms) { if (Date.parse(m.at) <= t) who = m.to; else break; }
+      return who;
+    };
     const fingerprintsOf = e => (roster.get(e) ? [roster.get(e).fingerprint].concat(roster.get(e).previous_fingerprints || []) : []);
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
@@ -1239,10 +1246,13 @@
       const byHH = new Map();
       x.dials.forEach(d => { if (!byHH.has(d.hhid)) byHH.set(d.hhid, []); byHH.get(d.hhid).push(d); });
       for (const [h, ds] of byHH) {
-        if (mine(e, h)) continue;
-        const after = ds.filter(d => !heldBefore(e, h, d.ts));
-        if (!after.length) continue;                                   // dials made while the household was theirs, before it was moved
-        const mv = (movesOf.get(h) || []).filter(m => m.from === e).slice(-1)[0];
+        const key = replOf.has(h) ? replOf.get(h) : h;              // a replacement moves with the household it replaces
+        if (mine(e, h) && !movesOf.has(key)) continue;
+        // a dial while another enumerator held the household, after a move away from this one: a double call, even when
+        // the household has since come back to them; the current holder's dials from before the move reached them stand
+        const after = ds.filter(d => holderAt(key, d.ts) !== e && (movesOf.get(key) || []).some(m => m.from === e && Date.parse(m.at) <= Date.parse(d.ts)));
+        if (!after.length) { if (mine(e, h) || ds.every(d => holderAt(key, d.ts) === e)) continue; }
+        const mv = after.length ? (movesOf.get(key) || []).filter(m => m.from === e && Date.parse(m.at) <= Date.parse(after[0].ts)).slice(-1)[0] : null;
         if (mv) {
           const d = issue({ key: `after_move:${e}:${h}`, type: 'after_move', severity: 'action', enumerator: e, hhid: h,
             detail: `${e} logged ${R.plural(after.length, 'dial')} on ${h} after it was moved to ${mv.to} on ${mv.at.slice(0, 16).replace('T', ' ')}: a double call. Kept and flagged.`,
@@ -1401,7 +1411,10 @@
       row.capacity = known ? r.completes_per_day * left : null;
       row.need = known ? open - row.capacity : null;
       row.projected = known ? Math.min(r.households, r.complete + Math.floor(row.capacity + 1e-9)) : null;
-      row.why = !r.last_export ? 'no export yet' : !row.fresh ? `last export ${exportDay}, not today` : !known ? 'fewer than two enumerator-days: the pace cannot be judged yet' : '';
+      // an enumerator who left during the round is judged no more; one with nothing open is judged on any export (nothing can have changed)
+      const rec = M.enumerators.find(x => x.enumerator_id === r.enumerator_id) || {};
+      row.away = !!rec.away_from; row.away_from = rec.away_from || '';
+      row.why = row.away ? `away since ${rec.away_from.slice(0, 10)}` : !r.last_export ? 'no export yet' : !row.fresh && open > 0 ? `last export ${exportDay}, not today` : !known ? 'fewer than two enumerator-days: the pace cannot be judged yet' : '';
       return row;
     });
     return { rows, today, days_left: left };
@@ -1415,21 +1428,34 @@
     if (last && last.appointment_ts) return false;
     return !c.dials.some(d => d.status === 'REFUSAL_HARD');
   };
+  // the booked callback a moved household takes with it: the last dial's, when its result books one
+  const callbackOf = c => { const last = c.dials[c.dials.length - 1]; return last && last.appointment_ts && R.CALLBACK_STATUSES.includes(last.status) ? last.appointment_ts : undefined; };
+  const moveRow = (c, from, to, planned, extra) => R.clean(Object.assign({ hhid: c.hhid, from, to, state: c.state, dials: c.n, planned: planned(c.hhid), callback: callbackOf(c) }, extra || {}));
   // one household at a time from the enumerator furthest behind to the one with most spare capacity, latest-planned first,
-  // only to an enumerator who matches the household's criteria, until nobody is more than half a household behind or ahead
+  // only to an enumerator who matches the household's criteria, until nobody is more than half a household behind or ahead.
+  // With `take` ({ id, n }: "give n households to X", an enumerator who finished early or joined the round), X alone takes,
+  // n households, from the enumerators furthest behind and then those with most households open, whether short or not.
   L.proposeMoves = (pace, C, opts) => {
-    const o = Object.assign({ include: 'not_started', from: null, to: null, eligible: null, hh: null, planOf: null, allowStale: false }, opts || {});
-    const judged = r => r.known && (r.fresh || o.allowStale);
+    const o = Object.assign({ include: 'not_started', from: null, to: null, eligible: null, hh: null, planOf: null, allowStale: false, take: null }, opts || {});
+    // judged: on today's export, or on any export when the leader allows it or when nothing of theirs is open (nothing can have changed);
+    // a pace needs two enumerator-days, except for giving households to one enumerator, where only the donors' exports matter
+    const judged = r => !r.away && (r.fresh || o.allowStale || r.open === 0) && (r.known || !!o.take);
     const rows = pace.rows.filter(judged);
-    const need = new Map(rows.map(r => [r.enumerator_id, r.need]));
+    const need = new Map(rows.map(r => [r.enumerator_id, r.known ? r.need : 0])), open = new Map(rows.map(r => [r.enumerator_id, r.open]));
+    if (o.take) {
+      if (!rows.some(r => r.enumerator_id === o.take.id)) rows.push({ enumerator_id: o.take.id, open: 0, need: 0, known: true, fresh: true, extra: true });
+      need.set(o.take.id, -o.take.n); if (!open.has(o.take.id)) open.set(o.take.id, 0);
+    }
     const planned = id => (o.planOf && o.planOf(id)) || '';
     const rank = c => (c.state === 'not_started' ? 0 : 1);          // never dialed households first, then the latest planned
-    const cands = new Map(rows.map(r => [r.enumerator_id, [...C.values()].filter(c => c.enumerator_id === r.enumerator_id && L.movable(c, o.include))
+    const cands = new Map(rows.map(r => [r.enumerator_id, r.extra ? [] : [...C.values()].filter(c => c.enumerator_id === r.enumerator_id && L.movable(c, o.include) && !(o.exclude && o.exclude.has(c.hhid)))
       .sort((a, b) => rank(a) - rank(b) || cmpStr(planned(b.hhid), planned(a.hhid)) || cmpStr(b.hhid, a.hhid))]));
+    const isDonor = r => !r.extra && (o.take ? r.enumerator_id !== o.take.id && cands.get(r.enumerator_id).length > 0 : need.get(r.enumerator_id) > 0.5) && (!o.from || o.from.includes(r.enumerator_id));
+    const isTaker = r => need.get(r.enumerator_id) < -0.5 && (o.take ? r.enumerator_id === o.take.id : (!o.to || o.to.includes(r.enumerator_id)));
     const moves = [];
     for (let guard = 0; guard < 5000; guard++) {
-      const donors = rows.filter(r => need.get(r.enumerator_id) > 0.5 && (!o.from || o.from.includes(r.enumerator_id))).sort((a, b) => need.get(b.enumerator_id) - need.get(a.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
-      const takers = rows.filter(r => need.get(r.enumerator_id) < -0.5 && (!o.to || o.to.includes(r.enumerator_id))).sort((a, b) => need.get(a.enumerator_id) - need.get(b.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
+      const donors = rows.filter(isDonor).sort((a, b) => need.get(b.enumerator_id) - need.get(a.enumerator_id) || open.get(b.enumerator_id) - open.get(a.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
+      const takers = rows.filter(isTaker).sort((a, b) => need.get(a.enumerator_id) - need.get(b.enumerator_id) || cmpStr(a.enumerator_id, b.enumerator_id));
       let done = false;
       for (const d of donors) {
         const list = cands.get(d.enumerator_id);
@@ -1437,22 +1463,55 @@
           const i = list.findIndex(c => !o.eligible || !o.hh || !o.hh.get(c.hhid) || o.eligible(o.hh.get(c.hhid), t.enumerator_id));
           if (i < 0) continue;
           const c = list.splice(i, 1)[0];
-          moves.push({ hhid: c.hhid, from: d.enumerator_id, to: t.enumerator_id, state: c.state, dials: c.n, planned: planned(c.hhid) });
+          moves.push(moveRow(c, d.enumerator_id, t.enumerator_id, planned));
           need.set(d.enumerator_id, need.get(d.enumerator_id) - 1); need.set(t.enumerator_id, need.get(t.enumerator_id) + 1);
+          open.set(d.enumerator_id, open.get(d.enumerator_id) - 1); open.set(t.enumerator_id, open.get(t.enumerator_id) + 1);
           done = true; break;
         }
         if (done) break;
       }
       if (!done) break;
     }
-    return { moves, need, judged: rows.map(r => r.enumerator_id), left_out: pace.rows.filter(r => !judged(r)).map(r => ({ id: r.enumerator_id, why: r.why || (!r.fresh ? `last export ${r.export_day}, not today` : 'pace not known') })) };
+    const short = o.take ? Math.max(0, Math.round(-need.get(o.take.id))) : 0;   // households the leader asked for that no judged enumerator could give
+    return { moves, need, short, judged: rows.filter(r => !r.extra).map(r => r.enumerator_id), left_out: pace.rows.filter(r => !judged(r)).map(r => ({ id: r.enumerator_id, why: r.why || (!r.fresh ? `last export ${r.export_day}, not today` : 'pace not known') })) };
+  };
+  // an enumerator who leaves during the round: every open household of theirs goes to the others, a booked callback with it;
+  // a hard refusal stays, since nobody calls it again. Each household goes to the enumerator with most spare days, when a
+  // judged one has spare days, and otherwise to the one with fewest households open; always to one who matches its criteria.
+  L.coverAway = (pace, C, opts) => {
+    const o = Object.assign({ away: null, eligible: null, hh: null, planOf: null, allowStale: false }, opts || {});
+    const planned = id => (o.planOf && o.planOf(id)) || '';
+    const takers = pace.rows.filter(r => r.enumerator_id !== o.away && !r.away)
+      .map(r => ({ id: r.enumerator_id, need: r.known && (r.fresh || o.allowStale || r.open === 0) ? r.need : null, open: r.open }));
+    const rank = c => (c.state === 'not_started' ? 0 : 1);
+    const list = [...C.values()].filter(c => c.enumerator_id === o.away && !c.replaces && !(o.exclude && o.exclude.has(c.hhid)) && (c.state === 'not_started' || c.state === 'in_progress'))
+      .sort((a, b) => rank(a) - rank(b) || cmpStr(planned(b.hhid), planned(a.hhid)) || cmpStr(b.hhid, a.hhid));
+    const moves = [], stay = [];
+    for (const c of list) {
+      if (c.dials.some(d => d.status === 'REFUSAL_HARD')) { stay.push({ hhid: c.hhid, why: 'hard refusal: nobody calls it again' }); continue; }
+      const ok = takers.filter(t => !o.eligible || !o.hh || !o.hh.get(c.hhid) || o.eligible(o.hh.get(c.hhid), t.id));
+      const spare = ok.filter(t => t.need !== null && t.need < -0.5).sort((a, b) => a.need - b.need || cmpStr(a.id, b.id));
+      const t = spare[0] || ok.slice().sort((a, b) => a.open - b.open || cmpStr(a.id, b.id))[0];
+      if (!t) { stay.push({ hhid: c.hhid, why: 'no enumerator matches its criteria' }); continue; }
+      moves.push(moveRow(c, o.away, t.id, planned, { away: true }));
+      if (t.need !== null) t.need += 1;
+      t.open += 1;
+    }
+    return { moves, stay, away: o.away, takers: takers.map(t => t.id) };
   };
   // the revised files: a new assignment file for each enumerator who gives or receives a household, and the manifest's next
   // revision. Contacts come from the household list (with the numbers enumerators corrected this round); a moved household
-  // carries the dials made before the move (handover), a first dial on the next working day, and its usual hour.
+  // carries the dials made before the move (handover) and its booked callback, a first dial on the next working day, and
+  // its usual hour. An enumerator who joins the round (`added`) enters the roster with their file; one who left (`away`)
+  // is marked in the roster, and judged no more until a household is moved to them again.
   L.reviseFiles = inp => {
     const M = inp.M, at = inp.at, moved = new Map(inp.moves.map(m => [m.hhid, m]));
     const affected = new Set(); inp.moves.forEach(m => { affected.add(m.from); affected.add(m.to); });
+    const added = (inp.added || []).filter(a => a.enumerator_id && !M.enumerators.some(x => x.enumerator_id === a.enumerator_id));
+    const team = M.enumerators.concat(added.map(a => R.clean({ enumerator_id: a.enumerator_id, name: a.name || undefined, available: true, share: 1, households: 0,
+      platform_id: a.platform_id || undefined, joined_at: at, file: `${a.enumerator_id}_assignment_R${p2(M.round)}.json` })));
+    const matching = M.matching ? Object.assign({}, M.matching, { enumerators: Object.assign({}, M.matching.enumerators || {},
+      Object.fromEntries(added.map(a => [a.enumerator_id, Object.fromEntries((M.matching.criteria || []).map(c => [c, [...new Set(L.splitVals((a.attrs || {})[c]))].sort()]))]))) }) : undefined;
     const cal = R.calendarOf({ calendar: M.calendar }), today = R.partsIn(inp.now || R.now(), cal.tz).key;
     let first = today < cal.start ? cal.start : today, guard = 0;
     while (!cal.isWorking(first) && first < cal.end && guard++ < 60) first = R.addDaysKey(first, 1);
@@ -1489,32 +1548,36 @@
           assignment: R.clean({ reason: h.reason, previous_enumerator: h.previous_enumerator, matched: h.matched }),
           criteria: crit && Object.keys(crit).length ? crit : undefined,
           plan: m ? R.clean({ first_dial_date: first, target_hour: pl && Number.isInteger(pl.target_hour) ? pl.target_hour : (li && Number.isInteger(li.hour) ? li.hour : undefined) }) : pl || undefined,
-          handover: m ? R.clean({ from: m.from, moved_at: at, dials: c ? c.n : 0, last_status: last ? last.status : undefined, last_ts: last ? last.ts : undefined }) : undefined,
+          handover: m ? R.clean({ from: m.from, moved_at: at, dials: c ? c.n : 0, last_status: last ? last.status : undefined, last_ts: last ? last.ts : undefined, appointment_ts: c ? callbackOf(c) : undefined }) : undefined,
           replacements: reps.length ? reps : undefined,
         });
       });
-      const old = M.enumerators.find(x => x.enumerator_id === e);
+      const old = M.enumerators.find(x => x.enumerator_id === e), joins = added.some(x => x.enumerator_id === e);
       const a = R.clean({
         schema: R.SCHEMA.assign, tool_version: R.VERSION, program: M.program, country: M.country, round: M.round, enumerator_id: e,
         generated_by: inp.leader, generated_at: at, revision: (M.revision || 1) + 1, supersedes: old ? old.fingerprint : undefined,
-        rule: M.rule, replacement_policy: M.replacement_policy, matching: M.matching ? { criteria: M.matching.criteria, enumerator: (M.matching.enumerators || {})[e] || {} } : undefined,
-        synthetic: M.synthetic ? true : undefined, note: `Revision ${(M.revision || 1) + 1} of this round's assignment: ${inp.moves.filter(x => x.to === e).length} household(s) moved to you, ${inp.moves.filter(x => x.from === e).length} moved from you.`,
+        rule: M.rule, replacement_policy: M.replacement_policy, matching: matching ? { criteria: matching.criteria, enumerator: (matching.enumerators || {})[e] || {} } : undefined,
+        synthetic: M.synthetic ? true : undefined, note: `${joins ? 'You join this round. ' : ''}Revision ${(M.revision || 1) + 1} of this round's assignment: ${inp.moves.filter(x => x.to === e).length} household(s) moved to you, ${inp.moves.filter(x => x.from === e).length} moved from you.`,
         calendar: M.calendar, households: entries,
       });
       a.fingerprint = R.fingerprint(a);
       files.push({ enumerator_id: e, name: `${e}_assignment_R${p2(M.round)}.json`, obj: a });
     }
     const manifest = Object.assign({}, M, {
-      generated_at: at, revision: (M.revision || 1) + 1, supersedes: M.fingerprint,
-      enumerators: M.enumerators.map(x => {
+      generated_at: at, revision: (M.revision || 1) + 1, supersedes: M.fingerprint, matching,
+      enumerators: team.map(x => {
         const f = files.find(y => y.enumerator_id === x.enumerator_id);
-        return f ? Object.assign({}, x, { households: f.obj.households.length, fingerprint: f.obj.fingerprint, previous_fingerprints: (x.previous_fingerprints || []).concat([x.fingerprint]) }) : x;
+        let y = f ? Object.assign({}, x, { households: f.obj.households.length, fingerprint: f.obj.fingerprint, previous_fingerprints: x.fingerprint ? (x.previous_fingerprints || []).concat([x.fingerprint]) : x.previous_fingerprints }) : x;
+        if (inp.away && inp.away === x.enumerator_id) y = Object.assign({}, y, { away_from: at });
+        else if (y.away_from && inp.moves.some(m => m.to === x.enumerator_id)) { y = Object.assign({}, y); delete y.away_from; }
+        return R.clean(y);
       }),
       households, moves: (M.moves || []).concat(inp.moves.map(m => ({ hhid: m.hhid, from: m.from, to: m.to, at, by: inp.leader }))),
     });
+    if (!matching) delete manifest.matching;
     delete manifest.fingerprint;
     manifest.fingerprint = R.fingerprint(manifest);
-    return { files, manifest, affected: [...affected].sort(cmpStr) };
+    return { files, manifest, affected: [...affected].sort(cmpStr), added: added.map(a => a.enumerator_id) };
   };
 
   // ---- the round's outputs (A.6) ----

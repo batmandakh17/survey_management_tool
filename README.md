@@ -58,6 +58,10 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
      2026 two households would move from E01 to E02). Add a move by hand with any household not yet called,
      then "Write the updated files": one revised file per enumerator concerned and revision 2 of the manifest.
      This needs the household list open in the same session (step 1).
+   - **Three more cases on the same card.** "Give 5 households to E02" tops up an enumerator who finished early,
+     from those furthest behind. "An enumerator is away: E01" moves every open household of E01 to the others,
+     booked callbacks included, and marks E01 away in the roster. "An enumerator joins the round" adds E09 with
+     a platform code; give them households the same way, and the next write includes their first file.
 8. **Try the merge questions.** Add the files in `merge_cases/`, one folder at a time: a duplicate, an
    earlier export, a file from another round, a file edited after export, a CSV without its JSON (E02's later
    export that evening, whose JSON did not arrive, used as unverified), and a conflict where E01 logs a

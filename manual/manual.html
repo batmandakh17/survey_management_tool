@@ -54,7 +54,7 @@
     <div class="sub">User manual for enumerators and team leaders<br>Assignment, scheduling and call logs for phone panel surveys</div>
   </div>
   <img src="img/e03_today.png" alt="The enumerator's Today tab">
-  <div class="meta">Tool version 0.3.2 · Manual of 1 November 2026<br>
+  <div class="meta">Tool version 0.3.3 · Manual of 3 November 2026<br>
     Real-Time Monitoring (RTM) Handbook task team. Every picture in this manual shows the synthetic practice program
     “L2MN-DEMO”: no real household, name or phone number appears anywhere in it.</div>
 </section>
@@ -379,8 +379,10 @@ yours”: their calls stay in your log, but you cannot log new ones for them. A 
 round is refused, and so is a file older than the one in your session.</p>
 <p>A household moved to you shows who had it before and the calls they made, with the reason “Moved to you mid-round”.
 Those calls count toward the dial cap: if the previous enumerator made 7 of 8, you have one left. Its first dial is
-planned for the day of the move, at the household's usual hour. Households you already had keep their plan and history
-even when the new file does not repeat them.</p>
+planned for the day of the move, at the household's usual hour; if the household had booked a callback with the
+previous enumerator, that callback is yours now and the household is due at that time. Households you already had
+keep their plan and history even when the new file does not repeat them. If you join a round that has started, your
+first file is such an updated assignment: open it with <b class="ui">Open assignment</b> as usual.</p>
 
 <h3><span class="num">A21</span>On a phone</h3>
 <p>The page also works on a phone's browser. The columns stack, and a household's panel fills the screen; close it
@@ -651,7 +653,33 @@ two or more enumerator-days, are judged; tick the box to judge earlier exports t
 </ol>
 <p>No household is in two files, and no double call goes unnoticed: a moved household carries the dials its previous
 enumerator made, which count toward the dial cap, and in the merge the previous enumerator's dials up to the move are
-theirs while any made after it is flagged for you to keep or leave out.</p>
+theirs while any made after it is flagged for you to keep or leave out. That holds even for a household moved back to
+an earlier enumerator: a dial they made while someone else held it is still flagged.</p>
+<h4>Three more cases</h4>
+<p>The same card covers what happens to a team during a round. Each adds to the list of moves; “Write the updated
+files” writes them all in one revision.</p>
+<ul>
+  <li><b>An enumerator finished early.</b> With nothing left open, they are judged on any export, not only today's,
+  and “Propose moves” sends them households from the enumerators behind. When nobody is behind but you still want
+  them busy, use <b class="ui">Give … households to</b>: the number you choose goes to them from the enumerators
+  furthest behind, then from those with most households waiting. If fewer can be given, the card says why (the
+  others' exports are not from today, or nothing is waiting).</li>
+  <li><b>An enumerator is away</b> (ill, or has left). Choose them under <b class="ui">An enumerator is away</b>:
+  every open household of theirs moves to the others, including those with a booked callback, which goes with the
+  household; a hard refusal stays, since nobody calls it again. Households go first to enumerators with spare days,
+  then evenly by the number of households open, and only to one who matches their criteria. The roster marks the
+  enumerator away from that moment, and no proposal sends households to them until you move one to them by hand,
+  which brings them back.</li>
+  <li><b>An enumerator joins the round.</b> Open <b class="ui">An enumerator joins the round</b> and give their ID,
+  name, platform code (C) and, when the round matches by language or another criterion, their values. They enter the
+  roster with the next files you write, with their own assignment file; give them households with
+  <b class="ui">Give … households to</b> or by hand. Their file is their first: they open it with “Open assignment”.</li>
+</ul>
+<p>A move by hand now takes a household with a booked callback too; the callback moves with it. The file for a
+team that interviews in KoBoToolbox (C4) changes after any of these: write the households list again and paste it
+into the form, so that a newcomer's households appear under their code and a departed enumerator's under the new
+holders'.</p>
+<figure><img class="w100" src="img/l28b_moves_cases.png"><figcaption><b>Figure B22d.</b> The three cases on one list. Shown: E01 away, so every open household of theirs goes to the others, tagged “away”, a booked callback (0108-007) going with its household. Further down the same list, E09 has joined with a platform code and been given four households.</figcaption></figure>
 <figure><img class="w100" src="img/l28_moves.png"><figcaption><b>Figure B22b.</b> Who is short and who has spare days, and the moves proposed.</figcaption></figure>
 <figure><img class="w100" src="img/l29_moves_files.png"><figcaption><b>Figure B22c.</b> The revised files and the manifest's next revision, ready to give out.</figcaption></figure>
 
@@ -719,7 +747,7 @@ bottom of the tab gives the training data, the features, the backtests and the m
   <tr><th>When</th><th>Leader</th><th>Enumerators</th></tr>
   <tr><td>Before the round</td><td>Steps 1 to 8; give out the files and passphrases; save the session</td><td>Open their assignment; check the Today tab and the Calendar</td></tr>
   <tr><td>Each working day</td><td>Import the exports; settle merge questions; read Progress</td><td>Call, log, save; export at the end of the day</td></tr>
-  <tr><td>When an enumerator is away</td><td>Move their households by hand or prepare an updated assignment for the others</td><td>Load the updated assignment</td></tr>
+  <tr><td>When an enumerator is away, finishes early or joins</td><td>Progress tab, “Move waiting households”: cover the one away, give households to the one who is free or new; write the updated files</td><td>Load the updated assignment (a newcomer opens their first file)</td></tr>
   <tr><td>End of the round</td><td>Import the final exports; write the round's files; move contact updates into the household list</td><td>Export a final time</td></tr>
   <tr><td>Next round</td><td>Load this round's merged files as an earlier round (step 2)</td><td>Open the new assignment</td></tr>
 </table>
