@@ -15,6 +15,7 @@ Writes:
   round05/E0k_assignment_R05.json           the round-5 assignment files (A.3)
   round05/E07_project_R05.json              E07's saved session on 27 October at 12:30 (A.5)
   past/E07_2026-10-21.csv and .json         E07's round-4 export, for the enumerator's performance view
+  kobo/, suso/                              the same round-5 calls as KoBoToolbox and Survey Solutions exports (proposal K)
 Phone numbers use the invalid country code +000, so none can be dialed by mistake.
 Run:  python3 samples/make_samples.py
 """
@@ -29,10 +30,11 @@ import random
 import shutil
 import tempfile
 import uuid
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VERSION = "0.4.0"
+VERSION = "0.5.1"
 PROGRAM, COUNTRY, TZNAME = "L2MN-DEMO", "MN", "Asia/Ulaanbaatar"
 TZ = dt.timezone(dt.timedelta(hours=8))
 OFF = "+08:00"
@@ -754,6 +756,159 @@ def write_platform_samples(out, logs, files, hist):
     print(f"kobo/households.csv: {len(hh_rows)} rows; kobo/rtm_call_record_2026-11-06.csv: {len(kobo)} submissions")
 
 
+# ---- the same round-5 calls as a Survey Solutions export of the tool's own questionnaire (proposal K.9, formats/suso/README.md) ----
+SUSO_RESULT = {s: i + 1 for i, s in enumerate(["COMPLETE", "APPOINTMENT", "PARTIAL", "NOT_AVAILABLE", "NO_ANSWER", "BUSY", "SWITCHED_OFF", "BLOCKED", "DEAD_NUMBER",
+                                                "WRONG_NUMBER", "REFUSAL_SOFT", "REFUSAL_HARD", "LANGUAGE", "OTHER"])}
+SUSO_RESULT["NONE"] = 99
+SUSO_WILLING = {"yes": 1, "later": 2, "no": 3, "not_asked": 4}
+SUSO_ACTION_CODE = {"none": 1, "RELEASE": 2, "SWITCH_REQUEST": 3, "REMOVE_REQUEST": 4, "ACTIVATE_REPLACEMENT": 5}
+SUSO_ASSIGN_COLS = ["hhid", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label", "planned_date", "planned_hour",
+                    "psu", "stratum", "kind", "replaces", "rank", "_responsible", "_quantity"]
+SUSO_MAIN_COLS = ["interview__key", "interview__id", "hhid", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label",
+                  "planned_date", "planned_hour", "psu", "stratum", "kind", "replaces", "rank", "n_calls", "ssSys_IRnd", "has__errors", "interview__status", "assignment__id"]
+SUSO_CALL_COLS = ["interview__key", "interview__id", "calls__id", "phone_slot", "call_start", "call_end", "result", "willing", "appointment", "action", "target_hhid", "note"]
+SUSO_ACT_COLS = ["interview__key", "interview__id", "date", "time", "action", "originator", "role", "responsible_name", "responsible_role"]
+SUSO_ASSIGN_ACT_COLS = ["assignment__id", "date", "time", "action", "originator", "role", "responsible_name", "responsible_role", "old__value", "new__value", "comment"]
+SUSO_DIAG_COLS = ["interview__key", "interview__id", "interview__status", "responsible", "interviewers", "rejections__sup", "rejections__hq", "entities__errors",
+                  "interview__duration"]
+# interview__actions codes (docs.mysurvey.solutions, export file anatomy): 1 InterviewerAssigned, 2 FirstAnswerSet, 3 Completed, 12 Created, 14 Resumed, 15 Paused;
+# roles: 1 Interviewer, 2 Supervisor; interview__status: 60 InterviewerAssigned, 100 Completed
+SUSO_A = {"assigned": 1, "first_answer": 2, "completed": 3, "rejected_sup": 7, "created": 12, "received": 13, "resumed": 14, "paused": 15}
+SUSO_AA = {"created": 1, "received": 4, "reassigned": 7}      # assignment__actions: Created, ReceivedByTablet, Reassigned
+SUSO_ROLE_INT, SUSO_ROLE_SUP, SUSO_ROLE_HQ = 1, 2, 3
+SUSO_NA = "##N/A##"
+
+
+def suso_local(s):
+    """A timestamp answer as the export writes it: the device's local time, no offset (2026-11-06T14:23:11)."""
+    return parse(s).astimezone(TZ).strftime("%Y-%m-%dT%H:%M:%S") if s else SUSO_NA
+
+
+def suso_utc(t):
+    u = t.astimezone(dt.timezone.utc)
+    return u.strftime("%Y-%m-%d"), u.strftime("%H:%M:%S")
+
+
+def write_suso_samples(out, logs, files):
+    """assignments.tab as the leader view writes it for round 5 (the tool's own questionnaire, logins = the platform codes) and a
+    tabular export of 6 November 18:00: one interview per household holding its calls as the roster `calls`, from the same
+    effective logs as the KoBo samples, with interview__actions, interview__diagnostics and assignment__actions (every
+    assignment created by the leader's upload and received by its interviewer's tablet). One completed interview of CATI02 is
+    rejected by the supervisor, as a round's review produces."""
+    r3 = random.Random(SEED + 6000)               # a stream of its own: every other sample stays as it was
+    pid = platform_id
+    contact, plan_of, by_e, as_rows = {}, {}, {}, []
+    for e, a in sorted(files.items()):
+        for h in a["households"]:
+            ph = {p["slot"]: (p["number"], p["label"]) for p in h["contact"]["phones"]}
+            contact[h["hhid"]] = (h["contact"]["name"], ph)
+            plan_of[h["hhid"]] = h["plan"]
+            by_e[h["hhid"]] = e
+            base = {"hhid": h["hhid"], "program": PROGRAM, "round": 5, "contact_name": h["contact"]["name"], "planned_date": h["plan"]["first_dial_date"], "planned_hour": h["plan"]["target_hour"],
+                    "psu": h["psu"], "stratum": h["stratum"], "kind": "main", "replaces": "", "rank": "", "_responsible": pid(e), "_quantity": 1}
+            as_rows.append({**base, **{f"phone_{s}": ph[s][0] for s in ph}, **{f"phone_{s}_label": ph[s][1] for s in ph}})
+            for i, r in enumerate(h.get("replacements", [])):
+                rph = {p["slot"]: (p["number"], p.get("label", "")) for p in r["contact"]["phones"]}
+                contact[r["hhid"]] = (r["contact"]["name"], rph)
+                by_e[r["hhid"]] = e
+                as_rows.append({"hhid": r["hhid"], "program": PROGRAM, "round": 5, "contact_name": r["contact"]["name"], "planned_date": "", "planned_hour": "", "psu": h["psu"], "stratum": h["stratum"],
+                                "kind": "replacement", "replaces": h["hhid"], "rank": i + 1, "_responsible": pid(e), "_quantity": 1,
+                                **{f"phone_{s}": rph[s][0] for s in rph}, **{f"phone_{s}_label": rph[s][1] for s in rph}})
+    as_rows.sort(key=lambda r: r["hhid"])
+    assignment_id = {r["hhid"]: 1001 + i for i, r in enumerate(as_rows)}
+    write_tsv(os.path.join(out["suso"], "assignments.tab"), as_rows, SUSO_ASSIGN_COLS)
+    # the assignments' own history: created when the leader uploaded the file, received by each tablet on the round's first morning
+    up_at = dt.datetime.combine(day(WINDOWS[5][0]) - dt.timedelta(days=3), dt.time(16, 20), tzinfo=TZ)
+    got_at = dt.datetime.combine(day(WINDOWS[5][0]), dt.time(8, 30), tzinfo=TZ)
+    aacts = []
+    for r in as_rows:
+        aid, login = assignment_id[r["hhid"]], r["_responsible"]
+        d_, h_ = suso_utc(up_at)
+        aacts.append({"assignment__id": aid, "date": d_, "time": h_, "action": SUSO_AA["created"], "originator": "L01", "role": SUSO_ROLE_HQ, "responsible_name": login, "responsible_role": SUSO_ROLE_INT, "old__value": "", "new__value": "", "comment": ""})
+        d_, h_ = suso_utc(got_at + dt.timedelta(minutes=int(login[-2:]) % 7))
+        aacts.append({"assignment__id": aid, "date": d_, "time": h_, "action": SUSO_AA["received"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT, "old__value": "", "new__value": "", "comment": ""})
+    mains, calls, acts, diags = [], [], [], []
+    rejected = None                                 # the first completed interview of CATI02, in key order, is rejected by the supervisor
+    keys = set()
+    for e, log in sorted(logs.items()):
+        live, standalone, _, _ = effective(log.events)
+        recs = [dict(d, _kind="dial") for d in live] + [dict(a, _kind="action") for a in standalone]
+        recs.sort(key=lambda x: (x.get("ts") or x["logged_at"], x["event_id"]))
+        per_hh = {}
+        for x in recs:
+            per_hh.setdefault(x["hhid"], []).append(x)
+        for hid, xs in sorted(per_hh.items()):
+            key = "-".join(f"{r3.randint(0, 99):02d}" for _ in range(4))
+            while key in keys:
+                key = "-".join(f"{r3.randint(0, 99):02d}" for _ in range(4))
+            keys.add(key)
+            iid = uuid.UUID(int=r3.getrandbits(128)).hex
+            name, ph = contact.get(hid, (f"Contact {hid}", {}))
+            row = next((r for r in as_rows if r["hhid"] == hid), None) or {}
+            done = any(x["_kind"] == "dial" and x["status"] == "COMPLETE" for x in xs)
+            mains.append({**{k: row.get(k, "") for k in SUSO_MAIN_COLS}, "interview__key": key, "interview__id": iid, "hhid": hid, "n_calls": len(xs),
+                          "planned_date": row.get("planned_date") or SUSO_NA, "planned_hour": row.get("planned_hour") if row.get("planned_hour") != "" else -999999999,
+                          "replaces": row.get("replaces") or SUSO_NA, "rank": row.get("rank") if row.get("rank") != "" else -999999999,
+                          "ssSys_IRnd": f"{r3.random():.6f}", "has__errors": 0, "interview__status": 100 if done else 60, "assignment__id": assignment_id.get(hid, "")})
+            login = pid(e)
+            first = parse(xs[0].get("ts") or xs[0]["logged_at"])
+            t0 = first - dt.timedelta(minutes=2)
+            for code, t, who, role in ((SUSO_A["created"], t0, login, SUSO_ROLE_INT), (SUSO_A["assigned"], t0, login, SUSO_ROLE_INT), (SUSO_A["first_answer"], first, login, SUSO_ROLE_INT)):
+                d_, h_ = suso_utc(t)
+                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": code, "originator": who, "role": role, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+            last = first
+            for i, x in enumerate(xs, start=1):
+                if x["_kind"] == "dial":
+                    rec = {"phone_slot": x["phone_slot"], "call_start": suso_local(x["ts"]), "call_end": suso_local(x.get("end_ts")), "result": SUSO_RESULT[x["status"]],
+                           "willing": SUSO_WILLING.get(WILLING.get(x["status"], ""), -999999999), "action": SUSO_ACTION_CODE.get(x.get("action") or "none", 1),
+                           "appointment": parse(x["appointment_ts"]).astimezone(TZ).strftime("%Y-%m-%d %H:%M") if x.get("appointment_ts") else SUSO_NA, "target_hhid": SUSO_NA, "note": x.get("note") or SUSO_NA}
+                    t_in, t_out = parse(x["ts"]), parse(x.get("end_ts") or x["logged_at"])
+                else:
+                    rec = {"phone_slot": -999999999, "call_start": SUSO_NA, "call_end": SUSO_NA, "result": SUSO_RESULT["NONE"], "willing": -999999999, "appointment": SUSO_NA,
+                           "action": SUSO_ACTION_CODE.get(x["action"], 1), "target_hhid": x.get("target_hhid") or SUSO_NA, "note": x.get("note") or SUSO_NA}
+                    t_in = t_out = parse(x["logged_at"])
+                calls.append({"interview__key": key, "interview__id": iid, "calls__id": i, **rec})
+                if i > 1:
+                    d_, h_ = suso_utc(t_in)
+                    acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["resumed"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+                d_, h_ = suso_utc(t_out + dt.timedelta(seconds=20))
+                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["paused"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+                last = max(last, t_out)
+            if done:
+                d_, h_ = suso_utc(last + dt.timedelta(seconds=40))
+                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["completed"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+            secs = int(sum((parse(x.get("end_ts") or x["ts"]) - parse(x["ts"])).total_seconds() for x in xs if x["_kind"] == "dial" and x.get("ts")))
+            diags.append({"interview__key": key, "interview__id": iid, "interview__status": 100 if done else 60, "responsible": login, "interviewers": 1, "rejections__sup": 0, "rejections__hq": 0,
+                          "entities__errors": 0, "interview__duration": f"{secs // 86400:02d}.{secs % 86400 // 3600:02d}:{secs % 3600 // 60:02d}:{secs % 60:02d}"})
+            if done and login == "CATI02" and (rejected is None or key < rejected[0]):
+                rejected = (key, iid, login, last)
+    if rejected:                                   # the supervisor sends it back the next morning, with a comment the interviewer sees
+        key, iid, login, last = rejected
+        d_, h_ = suso_utc(dt.datetime.combine((last + dt.timedelta(days=1)).date(), dt.time(9, 10), tzinfo=TZ))
+        acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["rejected_sup"], "originator": "sup01", "role": SUSO_ROLE_SUP, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+        for m in mains:
+            if m["interview__id"] == iid:
+                m["interview__status"] = 65
+        for d in diags:
+            if d["interview__id"] == iid:
+                d["interview__status"], d["rejections__sup"] = 65, 1
+    mains.sort(key=lambda r: r["interview__key"])
+    acts.sort(key=lambda r: (r["date"], r["time"], r["interview__key"]))
+    aacts.sort(key=lambda r: (r["date"], r["time"], r["assignment__id"]))
+    zpath = os.path.join(out["suso"], "rtm_call_record_1_Tabular_All.zip")
+    with tempfile.TemporaryDirectory() as tmp:
+        tabs = [("rtm_call_record.tab", mains, SUSO_MAIN_COLS), ("calls.tab", calls, SUSO_CALL_COLS), ("interview__actions.tab", acts, SUSO_ACT_COLS),
+                ("interview__diagnostics.tab", diags, SUSO_DIAG_COLS), ("assignment__actions.tab", aacts, SUSO_ASSIGN_ACT_COLS), ("interview__errors.tab", [], ["interview__key", "interview__id", "roster", "id1", "variable", "type", "message__number", "message"]),
+                ("interview__comments.tab", [], ["interview__key", "interview__id", "roster", "id1", "variable", "order", "date", "time", "originator", "role", "comment"])]
+        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+            for n, rows, cols in tabs:
+                write_tsv(os.path.join(tmp, n), rows, cols)
+                z.write(os.path.join(tmp, n), n)
+            z.writestr("export__readme.txt", "SYNTHETIC export of the questionnaire RTM call record (L2MN-DEMO round 5), in the layout of a Survey Solutions tabular export. No real household.\n")
+    print(f"suso/assignments.tab: {len(as_rows)} assignments; suso/{os.path.basename(zpath)}: {len(mains)} interviews, {len(calls)} call records, {len(acts)} actions, "
+          f"{len(aacts)} assignment actions, rejected {rejected[0] if rejected else 'none'}")
+
+
 def write_household_list(out):
     """The leader's household list (A.1) as it stands when round 5 is prepared. Two columns beyond the standard ones,
     language and respondent_sex, let the leader try the matching criteria; they come from a stream of their own, so every
@@ -778,7 +933,7 @@ def main():
     H = make_households()
     for h in H.values():
         h["used_repl_at"] = {}
-    out = {k: os.path.join(HERE, k) for k in ("leader", "round05", "past", "leader/history", "leader/exports_R05", "leader/merge_cases", "kobo")}
+    out = {k: os.path.join(HERE, k) for k in ("leader", "round05", "past", "leader/history", "leader/exports_R05", "leader/merge_cases", "kobo", "suso")}
     for p in out.values():
         os.makedirs(p, exist_ok=True)
     for sub_ in ("leader/merge_cases", "leader/exports_R05", "leader/history"):
@@ -849,6 +1004,7 @@ def main():
         write_csv(os.path.join(out["leader"], "expected_R05_calls.csv"), rows, COLS)
         write_csv(os.path.join(out["leader"], "expected_R05_actions.csv"), arows, ACOLS)
         write_platform_samples(out, logs, files, hist)
+        write_suso_samples(out, logs, files)
         # ---- the merge cases (proposal F) ----
         mc = out["leader/merge_cases"]
         for d in ("duplicate", "csv_only", "wrong_round", "edited", "conflict"):

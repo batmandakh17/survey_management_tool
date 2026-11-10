@@ -119,6 +119,25 @@ the manifest is open:
 4. **Records to look at.** Step 5 lists every dial behind a merge question with the submission's `_uuid`, for the
    project's table view.
 
+## Try it with Survey Solutions
+
+The same round as a Survey Solutions survey of the tool's own questionnaire (`formats/suso/README.md`: one interview
+per household, the calls a roster). The **Survey Solutions** tab walks the same five steps. With the same session,
+after the manifest is open:
+
+1. **The export.** On the Survey Solutions tab, step 3, add `samples/suso/rtm_call_record_1_Tabular_All.zip`: 107
+   interviews holding 342 call records, with `interview__actions` and `interview__diagnostics`. The browser opens
+   the zip; the tool joins the calls to their interviews, gives each call to the interviewer who held the interview
+   when it started, and merges: the same dials and completes per enumerator as the other samples.
+2. **A program's own questionnaire.** An export the tool does not know asks which of its files holds the calls (a
+   roster, or the interviews themselves when each call attempt is an interview), then for the column mapping.
+3. **What Headquarters takes in.** Step 2 writes *assignments.tab* for Upload assignments, with each interviewer's
+   login in `_responsible` (compare `samples/suso/assignments.tab`).
+4. **Moves and review.** Step 4 lists the moved households with the logins before and after, the assignment ID and
+   the interview keys, to reassign in Headquarters, and reads from the next export whether each move is done there
+   and whether a tablet already holds the work; step 5 lists the interviews behind merge questions by their key.
+   Step 3 also summarises each export (interviews by status, handovers, errors, rejected interviews).
+
 ## Try the enumerator view
 
 1. **Open an assignment.** Choose "Open my assignment file" and pick `samples/round05/E07_assignment_R05.json`.
@@ -145,6 +164,7 @@ the manifest is open:
 | `samples/past/E07_2026-10-21.csv` and `.json` | E07's round-4 export, for the performance view |
 | `samples/rtmtools_export/` | A real `rtmsample draw` run with reserves (`selection.csv`, its manifest, and the do-file that made it), for the leader's Step 3 |
 | `samples/kobo/` | The round-5 calls in the L2PHL form's layout and in the tool's own form, and the lists the tool writes for the form |
+| `samples/suso/` | The round-5 calls as a Survey Solutions export of the tool's own questionnaire, and the assignments upload |
 
 ## Folder
 
@@ -154,7 +174,7 @@ the manifest is open:
 | `src/` | `core.js` (log, scheduler, files), `enum_view.js` (enumerator view), `leader_core.js` (rules, planning, merge), `leader_stats.js` (analytics), `leader_risk.js` (risk models), `leader_view.js` (leader view), `app.css`, `shell.html`, `holidays_data.js` |
 | `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally), `risk_models.json` and `validation.json` (coefficients and aggregates only), `coef_significance.py` and `coefficients.json` (each coefficient's household-clustered standard error, z and p), `make_card.py` and `MODEL_CARD.md` |
 | `holidays/make_holidays.py` | Writes the bundled holiday table (Python package `holidays`, 2025–2030) |
-| `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox layouts |
+| `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox layouts, `formats/suso/` the Survey Solutions questionnaire and layouts |
 | `manual/` | The user manual (`manual.html`, `RTM_interview_tool_manual.pdf`) and the worked examples (`examples.html`, `RTM_interview_tool_examples.pdf`: 48 situations from a round, each with the steps in the tool and a picture); `make_screens.py` and `make_examples.py` take the pictures on the synthetic samples, `make_pdf.py` prints either page |
 | `samples/` | The synthetic program and the scripts that make it |
 | `tests/` | Browser tests of both views, the risk models, the merge batch and the other rules, the format checker and the rtmtools import; reference implementations of the handbook's rules and of the models; the usability walkthrough and its screens |

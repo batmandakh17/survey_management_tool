@@ -667,6 +667,9 @@
       return { name, sha, base, kind: 'unknown', problem: `its schema is "${o.schema || 'missing'}"` };
     }
     const head = (t.split(/\r?\n/)[0] || '').split(',');
+    // a file of a Survey Solutions export: kept as a part, and joined with the other files of its export before the merge (proposal K.9)
+    const sp = L.susoPart(name, t);
+    if (sp) return Object.assign({ name, sha, base, kind: 'suso', count: sp.rows.length, enumerator_id: '', exported_at: '' }, sp);
     // a platform file: a KoBoToolbox export of a form that records each call attempt (proposal K)
     const P = L.parseDelimited(t), prof = L.profileFor(P.header, profiles);
     if (prof) return { name, sha, base, kind: 'platform', profile: prof, header: P.header, rows: P.rows, count: P.rows.length, delimiter: P.delimiter, enumerator_id: '', exported_at: '' };
@@ -748,6 +751,14 @@
       consent: { column: 'Z9', yes: '1' }, keepLabel: ['2'],
       about: 'Every call attempt is one submission of the interview form: the interviewer\'s ID, the household from the sample list, the attempt number, whether someone answered, consent (Z9), and in the closing block the result of the call (X15). As in the program\'s own processing, a complete is code 1 with consent; a partially completed interview with no further callback closes the case, as a firm refusal does.' },
   ];
+  // the tool's own Survey Solutions questionnaire (formats/suso/README.md): one interview per household, the calls a roster;
+  // Survey Solutions' categorical answers are numbers, so the codes are the tool's results in their order, 99 a record without a call
+  L.PROFILES.push({ id: 'rtm_suso', name: 'RTM call record (Survey Solutions questionnaire)', kind: 'calls', detect: ['interview__key', 'calls__id', 'hhid', 'result', 'call_start'],
+    columns: { hhid: 'hhid', enumerator: 'suso__interviewer', start: 'call_start', end: 'call_end', result: 'result', callback: 'appointment', phone_slot: 'phone_slot', round: 'round', id: 'suso__record', note: 'note' },
+    extras: { willing: 'willing', action: 'action', target_hhid: 'target_hhid', replaces: 'replaces', program: 'program' },
+    codes: Object.fromEntries(R.STATUS.map((s, i) => [String(i + 1), s.code]).concat([['99', 'NONE']])),
+    extraCodes: { willing: { 1: 'yes', 2: 'later', 3: 'no', 4: 'not_asked' }, action: { 1: 'none', 2: 'RELEASE', 3: 'SWITCH_REQUEST', 4: 'REMOVE_REQUEST', 5: 'ACTIVATE_REPLACEMENT' } },
+    about: 'One interview per household per round, its calls a roster (calls): the number dialed, the call\'s start and end (timestamps), the result, the willingness to take part, a callback, an action and a note. The interviewer of each call is the one who held the interview at its start, from interview__actions.' });
   L.profileFor = (header, custom) => {
     const h = new Set(header.map(c => String(c).trim()));
     const fits = p => { const need = p.detect || Object.values(p.columns || {}).filter(Boolean); return need.length > 0 && need.every(c => h.has(c)); };
@@ -759,6 +770,14 @@
     const o = { hhid: find('hhid', 'hhid', 'householdid', 'household', 'hh'), enumerator: find('enumeratorid', 'operatorid', 'operator', 'interviewerid', 'intid', 'enumerator', 'interviewer', 'caller'),
       start: find('callstart', 'starttime', 'start', 'callstart'), end: find('callend', 'endtime', 'end'), round: find('round'), id: find('uuid', 'id', 'callid', 'recordid', 'sid'), logged_at: find('submissiontime', 'submitted', 'logged'), note: find('note', 'comment', 'remarks') };
     Object.assign(o, { result: find('result', 'status', 'calloutcome', 'outcome', 'disposition'), attempt: find('attempt', 'calltry', 'try'), callback: find('appointment', 'callback', 'nextcall'), phone: find('dialingphone', 'phonedialed', 'numberdialed', 'phone', 'number'), phone_slot: find('phoneslot', 'slot') });
+    // a table built from a Survey Solutions export: the interviewer and the record from the export's own columns, the times from the
+    // questionnaire's call times if it has them, else from the interview's start and completion
+    if (header.includes('suso__record')) {
+      const own = (...keys) => { const i = n.findIndex(x => keys.includes(x)); return i >= 0 ? header[i] : ''; };
+      Object.assign(o, { enumerator: 'suso__interviewer', id: 'suso__record', logged_at: '', start: own('callstart', 'starttime', 'calltime') || 'suso__started', end: own('callend', 'endtime') || 'suso__completed',
+        result: own('result', 'callresult', 'calloutcome', 'outcome', 'disposition', 'callstatus') || o.result });
+      if (/^interview__/.test(o.hhid)) o.hhid = own('hhid', 'householdid', 'hhcode') || '';
+    }
     return o;
   };
   // 'YYYY-MM-DDTHH:MM:SS(.sss)?(Z|+HH:MM)?' or 'YYYY-MM-DD HH:MM:SS' into the harmonized wall time and offset
@@ -794,6 +813,7 @@
   // a row of a platform file as the standard call record the form reader takes (the roles, the codes mapped, the extras of the tool's own form)
   const stdRecord = (prof, r, M) => {
     const c = prof.columns || {}, x = prof.extras || {}, g = k => (k && r[k] !== undefined && r[k] !== null ? String(r[k]).trim() : '');
+    const xc = prof.extraCodes || {}, gx = k => { const v = g(x[k]); return xc[k] && xc[k][v] !== undefined ? xc[k][v] : v; };
     const raw = g(c.result);
     let status = codeStatus(prof, raw), consentNote = '';
     // a form that asks for consent: a complete-coded record without it is not a complete (the program's rule), and is shown for the leader to see
@@ -802,7 +822,7 @@
     const note = [g(c.note), (status === 'OTHER' || (prof.keepLabel || []).includes(raw)) && raw ? `result: ${raw}${label ? ` (${label})` : ''}` : '', consentNote].filter(Boolean).join(' · ');
     return { hhid: g(c.hhid), enumerator: g(c.enumerator), call_start: g(c.start), call_end: g(c.end), result: status, raw, appointment: g(c.callback), phone: g(c.phone), phone_slot: g(c.phone_slot),
       round: g(c.round), attempt: g(c.attempt), id: g(c.id), logged_at: g(c.logged_at), note,
-      willing: g(x.willing), action: g(x.action), target_hhid: g(x.target_hhid), replaces: g(x.replaces), program: g(x.program) || M.program };
+      willing: gx('willing'), action: gx('action'), target_hhid: g(x.target_hhid), replaces: g(x.replaces), program: g(x.program) || M.program };
   };
   // one call record into a row of the harmonized dial table (A.4), or a standalone action for a record without a call
   const formRecord = (M, src, r, e, eid, loggedAt) => {
@@ -828,7 +848,7 @@
     return out;
   };
   const pseudoExport = (M, orig, e, rows, actions, when) => ({
-    name: `${orig.name} (${e || 'no enumerator'})`, sha: R.sha256(`${orig.sha}|${e}`), base: `${baseName(orig.name)} (${e})`, kind: 'csv', form: orig.profile ? orig.profile.id : orig.kind, parent: orig.name,
+    name: `${orig.name} (${e || 'no enumerator'})`, sha: R.sha256(`${orig.sha}|${e}`), base: `${baseName(orig.name)} (${e})`, kind: 'csv', form: orig.profile ? orig.profile.id : orig.kind, parent: orig.name, suso: orig.suso ? 1 : undefined,
     program: rows.length && rows[0].program ? rows[0].program : M.program, round: rows.length && rows[0].round ? +rows[0].round : M.round,
     enumerator_id: e, rows, at: when || 0, exported_at: when ? R.localISO(new Date(when)) : '', count: rows.length + actions.length, formActions: actions,
   });
@@ -885,6 +905,8 @@
         const recs = [];
         f.rows.forEach((r0, i) => {
           const r = stdRecord(prof, r0, M);
+          // a Survey Solutions interview can change hands: each call goes to the interviewer who held the interview when it started
+          if (f.suso && f.suso.timeline && (prof.columns || {}).enumerator === 'suso__interviewer') { const w = susoWho(f.suso.timeline.get(r0.interview__id), r.call_start, tz); if (w) r.enumerator = w; }
           if (roundCol && r.round && +r.round !== +M.round) { otherRound++; return; }
           if (r.phone && !r.phone_slot) { const s = slots.find(r.phone); if (s && s.hhid === r.hhid) r.phone_slot = String(s.slot); else noSlot++; }
           if (!r.hhid) { noId++; return; }
@@ -893,11 +915,18 @@
           const loggedAt = loggedOf(r.logged_at, r);
           recs.push({ r, e, eid, loggedAt, when: Date.parse(loggedAt) || stamp(r.call_end) || stamp(r.call_start) });
         });
-        const left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : ''].filter(Boolean);
+        const so = f.suso, left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : '',
+          so && so.orphans ? `${R.plural(so.orphans, 'row')} without their interview left out` : '', so && !so.actions && !so.diagnostics ? 'no interview__actions file: each record goes to the interview\'s own interviewer column' : ''].filter(Boolean);
         const parts = emit(f, prof.id, recs);
-        extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
+        extra.push({ name: f.name, kind: prof.name, suso: so ? 1 : undefined, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${so ? `${R.plural(so.interviews, 'interview')}, ` : ''}${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
       } else if (f.kind === 'unmapped') {
-        extra.push({ name: f.name, kind: 'table, columns unknown', enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged until its columns are mapped (Import tab)' });
+        extra.push({ name: f.name, kind: 'table, columns unknown', suso: f.suso ? 1 : undefined, enumerator_id: '', exported_at: '', count: f.rows.length, use: `not merged until its columns are mapped (${f.suso ? 'Survey Solutions' : 'Import'} tab)` });
+      } else if (f.kind === 'suso_pending') {
+        extra.push({ name: f.name, kind: 'Survey Solutions export', suso: 1, enumerator_id: '', exported_at: '', count: f.count, use: 'not merged until you say which of its files holds the calls (Survey Solutions tab, step 3)' });
+      } else if (f.kind === 'suso_interviews') {
+        extra.push({ name: f.name, kind: 'Survey Solutions export', suso: 1, enumerator_id: '', exported_at: '', count: f.count, use: 'not merged: its questionnaire records interviews, not call attempts, so the team logs its calls in the tool' });
+      } else if (f.kind === 'suso_incomplete') {
+        extra.push({ name: f.name, kind: 'Survey Solutions export', suso: 1, enumerator_id: '', exported_at: '', count: f.count, use: 'not merged: the export\'s main file (one row per interview) was not added; add the whole zip' });
       } else out.push(f);
     }
     return { imports: out, extra };
@@ -963,19 +992,281 @@
     }
     return R.toCSV(rows, L.CHOICE_COLS);
   };
+
+  // ---- exports of Survey Solutions (proposal K.9) ----
+  // A tabular export (Data Export › Tab separated) is a zip: the main file, named after the questionnaire (one row per interview),
+  // a file per roster (one row per item, with the interview's ID and the roster's own ID) and the service files, of which the tool
+  // reads interview__actions (who held each interview, and when it was started and completed) and interview__diagnostics (who is
+  // responsible for it, how long it took). The calls are one level of the export: a roster of calls inside one interview per
+  // household (the tool's own questionnaire), or the interviews themselves when each call attempt is an interview.
+  const SUSO_SKIP = /^(interview__errors|interview__comments|paradata|export__readme)$/i;
+  const SUSO_NA = new Set(['##N/A##', '-999999999']);              // the export's missing values: text, and numeric or categorical
+  const tsvTable = text => {
+    const lines = String(text).replace(/^﻿/, '').split(/\r?\n/).filter(l => l !== '');
+    const head = (lines[0] || '').split('\t').map(h => h.trim());
+    return { header: head, rows: lines.slice(1).map(l => { const v = l.split('\t'); return Object.fromEntries(head.map((h, i) => [h, v[i] === undefined || SUSO_NA.has(v[i].trim()) ? '' : v[i]])); }) };
+  };
+  // a file of the export (a member of the zip, named "<zip>/<file>.tab", or a .tab added alone), or null for any other file
+  L.susoPart = (name, text) => {
+    const n = String(name), file = n.split('/').pop().replace(/\.(tab|txt|csv)$/i, ''), group = n.includes('/') ? n.slice(0, n.lastIndexOf('/')) : '';
+    const cols = (String(text).replace(/^﻿/, '').split(/\r?\n/)[0] || '').split('\t').map(c => c.trim());
+    if (SUSO_SKIP.test(file) && /\.(tab|txt)$/i.test(n)) return { suso: 'other', file, group, header: cols, rows: [] };
+    // assignment__actions: who holds each assignment and when it reached a tablet (no interview__id column)
+    if (/^assignment__actions$/i.test(file) && cols.includes('assignment__id') && cols.includes('action')) return Object.assign({ suso: 'assignments', file, group }, tsvTable(text));
+    if (!cols.includes('interview__id')) return null;
+    const T = tsvTable(text);
+    if (/^interview__actions$/i.test(file)) return Object.assign({ suso: 'actions', file, group }, T);
+    if (/^interview__diagnostics$/i.test(file)) return Object.assign({ suso: 'diagnostics', file, group }, T);
+    const ids = T.header.filter(c => /__id$/.test(c) && c !== 'interview__id' && c !== 'assignment__id');
+    return Object.assign({ suso: ids.length ? 'roster' : 'main', file, group, ids }, T);
+  };
+  // interview__actions: the date and time of each action in UTC, the action's code, who did it (originator, role) and who
+  // is responsible for the interview after it (responsible_name, responsible_role); role 1 is an interviewer
+  L.SUSO_ACTION = { assigned: '1', first_answer: '2', completed: '3', received: '13' };      // InterviewerAssigned, FirstAnswerSet, Completed, InterviewReceivedByTablet
+  // assignment__actions codes: 1 Created, 4 ReceivedByTablet, 7 Reassigned (responsible_name is the login that holds the assignment after the action)
+  L.SUSO_ASSIGN_ACTION = { created: '1', received: '4', reassigned: '7' };
+  L.SUSO_REJECTED = new Set(['65', '125']);
+  L.SUSO_STATUS = { '-1': 'Deleted', 0: 'Restored', 20: 'Created', 40: 'Supervisor assigned', 60: 'Interviewer assigned', 65: 'Rejected by supervisor', 80: 'Ready for interview',
+    85: 'Sent to CAPI', 95: 'Restarted', 100: 'Completed', 120: 'Approved by supervisor', 125: 'Rejected by headquarters', 130: 'Approved by headquarters' };
+  const isInterviewer = v => /^(1|interviewer)$/i.test(String(v == null ? '' : v).trim());
+  const actionMs = a => Date.parse(`${String(a.date || '').trim()}T${String(a.time || '').trim()}Z`) || 0;
+  // a moment as the round's wall time with its offset (the export's UTC times, shown as the team lives them)
+  const inZone = (ms, tz) => {
+    if (!ms) return '';
+    const u = new Date(ms).toISOString().slice(0, 19), off = tz ? offsetAt(u.replace('T', ' '), tz) : '';
+    if (!off) return u + 'Z';
+    const mins = (off[0] === '-' ? -1 : 1) * (+off.slice(1, 3) * 60 + +off.slice(4, 6));
+    return new Date(ms + mins * 60000).toISOString().slice(0, 19) + off;
+  };
+  // interview__duration as minutes: "d.hh:mm:ss", "hh:mm:ss" or a number of minutes
+  const susoMinutes = v => {
+    const s = String(v == null ? '' : v).trim(), m = /^(?:(\d+)\.)?(\d+):(\d\d):(\d\d)(?:\.\d+)?$/.exec(s);
+    if (m) return ((+m[1] || 0) * 1440 + +m[2] * 60 + +m[3] + +m[4] / 60).toFixed(1);
+    return s && isFinite(+s) ? s : '';
+  };
+  // per interview: the interviewers who held it, in time ([ms, login]), when it was started and completed, and by whom
+  const susoIndex = (actions, diags) => {
+    const by = new Map(), info = new Map();
+    actions.forEach(a => { const id = a.interview__id; if (!by.has(id)) by.set(id, []); by.get(id).push(Object.assign({ ms: actionMs(a) }, a)); });
+    for (const [id, as] of by) {
+      as.sort((x, y) => x.ms - y.ms);
+      const tl = [];
+      let first = 0, done = 0, doneBy = '', received = 0;
+      as.forEach(a => {
+        const who = String(a.responsible_name || a.responsible__name || '').trim();
+        if (who && isInterviewer(a.responsible_role !== undefined ? a.responsible_role : a.responsible__role) && (!tl.length || tl[tl.length - 1][1] !== who)) tl.push([a.ms, who]);
+        const code = String(a.action).trim();
+        if (code === L.SUSO_ACTION.first_answer && !first) first = a.ms;
+        if (code === L.SUSO_ACTION.completed) { done = a.ms; if (isInterviewer(a.role) && a.originator) doneBy = String(a.originator).trim(); }
+        if (code === L.SUSO_ACTION.received && !received) received = a.ms;
+      });
+      info.set(id, { tl, started: first, completed: done, received, by: doneBy || (tl.length ? tl[tl.length - 1][1] : ''), responsible: '', minutes: '', status: '', interviewers: '' });
+    }
+    (diags || []).forEach(d => {
+      const x = info.get(d.interview__id) || { tl: [], started: 0, completed: 0, by: '' };
+      Object.assign(x, { responsible: String(d.responsible || '').trim(), minutes: susoMinutes(d.interview__duration), status: d.interview__status, interviewers: d.interviewers });
+      if (!x.by) x.by = x.responsible;
+      info.set(d.interview__id, x);
+    });
+    return info;
+  };
+  const assignIndex = rows => {
+    const out = new Map();
+    (rows || []).forEach(a => {
+      const id = String(a.assignment__id || '').trim(); if (!id) return;
+      const x = out.get(id) || { changes: [], received: 0 }, code = String(a.action).trim(), ms = actionMs(a), who = String(a.responsible_name || a.responsible__name || '').trim();
+      if ((code === L.SUSO_ASSIGN_ACTION.created || code === L.SUSO_ASSIGN_ACTION.reassigned) && who) x.changes.push([ms, who]);
+      if (code === L.SUSO_ASSIGN_ACTION.received && !x.received) x.received = ms;
+      out.set(id, x);
+    });
+    for (const x of out.values()) x.changes.sort((a, b) => a[0] - b[0]);
+    return out;
+  };
+  // the interviewer who held an interview when a call started (the call's own time, placed in the round's zone when it has no offset)
+  const susoWho = (tl, start, tz) => {
+    if (!tl || !tl.length) return '';
+    const p = isoParts(start), off = p.off || (p.wall && tz ? offsetAt(p.wall, tz) : ''), t = p.wall ? Date.parse(p.wall.replace(' ', 'T') + off) : NaN;
+    if (isNaN(t)) return '';
+    let who = tl[0][1];
+    for (const [ms, w] of tl) { if (ms <= t) who = w; else break; }
+    return who;
+  };
+  // the columns the tool adds to every table it builds from an export
+  L.SUSO_EXTRA = ['suso__record', 'suso__interviewer', 'suso__responsible', 'suso__started', 'suso__completed', 'suso__status', 'suso__minutes'];
+  // the exports among the parts: per zip (or per questionnaire among .tab files added alone) its main file, rosters and service files
+  L.susoGroups = parts => {
+    const groups = new Map(), out = [];
+    parts.forEach(f => { if (!groups.has(f.group)) groups.set(f.group, []); groups.get(f.group).push(f); });
+    for (const [group, fs] of groups) {
+      const mains = fs.filter(f => f.suso === 'main'), rosters = fs.filter(f => f.suso === 'roster');
+      const actions = [].concat(...fs.filter(f => f.suso === 'actions').map(f => f.rows)), diags = [].concat(...fs.filter(f => f.suso === 'diagnostics').map(f => f.rows));
+      const assigns = [].concat(...fs.filter(f => f.suso === 'assignments').map(f => f.rows));
+      const owner = r => { if (mains.length < 2) return mains[0]; const id = (r.rows[0] || {}).interview__id; return mains.find(m => m.rows.some(x => x.interview__id === id)) || mains[0]; };
+      if (!mains.length) { out.push({ group, label: group || 'Survey Solutions files', main: null, rosters, actions, diags, assigns, files: fs }); continue; }
+      mains.forEach(m => out.push({ group, label: group ? (mains.length > 1 ? `${group} › ${m.file}` : group) : `${m.file}.tab`, q: m.file, main: m,
+        rosters: rosters.filter(r => owner(r) === m), actions, diags, assigns, files: fs }));
+    }
+    return out;
+  };
+  const levelOf = (g, lv) => (lv === 'main' ? null : g.rosters.find(r => r.file === lv));
+  L.susoLevelHeader = (g, lv) => { const r = levelOf(g, lv); return [...new Set(g.main.header.concat(r ? r.header : [], L.SUSO_EXTRA))]; };
+  const susoRows = (g, lv, info, tz) => {
+    const r = levelOf(g, lv), byId = new Map(g.main.rows.map(m => [m.interview__id, m])), rows = [];
+    let orphans = 0, deleted = 0;
+    (r ? r.rows : g.main.rows).forEach(x => {
+      const m = r ? byId.get(x.interview__id) : x;
+      if (!m) { orphans++; return; }
+      if (String(m.interview__status).trim() === '-1') { deleted++; return; }
+      const i = info.get(x.interview__id) || {}, rid = r ? r.ids.map(c => x[c]).join('-') : '', key = x.interview__key || m.interview__key || x.interview__id, st_ = m.interview__status || i.status || '';
+      rows.push(Object.assign({}, m, x, { suso__record: rid ? `${key}#${rid}` : key, suso__interviewer: i.by || i.responsible || '', suso__responsible: i.responsible || '',
+        suso__started: inZone(i.started, tz), suso__completed: inZone(i.completed, tz), suso__status: L.SUSO_STATUS[st_] || String(st_), suso__minutes: i.minutes || '' }));
+    });
+    return { rows, orphans, deleted };
+  };
+  // what the export says of its interviews: by status, with errors, held by more than one interviewer, rejected (with the household when known)
+  const susoSummary = (g, info, hhOf) => {
+    const status = {}, rejected = [];
+    let errors = 0, handovers = 0;
+    g.main.rows.forEach(m => {
+      const st_ = String(m.interview__status).trim(), lab = L.SUSO_STATUS[st_] || st_ || 'unknown';
+      if (st_ === '-1') return;
+      status[lab] = (status[lab] || 0) + 1;
+      if (String(m.has__errors).trim() === '1') errors++;
+      const i = info.get(m.interview__id) || {};
+      if (+i.interviewers > 1 || (i.tl && i.tl.length > 1)) handovers++;
+      if (L.SUSO_REJECTED.has(st_)) rejected.push({ key: m.interview__key || m.interview__id, hhid: hhOf ? hhOf(m) : '', status: lab, responsible: i.responsible || i.by || '' });
+    });
+    return { status, errors, handovers, rejected };
+  };
+  // the parts become one table per export at the level that holds the calls: a built-in or saved layout reads it as it reads a
+  // KoBoToolbox export; a table no layout knows is mapped once (as any unknown table); an export whose level is not known yet
+  // waits for the leader to say which file holds the calls (opts.suso: questionnaire -> 'main', a roster's name, or 'none')
+  L.susoAssemble = (imports, M, opts) => {
+    const parts = imports.filter(f => f.kind === 'suso');
+    if (!parts.length) return imports;
+    const out = imports.filter(f => f.kind !== 'suso'), profiles = (opts && opts.profiles) || [], chosen = (opts && opts.suso) || {};
+    for (const g of L.susoGroups(parts)) {
+      const sha = R.sha256(g.files.map(f => f.sha).sort().join('|') + '|' + (g.q || '')), files = g.files.map(f => f.name);
+      if (!g.main) { out.push({ name: g.label, sha, base: g.label, kind: 'suso_incomplete', count: g.rosters.reduce((s, r) => s + r.rows.length, 0), files, enumerator_id: '', exported_at: '' }); continue; }
+      const levels = ['main'].concat(g.rosters.map(r => r.file)), pick = chosen[g.q];
+      let level = pick === 'none' || levels.includes(pick) ? pick : null, prof = null;
+      if (!level) for (const lv of levels) { const p = L.profileFor(L.susoLevelHeader(g, lv), profiles); if (p) { level = lv; prof = p; break; } }
+      const meta = { questionnaire: g.q, group: g.group, label: g.label, level, files, interviews: g.main.rows.length, actions: g.actions.length, diagnostics: g.diags.length,
+        levels: levels.map(lv => ({ level: lv, rows: lv === 'main' ? g.main.rows.length : levelOf(g, lv).rows.length, columns: (lv === 'main' ? g.main.header : levelOf(g, lv).header).filter(c => !/^interview__(id|key)$/.test(c)).slice(0, 12) })) };
+      if (!level) { out.push({ name: g.label, sha, base: g.label, kind: 'suso_pending', count: g.main.rows.length, suso: meta, enumerator_id: '', exported_at: '' }); continue; }
+      if (level === 'none') { out.push({ name: g.label, sha, base: g.label, kind: 'suso_interviews', count: g.main.rows.length, suso: meta, enumerator_id: '', exported_at: '' }); continue; }
+      const info = susoIndex(g.actions, g.diags), header = L.susoLevelHeader(g, level), T = susoRows(g, level, info, M && M.calendar && M.calendar.time_zone);
+      prof = prof || L.profileFor(header, profiles);
+      meta.timeline = new Map([...info].map(([id, x]) => [id, x.tl]));
+      meta.received = new Map([...info].filter(([, x]) => x.received).map(([id, x]) => [id, x.received]));
+      meta.assign = assignIndex(g.assigns);
+      meta.orphans = T.orphans; meta.deleted = T.deleted;
+      // the interviews each household has, for the list of moves (step 4), and the export's summary (step 3)
+      const hc = prof && prof.columns && prof.columns.hhid;
+      if (hc) {
+        const seen = new Set();
+        meta.byHH = {};
+        T.rows.forEach(r => { const h = String(r[hc] || '').trim(), k = r.interview__key || r.interview__id; if (!h || seen.has(k)) return; seen.add(k);
+          (meta.byHH[h] = meta.byHH[h] || []).push({ key: k, iid: r.interview__id, assignment: r.assignment__id || '', status: r.suso__status, responsible: r.suso__responsible || r.suso__interviewer }); });
+      }
+      meta.summary = susoSummary(g, info, hc && level === 'main' ? m => String(m[hc] || '').trim() : hc ? m => { const r = T.rows.find(x => x.interview__id === m.interview__id); return r ? String(r[hc] || '').trim() : ''; } : null);
+      const name = `${g.label} › ${level === 'main' ? 'interviews' : level}`;
+      out.push(Object.assign({ name, sha, base: name, header, rows: T.rows, count: T.rows.length, delimiter: '\t', enumerator_id: '', exported_at: '', suso: meta },
+        prof ? { kind: 'platform', profile: prof } : { kind: 'unmapped', problem: 'a Survey Solutions table whose columns are not known: map them on the Survey Solutions tab' }));
+    }
+    return out;
+  };
+  // the assignments upload (Survey Setup › Questionnaires › the questionnaire › Upload assignments): a tab-delimited file with one
+  // assignment per household and listed reserve, the interviewer's login in _responsible. The tool's own questionnaire takes every
+  // column as an identifying question; a program's own questionnaire takes the household ID alone, under its variable's name.
+  L.SUSO_COLS = ['hhid', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour',
+    'psu', 'stratum', 'kind', 'replaces', 'rank'];
+  L.susoAssignments = (M, Hl, plans, codes, o) => {
+    const opt = Object.assign({ layout: 'rtm', idVar: 'hhid', quantity: 1 }, o || {}), codeOf = L.codeOf(M, codes), only = listedReplacements(M);
+    const idVar = String(opt.idVar || '').trim() || 'hhid';
+    const cols = (opt.layout === 'id' ? [idVar] : [idVar].concat(L.SUSO_COLS.slice(1))).concat(['_responsible', '_quantity']);
+    const cell = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' '), rows = [];
+    const add = (id, H, h, x) => rows.push(Object.assign({ [idVar]: id, program: M.program, round: M.round, contact_name: H.name || '', psu: h.psu || '', stratum: h.stratum || '',
+      _responsible: codeOf(h.enumerator_id), _quantity: opt.quantity }, contactCols(H), x));
+    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
+      const pl = planOf(plans, h.hhid);
+      add(h.hhid, Hl.get(h.hhid) || {}, h, { planned_date: pl.first_dial_date || '', planned_hour: Number.isInteger(pl.target_hour) ? pl.target_hour : '', kind: 'main', replaces: '', rank: '' });
+      (h.replacements || []).forEach((id, i) => (only && !only.has(id)) || add(id, Hl.get(id) || {}, h, { planned_date: '', planned_hour: '', kind: 'replacement', replaces: h.hhid, rank: i + 1 }));
+    }
+    return [cols.join('\t')].concat(rows.map(r => cols.map(c => cell(r[c])).join('\t'))).join('\n') + '\n';
+  };
+  // the households moved during the round, each with the interviewer who should now hold it in Survey Solutions, and the
+  // assignment and interviews the latest export shows for it (so that they can be found and reassigned in Headquarters)
+  // in_hq: 'done' when the latest export shows the assignment or an interview of the household passed to the new login after
+  // the move (assignment__actions Reassigned, or interview__actions InterviewerAssigned); 'pending' when the export knows the
+  // household but shows no such change; 'not in the export' when it knows neither an assignment nor an interview of it.
+  // received_on_tablet says whether a tablet already holds the work, when the documentation's warning about extra interviews applies.
+  L.SUSO_MOVE_COLS = ['hhid', 'moved_at', 'from_enumerator', 'from_login', 'to_enumerator', 'to_login', 'assignment_id', 'interview_keys', 'interview_status', 'in_hq', 'received_on_tablet'];
+  L.susoMoves = (M, codes, metas) => {
+    const codeOf = L.codeOf(M, codes), last = new Map(), byHH = new Map(), assign = new Map(), timeline = new Map(), received = new Map();
+    (M.moves || []).forEach(m => last.set(m.hhid, m));
+    (metas || []).forEach(s => {
+      Object.entries(s.byHH || {}).forEach(([h, xs]) => { if (!byHH.has(h)) byHH.set(h, new Map()); xs.forEach(x => byHH.get(h).set(x.key, x)); });
+      (s.assign || new Map()).forEach((v, k) => assign.set(k, v));
+      (s.timeline || new Map()).forEach((v, k) => timeline.set(k, v));
+      (s.received || new Map()).forEach((v, k) => received.set(k, v));
+    });
+    return [...last.values()].sort((a, b) => cmpStr(a.hhid, b.hhid)).map(m => {
+      const ints = byHH.has(m.hhid) ? [...byHH.get(m.hhid).values()] : [], aids = [...new Set(ints.map(i => i.assignment).filter(Boolean))];
+      const to = codeOf(m.to), toKey = codeKey(to), at = Date.parse(m.at || '') || 0;
+      const passed = (chs) => (chs || []).some(([ms, who]) => ms >= at && codeKey(who) === toKey);
+      const done = aids.some(a => assign.has(a) && passed(assign.get(a).changes)) || ints.some(i => passed(timeline.get(i.iid)));
+      const known = ints.length > 0 || aids.some(a => assign.has(a));
+      const got = aids.some(a => assign.has(a) && assign.get(a).received) || ints.some(i => received.has(i.iid));
+      return { hhid: m.hhid, moved_at: m.at || '', from_enumerator: m.from, from_login: codeOf(m.from), to_enumerator: m.to, to_login: to,
+        assignment_id: aids.join(' '), interview_keys: ints.map(i => i.key).join(' '), interview_status: ints.map(i => i.status).join(' '),
+        in_hq: done ? 'done' : known ? 'pending' : 'not in the export', received_on_tablet: known ? (got ? 'yes' : 'no') : '' };
+    });
+  };
+  // a zip archive (a Survey Solutions export) as its tables: the same reader as the workbook's
+  L.readZip = async buf => {
+    const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), dec = new TextDecoder('utf-8'), out = new Map();
+    let eocd = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('This is not a zip archive.');
+    const n = dv.getUint16(eocd + 10, true), entries = [];
+    let p = dv.getUint32(eocd + 16, true);
+    for (let k = 0; k < n; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      entries.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, off });
+      p += 46 + nl + el + cl;
+    }
+    for (const e of entries) {
+      if (e.name.endsWith('/') || !/\.(tab|csv)$/i.test(e.name)) continue;
+      const start = e.off + 30 + dv.getUint16(e.off + 26, true) + dv.getUint16(e.off + 28, true), data = u8.subarray(start, start + e.csize);
+      if (e.method === 0) out.set(e.name, dec.decode(data));
+      else if (e.method === 8 && typeof DecompressionStream !== 'undefined') out.set(e.name, dec.decode(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
+      else throw new Error('This browser cannot open this zip; unzip it and add its .tab files.');
+    }
+    return out;
+  };
   // ---- the merge (F): every situation gives a line in the merge report; nothing is resolved silently ----
   // resolutions: Map issue key -> {decision, note, logged_by, logged_at}
   L.merge = (M, imports, resolutions, now, opts) => {
     const res = resolutions || new Map(), issues = [], files = [];
     const nowMs = (now || R.now()).getTime();
+    imports = L.susoAssemble(imports, M, opts);   // the files of a Survey Solutions export become one table (proposal K.9)
     const ex = L.expandForms(imports, M, opts);    // platform exports become one CSV-like export per enumerator (proposal K)
-    const unmapped = imports.filter(f => f.kind === 'unmapped');
+    const unmapped = imports.filter(f => f.kind === 'unmapped'), platformFiles = imports.filter(f => f.kind === 'platform'), suso = imports.filter(f => f.suso).map(f => f.suso);
     imports = ex.imports; files.push(...ex.extra);
     const issue = x => {
       const r = res.get(x.key);
       issues.push(Object.assign(x, r ? { status: 'resolved', decision: r.decision, note: r.note, by: r.logged_by, at: r.logged_at } : { status: 'open' }));
       return r ? r.decision : null;
     };
+    // an interview rejected in Survey Solutions: its calls are read as recorded and a complete it holds still counts; the leader is told
+    {
+      const enumOf = L.enumMapper(M, opts && opts.codes);
+      suso.forEach(s => ((s.summary || {}).rejected || []).forEach(r => issue({ key: `suso_rejected:${r.key}`, type: 'suso_rejected', severity: 'info', file: s.label, hhid: r.hhid || undefined, enumerator: r.responsible ? enumOf(r.responsible) : undefined,
+        detail: `Interview ${r.key} is “${r.status}” in Survey Solutions: the interviewer must correct and resubmit it. Its calls are read as recorded, and a complete it holds counts until the interview is deleted.` })));
+    }
     const roster = new Map(M.enumerators.map(e => [e.enumerator_id, e]));
     const assignedTo = new Map(M.households.map(h => [h.hhid, h.enumerator_id]));
     const replOf = new Map();
@@ -995,7 +1286,7 @@
     // 1. files: duplicates, other rounds, other kinds
     const seen = new Map(), usable = [], contactFiles = [];
     for (const f of imports) {
-      const row = { name: f.name, kind: f.form ? 'platform records' : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '' };
+      const row = { name: f.name, kind: f.form ? (f.suso ? 'Survey Solutions records' : 'platform records') : f.kind, enumerator_id: f.enumerator_id || '', exported_at: f.exported_at || '', count: f.count || 0, use: '', suso: f.suso ? 1 : undefined };
       files.push(row);
       if (seen.has(f.sha)) {
         row.use = 'duplicate, ignored';
@@ -1279,7 +1570,7 @@
       if (!okNum || !okLog) issue({ key: `contact:${u.event_id}`, type: 'contact_mismatch', severity: 'info', file: f.name, hhid: u.hhid, enumerator: f.enumerator_id,
         detail: `The number for ${u.hhid}, slot ${u.slot}, does not match the digest ${okNum ? 'in the call log' : 'beside it'}.` });
     });
-    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), unmapped, selfSched };
+    return { files, issues, perEnum, dials: all, actions, counted, conflictHH, activatedBy, updates, sealedContacts: contactFiles.filter(f => f.kind === 'sealed'), unmapped, selfSched, platformFiles, suso };
   };
 
   // ---- cases and progress: one line per household of the round (manifest households and activated replacements) ----

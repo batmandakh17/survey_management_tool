@@ -369,6 +369,34 @@ def main():
             sel('code:C', 'COMPLETE'); sel('code:NA', 'NO_ANSWER'); sel('code:B', 'BUSY'); sel('name', 'Our call-record form'); return true; })()""")
         time.sleep(0.3)
         crop("l33_mapping", ["document.querySelector('#lmap')"], max_h=1100)
+        # ======================= the team leader: with Survey Solutions (Part D) =======================
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.click('[data-lact="tab"][data-t="suso"]'); time.sleep(0.3)
+        crop("d1_suso_files", ["__card('1 · The questionnaire')", "__card('2 · Before the round')"], hls=["document.querySelector('[data-lact=\"export\"][data-what=\"suso\"]')"], max_h=1000)
+        b.set_files("#lf-suso", [os.path.join(S, "suso", "rtm_call_record_1_Tabular_All.zip")])
+        b.wait("LEAD.state().imports.length >= 4"); time.sleep(0.5)
+        crop("d2_suso_import", ["__card('3 · Each day')"], hls=["document.querySelector('#lf-suso').parentElement"], max_h=900)
+        # an export the tool does not know: one interview per call attempt, beside a household roster
+        import zipfile as _zip, datetime as _dt
+        own_zip = os.path.join(WORK, "phone_survey_1_Tabular_All.zip")
+        codes_ = {"COMPLETE": 11, "PARTIAL": 12, "APPOINTMENT": 13, "NOT_AVAILABLE": 14, "REFUSAL_SOFT": 21, "REFUSAL_HARD": 22, "NO_ANSWER": 31, "BUSY": 32, "SWITCHED_OFF": 33,
+                  "BLOCKED": 34, "DEAD_NUMBER": 41, "WRONG_NUMBER": 42, "LANGUAGE": 51, "OTHER": 99}
+        pm, pa, pr = [], [], []
+        for i, r_ in enumerate(rows_):
+            key, iid = f"{10 + i // 10000:02d}-{i // 100 % 100:02d}-{i % 100:02d}-{i % 97:02d}", f"{i:032x}"
+            pm.append([key, iid, r_["hhid"], str(codes_[r_["status"]]), "0.5", "0", "100", str(5000 + i)])
+            for code, t in (("1", r_["ts"]), ("2", r_["ts"]), ("3", r_["end_ts"] or r_["ts"])):
+                u = _dt.datetime.fromisoformat(t.replace(" ", "T") + r_["utc_offset"]).astimezone(_dt.timezone.utc)
+                pa.append([key, iid, u.strftime("%Y-%m-%d"), u.strftime("%H:%M:%S"), code, "CATI" + r_["operator"][1:], "1", "CATI" + r_["operator"][1:], "1"])
+            pr.append([key, iid, "1", "Member 1", "35"])
+        with _zip.ZipFile(own_zip, "w", _zip.ZIP_DEFLATED) as z_:
+            for n_, head_, rws in (("phone_survey.tab", ["interview__key", "interview__id", "household_id", "call_outcome", "ssSys_IRnd", "has__errors", "interview__status", "assignment__id"], pm),
+                                   ("members.tab", ["interview__key", "interview__id", "members__id", "member_name", "age"], pr),
+                                   ("interview__actions.tab", ["interview__key", "interview__id", "date", "time", "action", "originator", "role", "responsible_name", "responsible_role"], pa)):
+                z_.writestr(n_, "\t".join(head_) + "\n" + "".join("\t".join(x) + "\n" for x in rws))
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-suso", [own_zip]); b.wait("!!document.querySelector('#lsusolevel')"); time.sleep(0.3)
+        crop("d3_suso_level", ["document.querySelector('#lsusolevel')"], max_h=900)
         print(f"{len(glob.glob(os.path.join(IMG, '*.png')))} pictures in {IMG}")
     finally:
         b.close()

@@ -349,11 +349,58 @@ def check_csv(path, errs, warns):
     return len(rows)
 
 
+def check_tab(path, errs, warns):
+    """The Survey Solutions files (proposal K.9): the assignments upload the leader view writes, or a table of an export."""
+    rows = list(csv.DictReader(io.open(path, encoding="utf-8", newline=""), delimiter="\t"))
+    header = open(path, encoding="utf-8").readline().rstrip("\r\n").split("\t")
+    if "_responsible" in header:
+        idc = header[0]
+        ids = [r[idc] for r in rows]
+        if len(ids) != len(set(ids)):
+            errs.append(f"a household appears twice in {idc}")
+        if any(not r["_responsible"].strip() for r in rows):
+            errs.append("every row needs a login in _responsible (Survey Solutions refuses the file otherwise)")
+        if "_quantity" in header and any(not re.fullmatch(r"-1|\d+", r["_quantity"].strip() or "1") for r in rows):
+            errs.append("_quantity must be a whole number, or -1 for no limit")
+        if "phone_1" in header:
+            warns.append("the Survey Solutions assignments upload: holds phone numbers; it goes to Headquarters only")
+        return f"Survey Solutions assignments upload, {len(rows)} assignments"
+    if "interview__id" in header or ("assignment__id" in header and "action" in header):
+        warns.append("a table of a Survey Solutions export: for the leader's Survey Solutions tab, never for the common folder")
+        return f"Survey Solutions export table, {len(rows)} rows"
+    errs.append("not one of the tool's tables: a tab-delimited file without _responsible or interview__id")
+    return None
+
+
+def check_zip(path, errs, warns):
+    """A Survey Solutions tabular export: a main file named after the questionnaire, the rosters and the service files."""
+    import zipfile
+    try:
+        z = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        errs.append("not a readable zip")
+        return None
+    tabs = {os.path.basename(n): z.read(n).decode("utf-8") for n in z.namelist() if n.endswith(".tab")}
+    service = {"interview__actions.tab", "interview__diagnostics.tab", "interview__errors.tab", "interview__comments.tab", "assignment__actions.tab"}
+    data = {n: t for n, t in tabs.items() if n not in service and "interview__id" in t.split("\n", 1)[0].split("\t")}
+    mains = [n for n, t in data.items() if not any(c.endswith("__id") and c not in ("interview__id", "assignment__id") for c in t.split("\n", 1)[0].split("\t"))]
+    if not data:
+        errs.append("no Survey Solutions table in the zip (a tab-separated export has a main file with interview__id)")
+        return None
+    if len(mains) != 1:
+        errs.append(f"{len(mains)} main files in the zip; an export has one, named after the questionnaire")
+    if "interview__actions.tab" not in tabs:
+        warns.append("no interview__actions.tab: the tool then cannot tell which interviewer held each interview when")
+    n_int = max(0, len(data[mains[0]].strip().split("\n")) - 1) if mains else 0
+    warns.append("a Survey Solutions export: holds the answers and any numbers preloaded; for the leader's Survey Solutions tab, never for the common folder")
+    return f"Survey Solutions export, {n_int} interviews, {len(data) - len(mains)} roster file(s)"
+
+
 def files_of(args):
     for a in args:
         if os.path.isdir(a):
             for p in sorted(glob.glob(os.path.join(a, "**", "*"), recursive=True)):
-                if p.endswith((".json", ".csv")) and not p.endswith(".schema.json"):
+                if p.endswith((".json", ".csv", ".tab", ".zip")) and not p.endswith(".schema.json"):
                     yield p
         else:
             yield a
@@ -369,7 +416,11 @@ def main(argv):
     n_err = 0
     for p in files_of(args):
         errs, warns = [], []
-        if p.endswith(".csv"):
+        if p.endswith(".tab"):
+            kind = check_tab(p, errs, warns) or "?"
+        elif p.endswith(".zip"):
+            kind = check_zip(p, errs, warns) or "?"
+        elif p.endswith(".csv"):
             n = check_csv(p, errs, warns)
             kind = n if isinstance(n, str) else (f"call log CSV, {n} rows" if n is not None else "CSV")
         else:

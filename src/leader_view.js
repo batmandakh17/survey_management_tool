@@ -54,7 +54,7 @@
       team: [], criteria: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
       spread: 0.5, margin: 0.15, policy: { active: true, triggers: ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'] }, protect: false,
       plan: null, generated: null, manifest: null, imports: [], resolutions: [], events: [], unsaved: 0,
-      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [], platform: { codes: {}, extra: {} },
+      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [], platform: { codes: {}, extra: {}, suso: {}, out: { layout: 'rtm', idVar: 'hhid', quantity: 1 } },
     };
     st.genesis = R.sha256(R.canon({ program: st.program, round: st.round, leader: st.leader, started_at: st.started_at }));
     logEv('started', {});
@@ -447,14 +447,15 @@
   function downloadAll(files) { files.forEach((f, i) => setTimeout(() => sh().download(f.name, f.text, f.name.endsWith('.csv') ? 'text/csv' : 'application/json'), i * 250)); }
 
   // ---- the merge (F) ----
-  const isPlatformRec = r => ['platform', 'unmapped'].includes(r.kind);
+  const isPlatformRec = r => ['platform', 'unmapped', 'suso'].includes(r.kind);
   const resolutionMap = () => { const m = new Map(); st.resolutions.forEach(r => m.set(r.key, r)); return m; };
   function merged() {
     if (cache.g) return cache.g;
     if (!st.manifest) return null;
     const recs = st.imports.map(f => Object.assign(L.readImport(f.name, f.text, st.profiles), { opened: f.opened }));
     const d = derived();
-    const G = L.merge(st.manifest, recs, resolutionMap(), R.now(), { households: d.hh && !d.hh.errors.length ? d.hh.households : null, codes: st.platform.codes, profileExtra: st.platform.extra });
+    const G = L.merge(st.manifest, recs, resolutionMap(), R.now(), { households: d.hh && !d.hh.errors.length ? d.hh.households : null, codes: st.platform.codes, profileExtra: st.platform.extra,
+      profiles: st.profiles, suso: st.platform.suso });
     const C = L.cases(st.manifest, G), P = L.progress(st.manifest, C, G);
     cache.g = { G, C, P, recs };
     return cache.g;
@@ -462,6 +463,15 @@
   async function addImports(files) {
     let n = 0;
     for (const f of files) {
+      if (/\.zip$/i.test(f.name)) {            // a Survey Solutions export: its tables are added under the zip's name (proposal K.9)
+        let parts;
+        try { parts = await L.readZip(await f.arrayBuffer()); } catch (e) { toast(`${f.name}: ${e.message}`, 'warn'); continue; }
+        const keep = [...parts].filter(([m]) => !/(^|\/)(interview__errors|interview__comments|paradata)\.tab$/i.test(m));
+        if (!keep.length) { toast(`${f.name} holds no table the tool reads.`, 'warn'); continue; }
+        st.imports = st.imports.filter(x => !x.name.startsWith(f.name + '/'));
+        keep.forEach(([m, text]) => st.imports.push({ name: `${f.name}/${m}`, text }));
+        n++; continue;
+      }
       const text = await sh().readText(f);
       st.imports.push({ name: f.webkitRelativePath || f.name, text });
       n++;
@@ -539,15 +549,19 @@
       // the files the KoBo form takes in (proposal K.3), from the current manifest; and the records to look at in KoBoToolbox (K.8)
       kobo: () => ['households.csv', L.koboHouseholds(M, derived().hh.households, st.plan ? st.plan.plans : null)],
       choices: () => ['choices_households.csv', L.koboChoices(M, derived().hh.households, st.platform.codes)],
-      review: () => [`${base}_kobo_review.csv`, R.toCSV(L.reviewRows(g.G), L.REVIEW_COLS)],
+      review: () => [`${base}_kobo_review.csv`, R.toCSV(L.reviewRows(g.G).filter(r => !susoKey(r.record_id)), L.REVIEW_COLS)],
+      // the assignments upload, the moves to make in Headquarters and the interviews to look at (proposal K.9)
+      suso: () => ['assignments.tab', L.susoAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null, st.platform.codes, st.platform.out)],
+      susomoves: () => [`${base}_suso_moves.csv`, R.toCSV(L.susoMoves(M, st.platform.codes, g.G.suso), L.SUSO_MOVE_COLS)],
+      susoreview: () => [`${base}_suso_review.csv`, R.toCSV(L.reviewRows(g.G).filter(r => !r.record_id || susoKey(r.record_id)), L.REVIEW_COLS)],
       visits: () => [`${base}_field_visits.csv`, R.toCSV(L.fieldVisits(M, g.G, g.C).filter(v => !v.outcome).map(v => { const H = derived().hh.households.get(v.hhid) || {}, ph = H.phones || [];
         return { hhid: v.hhid, enumerator_id: v.enumerator, psu: v.psu, stratum: v.stratum, contact_name: H.name || '', phone_1: (ph[0] || {}).number || '', phone_2: (ph[1] || {}).number || '', phone_3: (ph[2] || {}).number || '',
           why: v.reason, dials: v.dials, last_result: v.last, asked_at: v.at }; }), ['hhid', 'enumerator_id', 'psu', 'stratum', 'contact_name', 'phone_1', 'phone_2', 'phone_3', 'why', 'dials', 'last_result', 'asked_at'])],
       sms: () => [`${base}_messages_${smsDay()}.csv`, R.toCSV(L.smsList(M, g.C, st.plan ? st.plan.plans : null, derived().hh.households, smsDay()), L.SMS_COLS)],
     };
-    if (['kobo', 'choices', 'visits', 'sms'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: these files need the contacts.', 'warn');
+    if (['kobo', 'choices', 'suso', 'visits', 'sms'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: these files need the contacts.', 'warn');
     const [name, text] = files[what]();
-    sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : 'application/json');
+    sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : name.endsWith('.tab') ? 'text/tab-separated-values' : 'application/json');
     logEv('exported', { file: name });
   }
 
@@ -603,7 +617,8 @@
     st.risk = st.risk || { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } };
     st.criteria = Array.isArray(st.criteria) ? st.criteria : [];
     st.profiles = Array.isArray(st.profiles) ? st.profiles : [];
-    st.platform = { codes: st.platform && st.platform.codes && typeof st.platform.codes === 'object' ? st.platform.codes : {}, extra: st.platform && st.platform.extra && typeof st.platform.extra === 'object' ? st.platform.extra : {} };
+    const obj = k => (st.platform && st.platform[k] && typeof st.platform[k] === 'object' ? st.platform[k] : {});
+    st.platform = { codes: obj('codes'), extra: obj('extra'), suso: obj('suso'), out: Object.assign({ layout: 'rtm', idVar: 'hhid', quantity: 1 }, obj('out')) };
     (st.team || []).forEach(t => { t.attrs = t.attrs || {}; });
     if (st.cal && st.cal.day_list === undefined) st.cal.day_list = null;
     if (st.cal && !st.cal.self) st.cal.self = { reschedule: true, availability: true, push_first_calls: false };
@@ -714,11 +729,11 @@
   }
   function sessionView() {
     const M = st.manifest;
-    const tabs = [['prepare', 'Prepare round'], ['import', 'Import logs'], ['progress', 'Progress'], ['calllog', 'Call log'], ['platform', 'KoBoToolbox'], ['analytics', 'Analytics'], ['risk', 'Risk lists']];
+    const tabs = [['prepare', 'Prepare round'], ['import', 'Import logs'], ['progress', 'Progress'], ['calllog', 'Call log'], ['platform', 'KoBoToolbox'], ['suso', 'Survey Solutions'], ['analytics', 'Analytics'], ['risk', 'Risk lists']];
     const g = M ? merged() : null;
     const openIssues = g && st.imports.length ? g.G.issues.filter(i => i.status === 'open' && i.severity === 'action').length : 0;
-    const platformFiles = g ? g.recs.some(r => isPlatformRec(r)) : false;
-    const badge = k => ((k === 'import' || (k === 'platform' && platformFiles)) && openIssues ? ` <span class="count warn" title="${R.plural(openIssues, 'merge question')} waiting for your decision">${openIssues}</span>` : '');
+    const platformFiles = g ? g.recs.some(r => ['platform', 'unmapped'].includes(r.kind)) : false, susoFiles = g ? g.recs.some(r => r.kind === 'suso') : false;
+    const badge = k => ((k === 'import' || (k === 'platform' && platformFiles) || (k === 'suso' && susoFiles)) && openIssues ? ` <span class="count warn" title="${R.plural(openIssues, 'merge question')} waiting for your decision">${openIssues}</span>` : '');
     return `<section class="summary">
         <div class="line"><b>${esc(st.leader)}</b> · ${esc(st.program)} round ${st.round} · ${esc(COUNTRIES[st.country] || st.country)}${M ? ` · window ${esc(M.calendar.window_start)} to ${esc(M.calendar.window_end)} · ${M.households.length} households, ${M.enumerators.length} enumerators` : ''}</div>
         <div class="actions"><button class="primary" data-lact="save"${st.unsaved ? ` title="${R.plural(st.unsaved, 'change')} not saved yet"` : ''}>Save leader session${st.unsaved ? ` <span class="pill" aria-label="${R.plural(st.unsaved, 'change')} not saved yet">${st.unsaved}</span>` : ''}</button>
@@ -726,7 +741,7 @@
         <div class="savestate">${st.last_save ? `Last saved ${esc(st.last_save.at.slice(0, 16).replace('T', ' '))} (${esc(st.last_save.file)})` : 'Not saved yet'}${st.unsaved ? `${(st.last_save ? ', ' : ': ')}${R.plural(st.unsaved, 'change')}${st.last_save ? ' since' : ''}` : ''} · the session file holds contact information: keep it in your own folder</div>
       </section>
       <nav class="tabs" role="tablist">${tabs.map(([k, l]) => `<button role="tab" data-lact="tab" data-t="${k}" aria-selected="${ui.tab === k}" class="${ui.tab === k ? 'on' : ''}">${l}${badge(k)}</button>`).join('')}</nav>
-      <div class="body"><main class="panel lead-panel">${({ prepare: prepareTab, import: importTab, progress: progressTab, calllog: callLogTab, platform: platformTab, analytics: analyticsTab, risk: riskTab })[ui.tab]()}</main></div>`;
+      <div class="body"><main class="panel lead-panel">${({ prepare: prepareTab, import: importTab, progress: progressTab, calllog: callLogTab, platform: platformTab, suso: susoTab, analytics: analyticsTab, risk: riskTab })[ui.tab]()}</main></div>`;
   }
   // the replacement list in words: how many, for how many households, how many still in reserve
   function replSummary(d) {
@@ -914,17 +929,17 @@
         <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
         <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
         <p class="muted">No export added yet. The merge checks every file against this round's manifest (${R.plural(st.manifest.households.length, 'household')}, ${R.plural(st.manifest.enumerators.length, 'enumerator')}); an enumerator whose export has not arrived is reported once you add the others.</p>
-        <p class="muted small">A team that records its calls in a KoBoToolbox form adds the form's export on the <b>KoBoToolbox</b> tab instead, which also writes the form's list.</p></section>`;
+        <p class="muted small">A team that records its calls in a KoBoToolbox form adds the form's export on the <b>KoBoToolbox</b> tab instead, which also writes the form's list; a team on Survey Solutions uses the <b>Survey Solutions</b> tab, which also writes the assignments upload.</p></section>`;
     }
     const open = G.issues.filter(i => i.status === 'open' && i.severity === 'action');
     const sealed = st.imports.map((f, i) => ({ f, i, rec: g.recs[i] })).filter(x => x.rec.kind === 'sealed' && x.rec.contains === R.SCHEMA.contacts);
-    const nPlat = g.recs.filter(isPlatformRec).length;
+    const nPlat = g.recs.filter(r => ['platform', 'unmapped'].includes(r.kind)).length, nSuso = g.recs.filter(r => r.kind === 'suso').length;
     return `<section class="lcard"><h3>Add exports from the common folder</h3>
       <p class="muted">Each enumerator's <code>{enumerator_id}_{date}.json</code> and <code>.csv</code>, in one batch; the newest export of each enumerator is used. Contacts files go here too, but they never belong in the common folder.</p>
       <label class="btn">Add files<input type="file" id="lf-imports" accept=".json,.csv" multiple></label>
       ${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}
       ${sealed.map(x => `<div class="alert info">${esc(x.f.name)} is a protected contacts file. <button class="subtle" data-lact="opensealed" data-i="${x.i}">Open with its passphrase</button></div>`).join('')}
-      <p class="muted small">${nPlat ? `${R.plural(nPlat, 'KoBoToolbox file')} ${nPlat === 1 ? 'is' : 'are'} in the merge too (KoBoToolbox tab).` : 'A team that records its calls in a KoBoToolbox form adds the form\'s export on the <b>KoBoToolbox</b> tab instead.'}</p></section>
+      <p class="muted small">${nPlat || nSuso ? [nPlat ? `${R.plural(nPlat, 'KoBoToolbox file')} (KoBoToolbox tab)` : '', nSuso ? `${R.plural(nSuso, 'Survey Solutions file')} (Survey Solutions tab)` : ''].filter(Boolean).join(' and ') + ` ${nPlat + nSuso === 1 ? 'is' : 'are'} in the merge too.` : 'A team that records its calls in a KoBoToolbox form or interviews in Survey Solutions adds the export on the <b>KoBoToolbox</b> or <b>Survey Solutions</b> tab instead.'}</p></section>
       ${open.length ? `<section class="lcard"><h3>Needs your decision <span class="count warn">${open.length}</span></h3>${open.map(issueCard).join('')}</section>` : (st.imports.length ? '<p class="alert ok">No merge question is open.</p>' : '')}
       ${G.files.length ? `<section class="lcard"><h3>Files</h3><table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th>Exported</th><th class="num">Events or rows</th><th>Used</th></tr></thead><tbody>
         ${G.files.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td>${esc((f.exported_at || '').slice(0, 16).replace('T', ' '))}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table></section>` : ''}
@@ -948,13 +963,13 @@
     const missing = roles.filter(r => r[2] && !m.columns[r[0]]).map(r => r[1]);
     const unmappedCodes = vals.filter(([v]) => !m.codes[v]).length;
     return `<section class="lcard" id="lmap"><h3>Map the columns of ${esc(f.name)}</h3>
-      <p class="muted small">${R.plural(f.rows.length, 'row')}, ${f.header.length} columns, which match none of the known layouts. Each row should be one call attempt. Say which column plays each role and what each result code means. The mapping is kept in your session and used for every later file with these columns.</p>
+      <p class="muted small">${R.plural(f.rows.length, 'row')}, ${f.header.length} columns, which match none of the known layouts. Each row should be one call attempt. Say which column plays each role and what each result code means. The mapping is kept in your session and used for every later file with these columns.${f.suso ? ' The columns that start with <code>suso__</code> come from the export itself: the interviewer who held the interview (from interview__actions), the record (the interview key, with the roster row), and the interview\'s start and completion (interview__actions, in the round\'s time zone).' : ''}</p>
       <div class="row3"><label>Name of this layout <input data-lprof="name" value="${esc(m.name)}" placeholder="Our call-record form"></label></div>
       <table class="grid small"><thead><tr><th>Role</th><th>Column in the file</th></tr></thead><tbody>${roles.map(([k, lab, req]) => `<tr><td>${esc(lab)}${req ? ' <b class="warn">*</b>' : ''}</td><td><select data-lprof="col:${k}">${opt(m.columns[k] || '')}</select></td></tr>`).join('')}</tbody></table>
       ${rc ? `<h4>What each value of <code>${esc(rc)}</code> means</h4><table class="grid small"><thead><tr><th>Value</th><th class="num">Rows</th><th>Result in the tool</th></tr></thead><tbody>${vals.map(([v, n]) => `<tr><td class="id">${esc(v) || '(empty)'}</td><td class="num">${n}</td><td><select data-lprof="code:${esc(v)}">${statusOpts(v)}</select></td></tr>`).join('')}</tbody></table>
       <p class="muted small">A value left unmapped is read as "other", with the value in the note.</p>` : ''}
       ${missing.length ? `<p class="alert warn">Still needed: ${esc(missing.join(', '))}.</p>` : (unmappedCodes ? `<p class="muted small">${unmappedCodes} values of ${esc(rc)} are not mapped yet.</p>` : '')}
-      <div class="btnrow"><button class="primary" data-lact="saveprofile" ${missing.length ? 'disabled' : ''}>Save the mapping and merge the file</button><button class="subtle" data-lact="dropfile" data-name="${esc(f.name)}">Remove the file</button></div></section>`;
+      <div class="btnrow"><button class="primary" data-lact="saveprofile" ${missing.length ? 'disabled' : ''}>Save the mapping and merge the file</button>${f.suso ? `<button class="subtle" data-lact="dropfiles" data-files="${esc(f.suso.files.join('\n'))}">Remove the export</button>` : `<button class="subtle" data-lact="dropfile" data-name="${esc(f.name)}">Remove the file</button>`}</div></section>`;
   }
   function saveProfile() {
     const m = ui.map; if (!m) return;
@@ -1198,46 +1213,122 @@
       </tbody></table>${d.length > show.length ? `<button class="subtle" data-lact="logmore">Show 300 more (${d.length - show.length} left)</button>` : ''}</section>`;
   }
 
+  // the code each enumerator has in the platform (the KoBoToolbox interviewer code, the Survey Solutions login): one list for both tabs
+  function codesTable(head, placeholder, written) {
+    const M = st.manifest, pf = st.platform, ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
+    const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
+    return ids.length ? `<table class="grid small"><thead><tr><th>Enumerator</th><th>${esc(head)}</th></tr></thead><tbody>
+        ${ids.map(id => `<tr><td class="id">${esc(id)}</td><td><input class="small" data-lpcode="${esc(id)}" value="${esc(codeOf(id) === id ? (pf.codes[id] || '') : codeOf(id))}" placeholder="${esc(placeholder)}"></td></tr>`).join('')}</tbody></table>
+        <p class="muted small">Empty means the enumerator's ID itself. Several codes for one interviewer, separated by commas, are all read as that interviewer (a typing slip, an old code); the first is written into ${esc(written)}. The platform's records are read under the tool's ID through the code, whatever its case or punctuation. A code entered before the files are written goes into the manifest (Prepare tab, step 5, shows the same column); one entered later is kept in this session. The KoBoToolbox and Survey Solutions tabs share this list.</p>` : '<p class="muted">Add the team on the Prepare tab (step 5), or open the round\'s manifest on the Import tab.</p>';
+  }
+  // result values of a built-in layout that its map does not know, and the values already mapped, for the layouts given
+  function unknownCodesCard(files, pids) {
+    const uk = L.unknownPlatformCodes(files, st.platform.extra), known = Object.entries(st.platform.extra || {}).filter(([pid]) => pids.includes(pid)).flatMap(([pid, m]) => Object.entries(m).map(([v, to]) => ({ pid, v, to })));
+    return uk.length || known.length ? `<div class="alert ${uk.length ? 'warn' : 'info'}"><b>${uk.length ? 'New values in a known layout.' : 'Values you mapped in a known layout.'}</b> ${uk.length ? 'The export gives results its built-in map does not know (perhaps a new code after a redeploy); unmapped, they count as “Other”. Say what each means:' : ''}
+          <table class="grid small"><tbody>${uk.map(u => `<tr><td>${esc(u.name)}: <code>${esc(u.column)}</code> = <b>${esc(u.value)}</b> <span class="muted">(${u.n} rows)</span></td><td><select data-lxcode="${esc(u.profile)}|${esc(u.value)}"><option value="">Other</option>${R.STATUS.map(x => `<option value="${x.code}">${esc(x.label)}</option>`).join('')}</select></td></tr>`).join('')}
+          ${known.map(k => `<tr><td><code>${esc(k.v)}</code> <span class="muted">(${esc(k.pid)})</span></td><td><select data-lxcode="${esc(k.pid)}|${esc(k.v)}"><option value="">Other</option>${R.STATUS.map(x => `<option value="${x.code}" ${k.to === x.code ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : '';
+  }
   // ---- KoBoToolbox: the round's cycle with a form that records each call attempt (proposal K.8) ----
   function platformTab() {
-    const M = st.manifest, pf = st.platform, d = derived();
+    const M = st.manifest, d = derived();
     const g = M ? merged() : null, G = g ? g.G : null;
     const hasHH = !!(d.hh && !d.hh.errors.length);
-    const ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
-    const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
     const step1 = `<section class="lcard"><h3>1 · The form and the interviewers' codes</h3>
       <p class="muted small">For a team that records its calls in a KoBoToolbox form rather than in this tool's enumerator view: the L2PHL layout, where the interview form is submitted once per call attempt, or the tool's own call-record form. The tool keeps the leader's side: the assignment, the plan, the merge, progress and the moves during the round. What crosses the boundary is a file each way, and this tab walks the round's cycle: the list goes to the form (2), the form's export comes in each day (3), moves follow (4), and the records to look at in KoBoToolbox go back (5).</p>
-      ${ids.length ? `<table class="grid small"><thead><tr><th>Enumerator</th><th>Code in the form (or the KoBoToolbox account)</th></tr></thead><tbody>
-        ${ids.map(id => `<tr><td class="id">${esc(id)}</td><td><input class="small" data-lpcode="${esc(id)}" value="${esc(codeOf(id) === id ? (pf.codes[id] || '') : codeOf(id))}" placeholder="CATI01"></td></tr>`).join('')}</tbody></table>
-        <p class="muted small">Empty means the enumerator's ID itself. Several codes for one interviewer, separated by commas, are all read as that interviewer (a typing slip, an old code); the first is written into the list. The form's records are read under the tool's ID through the code, whatever its case or punctuation, and the list written for the form carries the code. A code entered before the files are written goes into the manifest (Prepare tab, step 5, shows the same column); one entered later is kept in this session.</p>` : '<p class="muted">Add the team on the Prepare tab (step 5), or open the round\'s manifest on the Import tab.</p>'}</section>`;
+      ${codesTable('Code in the form (or the KoBoToolbox account)', 'CATI01', 'the list written for the form')}</section>`;
     const need = !M ? 'Write the round\'s files (Prepare tab) or open its manifest (Import tab) first.' : !hasHH ? 'Open the household list on the Prepare tab (step 1): the files for the form need the contacts.' : '';
     const moved = M && M.moves && M.moves.length ? M.moves.length : 0;
     const listBtns = again => `<div class="btnrow"><button class="subtle" data-lact="export" data-what="choices" ${need ? 'disabled' : ''}>choices_households.csv${again ? ' again' : ' (the form\'s choices list)'}</button><button class="subtle" data-lact="export" data-what="kobo" ${need ? 'disabled' : ''}>households.csv${again ? ' again' : ' (media file of the tool\'s own form)'}</button> <span class="tag warn">the media file has phone numbers</span></div>`;
     const step2 = `<section class="lcard"><h3>2 · Before the round: the list goes to the form</h3>
       ${need ? `<p class="alert info">${esc(need)}</p>` : ''}${listBtns(false)}
       <p class="muted small"><code>choices_households.csv</code> is the sample list of a form that picks the household from its choices sheet (the L2PHL layout: <code>list_name</code> SN, the ID, and the interviewer's code in <code>filter_int_id</code>): paste it over the form's list and redeploy; with a <code>choice_filter</code> on the code, each interviewer sees only their households. <code>households.csv</code> is the media file of the tool's own call-record form (<code>formats/kobo/rtm_call_record.xlsx</code>): upload it under Settings › Media and redeploy. Both come from the current manifest.</p></section>`;
-    const platRows = G ? G.files.filter(f => !['json', 'csv', 'contacts', 'sealed', 'manifest', 'unknown', 'protected contacts file', 'contacts file'].includes(f.kind)) : [];
+    const platRows = G ? G.files.filter(f => !['json', 'csv', 'contacts', 'sealed', 'manifest', 'unknown', 'protected contacts file', 'contacts file'].includes(f.kind) && !susoRow(f)) : [];
     const open = G ? G.issues.filter(i => i.status === 'open' && i.severity === 'action') : [];
     const step3 = `<section class="lcard"><h3>3 · Each day: the form's export</h3>
       <p class="muted small">Download the form's data (Data › Downloads › CSV with XML values and headers, or the project's export link) and add it: one submission per call attempt, the L2PHL layout or the tool's own form. The export is cumulative: add the latest download, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A form with other columns is mapped here once.</p>
       ${M ? `<label class="btn">Add the form's export<input type="file" id="lf-platform" accept=".csv,.txt" multiple></label>${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}` : '<p class="alert info">Write the round\'s files or open its manifest first: the merge checks every record against it.</p>'}
-      ${G && G.unmapped && G.unmapped.length ? mappingCard(G.unmapped[0]) : ''}
-      ${(() => { const uk = g ? L.unknownPlatformCodes(g.recs, st.platform.extra) : []; const known = Object.entries(st.platform.extra || {}).flatMap(([pid, m]) => Object.entries(m).map(([v, to]) => ({ pid, v, to })));
-        return uk.length || known.length ? `<div class="alert ${uk.length ? 'warn' : 'info'}"><b>${uk.length ? 'New values in a known layout.' : 'Values you mapped in a known layout.'}</b> ${uk.length ? 'The form gives results its built-in map does not know (perhaps a new code after a redeploy); unmapped, they count as “Other”. Say what each means:' : ''}
-          <table class="grid small"><tbody>${uk.map(u => `<tr><td>${esc(u.name)}: <code>${esc(u.column)}</code> = <b>${esc(u.value)}</b> <span class="muted">(${u.n} rows)</span></td><td><select data-lxcode="${esc(u.profile)}|${esc(u.value)}"><option value="">Other</option>${R.STATUS.map(x => `<option value="${x.code}">${esc(x.label)}</option>`).join('')}</select></td></tr>`).join('')}
-          ${known.map(k => `<tr><td><code>${esc(k.v)}</code> <span class="muted">(${esc(k.pid)})</span></td><td><select data-lxcode="${esc(k.pid)}|${esc(k.v)}"><option value="">Other</option>${R.STATUS.map(x => `<option value="${x.code}" ${k.to === x.code ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>` : ''; })()}
+      ${(() => { const um = G && G.unmapped ? G.unmapped.filter(f => !f.suso) : []; return um.length ? mappingCard(um[0]) : ''; })()}
+      ${unknownCodesCard(g ? g.recs.filter(r => r.kind === 'platform') : [], ['rtm_kobo', 'phl_kobo'])}
       ${platRows.length ? `<table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th class="num">Rows</th><th>Used</th></tr></thead><tbody>${platRows.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table>` : ''}
       ${open.length ? `<h4>Needs your decision <span class="count warn">${open.length}</span></h4>${open.map(issueCard).join('')}` : (platRows.length ? '<p class="alert ok">No merge question is open.</p>' : '')}</section>`;
     const step4 = `<section class="lcard"><h3>4 · After moves during the round: the form follows</h3>
       ${!moved ? '<p class="muted">No household has moved yet this round. Moves are made on the Progress tab; each one is recorded in the manifest, and this step then writes the list again.</p>'
         : `<p>${R.plural(moved, 'move')} so far (the last on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}). Write the list again and redeploy the form, so that each moved household sits with its new interviewer. Batch the day's moves: a redeploy reaches the interviewers only when they reload the form. A call the previous interviewer makes after the move is flagged in the merge as a double call.</p>${listBtns(true)}`}</section>`;
-    const rv = G ? L.reviewRows(G) : [];
+    const rv = G ? L.reviewRows(G).filter(r => !susoKey(r.record_id)) : [];
     const step5 = `<section class="lcard"><h3>5 · Records to look at in KoBoToolbox</h3>
       <p class="muted small">Every dial behind a merge question that needs or had your decision, with the form's own record ID (<code>_uuid</code>), so that you can find the submission in the project's table view, set its validation status or ask the interviewer.</p>
       ${rv.length ? `<div class="btnrow"><button class="subtle" data-lact="export" data-what="review">${esc(`${M.program}_R${p2(M.round)}_kobo_review.csv`)} (${R.plural(rv.length, 'row')})</button></div>
         <table class="grid small"><thead><tr><th>Question</th><th>Household</th><th>Enumerator</th><th>Record</th><th>Call</th><th>Result</th><th>Status</th></tr></thead><tbody>
         ${rv.slice(0, 60).map(r => `<tr><td>${esc(r.issue.replace(/_/g, ' '))}</td><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.enumerator)}</td><td class="id small">${esc(r.record_id.slice(0, 18))}</td><td>${esc((r.call_start || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(r.result ? sh().statusLabel(r.result) : '')}</td><td>${r.status === 'open' ? '<b class="warn">open</b>' : esc(r.decision || r.status)}</td></tr>`).join('')}</tbody></table>${rv.length > 60 ? `<p class="muted">First 60 of ${rv.length}.</p>` : ''}`
         : `<p class="muted">${G && platRows.length ? 'Nothing to look at: no merge question concerns a form record.' : 'The list fills once the form\'s export is in the merge.'}</p>`}</section>`;
+    return step1 + step2 + step3 + step4 + step5;
+  }
+
+  // ---- Survey Solutions: the same cycle with a questionnaire in Survey Solutions (proposal K.9) ----
+  const susoRow = f => !!f.suso;
+  // a record of a Survey Solutions export: the interview key (12-34-56-78), with the roster row after "#"
+  const susoKey = id => /^\d\d-\d\d-\d\d-\d\d(#|$)/.test(String(id || ''));
+  function susoTab() {
+    const M = st.manifest, pf = st.platform, out = pf.out, d = derived();
+    const g = M ? merged() : null, G = g ? g.G : null;
+    const hasHH = !!(d.hh && !d.hh.errors.length);
+    const step1 = `<section class="lcard"><h3>1 · The questionnaire and the interviewers' logins</h3>
+      <p class="muted small">For a team that interviews in Survey Solutions rather than in this tool's enumerator view: the tool's own questionnaire (<code>formats/suso/README.md</code>: one interview per household, the calls a roster), or a program's own questionnaire whose calls are a roster or whose interviews are one per call attempt. The tool keeps the leader's side: the assignment, the plan, the merge, progress and the moves during the round. What crosses the boundary is a file each way: the assignments go to Headquarters (2), the export comes in each day (3), moves follow (4), and the interviews to look at go back (5).</p>
+      ${codesTable('Login in Survey Solutions (the interviewer\'s user name)', 'int07', 'the assignments file (_responsible)')}</section>`;
+    const need = !M ? 'Write the round\'s files (Prepare tab) or open its manifest (Import tab) first.' : !hasHH ? 'Open the household list on the Prepare tab (step 1): the assignments need the contacts.' : '';
+    const sel = (k, opts) => `<select data-lsuso="${k}">${opts.map(([v, l]) => `<option value="${esc(String(v))}" ${String(out[k]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
+    const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
+    const noLogin = ids.filter(id => codeOf(id) === id);
+    const nMain = M ? M.households.length : 0, nRes = M ? M.households.reduce((n, h) => n + (h.replacements || []).length, 0) : 0;
+    const step2 = `<section class="lcard"><h3>2 · Before the round: the assignments go to Headquarters</h3>
+      ${need ? `<p class="alert info">${esc(need)}</p>` : ''}
+      ${!need && noLogin.length ? `<p class="alert warn"><b>${R.plural(noLogin.length, 'enumerator')} without a login</b> (${esc(noLogin.join(', '))}): the file would carry their IDs in <code>_responsible</code>, and Headquarters refuses a login it does not know. Enter the logins in step 1 first.</p>` : ''}
+      <div class="row3"><label>Questionnaire ${sel('layout', [['rtm', 'the tool\'s own (every column)'], ['id', 'the program\'s own (the household ID only)']])}</label>
+        <label>Variable of the household ID <input class="small" data-lsuso="idVar" value="${esc(out.idVar)}" placeholder="hhid"></label>
+        <label>Interviews per assignment ${sel('quantity', [[1, '1: the calls are a roster in the interview'], [-1, 'no limit: one interview per call attempt']])}</label></div>
+      <div class="btnrow"><button class="subtle" data-lact="export" data-what="suso" ${need ? 'disabled' : ''}>assignments.tab${M ? ` (${nMain} households${nRes ? ` and up to ${nRes} reserves` : ''})` : ''}</button> ${out.layout === 'rtm' ? '<span class="tag warn">has phone numbers</span>' : ''}</div>
+      <p class="muted small">One assignment per household and listed reserve, from the current manifest, the interviewer's login in <code>_responsible</code> and the number of interviews in <code>_quantity</code>. In Headquarters: Survey Setup › Questionnaires › the questionnaire › Upload assignments. Headquarters checks three things before it accepts the file: every column is a variable of the questionnaire (download its template there to compare the names), every row has a login in <code>_responsible</code>, and each login exists with the interviewer or supervisor role. With the tool's own questionnaire every column is one, so the interviewer sees the household's name, numbers and planned first call on the dashboard: the numbers go to the Survey Solutions server, which keeps them as it keeps the answers. With a program's own questionnaire the file carries the household ID alone, under its variable's name, and the interviewer takes the numbers from the questionnaire's own preload.</p></section>`;
+    const metas = G ? G.suso || [] : [];
+    const pending = metas.filter(s => !s.level);
+    const levelCard = s => `<div class="alert warn" id="lsusolevel"><b>Which file of ${esc(s.label)} holds the calls?</b> The export of the questionnaire <code>${esc(s.questionnaire)}</code>: ${R.plural(s.interviews, 'interview')}${s.actions ? `, ${R.plural(s.actions, 'action')} in interview__actions` : ', <b>without interview__actions</b> (add the whole zip: it says who held each interview)'}. The tool reads one row per call attempt: a roster of calls, or the interviews themselves when each call is an interview. The choice is kept for every later export of this questionnaire.
+      <table class="grid small"><thead><tr><th>File</th><th class="num">Rows</th><th>First columns</th></tr></thead><tbody>${s.levels.map(l => `<tr><td>${l.level === 'main' ? `<b>${esc(s.questionnaire)}.tab</b> (the interviews)` : `${esc(l.level)}.tab (a roster)`}</td><td class="num">${l.rows}</td><td class="small">${esc(l.columns.join(', '))}</td></tr>`).join('')}</tbody></table>
+      <div class="row3"><label>The calls are in <select data-lsusolevel="${esc(s.questionnaire)}"><option value="">–</option>${s.levels.map(l => `<option value="${esc(l.level)}">${l.level === 'main' ? 'the interviews: one interview per call attempt' : `the roster ${esc(l.level)}: one row per call attempt`}</option>`).join('')}<option value="none">neither: the questionnaire records interviews only</option></select></label></div></div>`;
+    const chosen = metas.filter(s => s.level && pf.suso[s.questionnaire]);
+    const um = G && G.unmapped ? G.unmapped.filter(f => f.suso) : [];
+    const rows = G ? G.files.filter(susoRow) : [];
+    const open = G ? G.issues.filter(i => i.status === 'open' && i.severity === 'action') : [];
+    const step3 = `<section class="lcard"><h3>3 · Each day: the export</h3>
+      <p class="muted small">In Headquarters: Data Export, the questionnaire, <b>Tab separated</b>, all statuses (or those you follow), then download the zip and add it whole. The tool reads the main file, the roster that holds the calls and three service files: <code>interview__actions</code> says which interviewer held each interview when (a household moved during the round keeps its calls with the interviewer who made them), <code>interview__diagnostics</code> who is responsible for it, and <code>assignment__actions</code> who holds each assignment and whether a tablet has received it. The export is cumulative: add the latest zip, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A questionnaire the tool does not know is read once you say which file holds the calls and map its columns.</p>
+      ${M ? `<label class="btn">Add the export (.zip)<input type="file" id="lf-suso" accept=".zip,.tab" multiple></label>${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}` : '<p class="alert info">Write the round\'s files or open its manifest first: the merge checks every record against it.</p>'}
+      ${pending.map(levelCard).join('')}
+      ${chosen.map(s => `<p class="muted small">The calls of <code>${esc(s.questionnaire)}</code> are read from ${s.level === 'none' ? 'nowhere: the questionnaire records interviews only' : s.level === 'main' ? 'its interviews (one per call attempt)' : `the roster <code>${esc(s.level)}</code>`}. <button class="link" data-lact="susolevelreset" data-q="${esc(s.questionnaire)}">change</button></p>`).filter((x, i, a) => a.indexOf(x) === i).join('')}
+      ${um.length ? mappingCard(um[0]) : ''}
+      ${unknownCodesCard(G ? (G.platformFiles || []).filter(f => f.suso) : [], ['rtm_suso'])}
+      ${rows.length ? `<table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th class="num">Rows</th><th>Used</th></tr></thead><tbody>${rows.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind === 'platform records' ? 'Survey Solutions records' : f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${metas.filter(s => s.summary).map(s => { const su = s.summary, st_ = Object.entries(su.status).sort((a, b) => b[1] - a[1]);
+        return `<h4>What ${esc(s.label)} says of its ${R.plural(s.interviews - (s.deleted || 0), 'interview')}</h4>
+        <table class="grid small"><thead><tr><th>Status in Survey Solutions</th><th class="num">Interviews</th></tr></thead><tbody>${st_.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td></tr>`).join('')}</tbody></table>
+        <p class="muted small">${[su.handovers ? `${R.plural(su.handovers, 'interview')} held by more than one interviewer` : 'No interview held by more than one interviewer', su.errors ? `${su.errors} with validation errors` : 'none with validation errors',
+          su.rejected.length ? `<b>${R.plural(su.rejected.length, 'interview')} rejected</b> (${esc(su.rejected.slice(0, 6).map(r => r.key).join(', '))}${su.rejected.length > 6 ? ', …' : ''}): their calls are read as recorded and are noted in the merge report` : 'none rejected',
+          s.deleted ? `${R.plural(s.deleted, 'deleted interview')} left out` : '', s.assign && s.assign.size ? `${R.plural(s.assign.size, 'assignment')} in assignment__actions` : 'no assignment__actions file (step 4 then cannot say which moves Headquarters already shows)'].filter(Boolean).join('; ')}.</p>`; }).join('')}
+      ${open.length ? `<h4>Needs your decision <span class="count warn">${open.length}</span></h4>${open.map(issueCard).join('')}` : (rows.length ? '<p class="alert ok">No merge question is open.</p>' : '')}</section>`;
+    const moved = M && M.moves && M.moves.length ? M.moves.length : 0;
+    const mv = moved ? L.susoMoves(M, pf.codes, metas) : [];
+    const step4 = `<section class="lcard"><h3>4 · After moves during the round: Headquarters follows</h3>
+      ${!moved ? '<p class="muted">No household has moved yet this round. Moves are made on the Progress tab; each one is recorded in the manifest, and this step then lists what to reassign in Headquarters.</p>'
+        : (() => { const pend = mv.filter(r => r.in_hq === 'pending'), done = mv.filter(r => r.in_hq === 'done'), unk = mv.filter(r => r.in_hq === 'not in the export'), got = pend.filter(r => r.received_on_tablet === 'yes');
+          return `<p>${R.plural(mv.length, 'household')} moved so far (the last move on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}). Reassign each in Headquarters to the login in <code>to_login</code>: under Assignments, filter by the old login and tick the household's assignment (its ID is in the list once the export holds it), then choose Assign; an interview already started (its key is in the list) is reassigned under Interviews the same way, and reaches the new interviewer at their next synchronization. Batch the day's moves. A call the previous interviewer makes after the move is flagged in the merge as a double call.</p>
+          <p class="muted small"><b>In Headquarters</b> reads the latest export: <b>done</b> when it shows the assignment or an interview passed to the new login after the move, <b>pending</b> when it does not yet, and <em>not in the export</em> when the export holds no assignment or interview of the household (export again after the upload). <b>Received</b> says whether a tablet already holds the work: Survey Solutions warns that reassigning work a tablet has received can create extra interviews, and asks for a confirmation.${mv.length ? ` Now: ${done.length} done, ${pend.length} pending${got.length ? ` (${got.length} already on a tablet)` : ''}${unk.length ? `, ${unk.length} not in the export` : ''}.` : ''}</p>
+          <div class="btnrow"><button class="subtle" data-lact="export" data-what="susomoves">${esc(`${M.program}_R${p2(M.round)}_suso_moves.csv`)} (${R.plural(mv.length, 'row')})</button></div>
+          <table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>Assignment</th><th>Interviews</th><th>In Headquarters</th><th>Received</th></tr></thead><tbody>${mv.slice(0, 40).map(r => `<tr><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.from_login)}</td><td class="id">${esc(r.to_login)}</td><td class="id">${esc(r.assignment_id)}</td><td class="id small">${esc(r.interview_keys)}</td><td>${r.in_hq === 'done' ? '<span class="tag ok">done</span>' : r.in_hq === 'pending' ? '<b class="warn">pending</b>' : `<span class="muted">${esc(r.in_hq)}</span>`}</td><td>${esc(r.received_on_tablet)}</td></tr>`).join('')}</tbody></table>${mv.length > 40 ? `<p class="muted">First 40 of ${mv.length}.</p>` : ''}`; })()}</section>`;
+    const rv = G ? L.reviewRows(G).filter(r => !r.record_id || susoKey(r.record_id)) : [];
+    const step5 = `<section class="lcard"><h3>5 · Interviews to look at in Survey Solutions</h3>
+      <p class="muted small">Every call behind a merge question that needs or had your decision, with its record: the interview key (as Headquarters shows it, <code>12-34-56-78</code>) and, after <code>#</code>, the row of the calls roster. Under Interviews, paste the key into the search box (the search matches a value from its start, so the whole key or the household ID works, a middle part does not); open the interview, and reject it to the interviewer with a comment when a call should be corrected.</p>
+      ${rv.length ? `<div class="btnrow"><button class="subtle" data-lact="export" data-what="susoreview">${esc(`${M.program}_R${p2(M.round)}_suso_review.csv`)} (${R.plural(rv.length, 'row')})</button></div>
+        <table class="grid small"><thead><tr><th>Question</th><th>Household</th><th>Enumerator</th><th>Record</th><th>Call</th><th>Result</th><th>Status</th></tr></thead><tbody>
+        ${rv.slice(0, 60).map(r => `<tr><td>${esc(r.issue.replace(/_/g, ' '))}</td><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.enumerator)}</td><td class="id small">${esc(r.record_id.slice(0, 24))}</td><td>${esc((r.call_start || '').slice(0, 16).replace('T', ' '))}</td><td>${esc(r.result ? sh().statusLabel(r.result) : '')}</td><td>${r.status === 'open' ? '<b class="warn">open</b>' : esc(r.decision || r.status)}</td></tr>`).join('')}</tbody></table>${rv.length > 60 ? `<p class="muted">First 60 of ${rv.length}.</p>` : ''}`
+        : `<p class="muted">${G && rows.length ? 'Nothing to look at: no merge question concerns a Survey Solutions record.' : 'The list fills once the export is in the merge.'}</p>`}</section>`;
     return step1 + step2 + step3 + step4 + step5;
   }
 
@@ -1458,6 +1549,8 @@
       case 'export': exportFile(el.dataset.what); break;
       case 'saveprofile': saveProfile(); break;
       case 'dropfile': { const n = el.dataset.name; st.imports = st.imports.filter(f => f.name !== n); ui.map = null; logEv('import_removed', { file: n }); invalidate(); render(); break; }
+      case 'dropfiles': { const ns = new Set(el.dataset.files.split('\n')); st.imports = st.imports.filter(f => !ns.has(f.name)); ui.map = null; logEv('import_removed', { files: [...ns].slice(0, 50) }); invalidate(); render(); break; }
+      case 'susolevelreset': { delete st.platform.suso[el.dataset.q]; ui.map = null; logEv('suso_calls_level', { questionnaire: el.dataset.q, level: null }); invalidate(); render(); break; }
       case 'hhfilter': ui.hhFilter = el.dataset.f; render(); break;
       case 'logmore': ui.logMore += 300; render(); break;
       case 'rkfilter': ui['rk_' + el.dataset.k] = el.dataset.f; render(); break;
@@ -1506,7 +1599,7 @@
       for (const f of t.files) st.inputs.history.push({ name: f.name, text: await sh().readText(f) });
       logEv('history_opened', { files: t.files.length }); invalidate(); stale(); suggestFromHistory(); invalidate(); return render();
     }
-    if ((t.id === 'lf-imports' || t.id === 'lf-platform') && t.files.length) return addImports([...t.files]);
+    if ((t.id === 'lf-imports' || t.id === 'lf-platform' || t.id === 'lf-suso') && t.files.length) return addImports([...t.files]);
     if (t.id === 'lf-manifest' && file) {
       let o; try { o = JSON.parse(await sh().readText(file)); } catch (x) { return toast(`${file.name} is not readable JSON.`, 'warn'); }
       if (!L.validManifest(o)) return toast(`${file.name} is not a round manifest.`, 'warn');
@@ -1533,6 +1626,9 @@
     if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
     if (t.dataset.lvisit !== undefined) { const h = t.dataset.lvisit, q = ui.visits.get(h) || { hhid: h }; q.outcome = t.value || undefined; ui.visits.set(h, q); return render(); }
     if (t.dataset.lvisitnote !== undefined) { const h = t.dataset.lvisitnote, q = ui.visits.get(h) || { hhid: h }; q.note = t.value.trim(); ui.visits.set(h, q); return; }
+    if (t.dataset.lsuso !== undefined) { const k = t.dataset.lsuso; st.platform.out[k] = k === 'quantity' ? parseInt(t.value, 10) : t.value.trim(); logEv('suso_setting', { [k]: st.platform.out[k] }); return render(); }
+    if (t.dataset.lsusolevel !== undefined) { const q = t.dataset.lsusolevel; if (t.value) st.platform.suso[q] = t.value; else delete st.platform.suso[q]; ui.map = null;
+      logEv('suso_calls_level', { questionnaire: q, level: t.value || null }); invalidate(); return render(); }
     if (t.dataset.lxcode !== undefined) { const [pid, val] = t.dataset.lxcode.split('|'); st.platform.extra[pid] = st.platform.extra[pid] || {}; if (t.value) st.platform.extra[pid][val] = t.value; else delete st.platform.extra[pid][val];
       logEv('platform_code_mapped', { profile: pid, value: val, to: t.value || 'OTHER' }); invalidate(); return render(); }
     if (t.dataset.lrrsel !== undefined) { ui.rrSel = ui.rrSel || new Set(); if (t.checked) ui.rrSel.add(t.dataset.lrrsel); else ui.rrSel.delete(t.dataset.lrrsel); return; }

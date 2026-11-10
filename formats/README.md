@@ -361,9 +361,24 @@ overrides the manifest's for reading and writing.
 **The KoBoToolbox tab (3 November 2026).** One tab walks the round's cycle with the form: the codes (1), the list
 out (2), the export in each day (3, with the mapping card and the open merge questions), the list again after
 moves (4), and the records to look at in KoBoToolbox (5). The Import tab keeps the enumerators' own exports; the
-Call log tab keeps the round's own files. The Survey Solutions reading and writing and the calling-service log of
-1 November 2026 were taken out on 3 November 2026 (KoBoToolbox only, the author's decision); they remain in the
-repository's history.
+Call log tab keeps the round's own files. The calling-service log of 1 November 2026 was taken out on 3 November
+2026 and remains in the repository's history.
+
+## Files of Survey Solutions (6 November 2026)
+
+For a team that interviews in Survey Solutions (proposal K.9; `formats/suso/README.md` has the questionnaire, the
+layouts and the daily cycle). The **Survey Solutions** tab walks the same cycle as the KoBoToolbox tab, and the two
+share the codes table: here the code is the interviewer's login.
+
+| File | Direction | Written or read as |
+|---|---|---|
+| `assignments.tab` | Leader view → Headquarters, Upload assignments | Tab-delimited, one assignment per household and released reserve: the identifying variables of the tool's own questionnaire (`hhid`, the contact, numbers, plan, `kind`, `replaces`, `rank`), or the household ID alone under the program's variable name; `_responsible` (the login) and `_quantity` (1, or -1 for one interview per call attempt). The tool's own layout has phone numbers |
+| The tabular export (`.zip`) | Headquarters, Data Export → Survey Solutions tab | The main file, the rosters, `interview__actions` (UTC; who held each interview when), `interview__diagnostics` and `assignment__actions` (who holds each assignment, whether a tablet received it); rejected interviews noted (`suso_rejected`), deleted ones left out; the level that holds the calls is joined to its interview by `interview__id`, each call given to the interviewer who held the interview when it started, split by interviewer and merged as a CSV export of each. The event ID is the record, `interview__key#roster row` |
+| `{program}_R{nn}_suso_moves.csv` | Leader view → the leader, for Headquarters | The households moved this round, to reassign by hand (Survey Solutions has no file for it): `hhid`, `moved_at`, `from_enumerator`, `from_login`, `to_enumerator`, `to_login`, `assignment_id`, `interview_keys`, `interview_status`, `in_hq` (done, pending, not in the export: read from `assignment__actions` and `interview__actions`), `received_on_tablet` |
+| `{program}_R{nn}_suso_review.csv` | Leader view → the leader, for Headquarters | As the KoBoToolbox review list, the record being the interview key with the roster row |
+| Any other questionnaire | → Survey Solutions tab | The leader says once which file holds the calls (the interviews, a roster, or neither), then maps the columns; both are saved in the leader's session (`settings.platform.suso`, `settings.profiles`) |
+
+`check_formats.py` recognises `assignments.tab` and the export's zip.
 
 
 ## Additions made on 31 October 2026, from the supervisor's requests of 28 October, for the author's approval

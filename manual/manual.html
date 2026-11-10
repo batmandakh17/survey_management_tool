@@ -54,7 +54,7 @@
     <div class="sub">User manual for enumerators and team leaders<br>Assignment, scheduling and call logs for phone panel surveys</div>
   </div>
   <img src="img/e03_today.png" alt="The enumerator's Today tab">
-  <div class="meta">Tool version 0.4.0 · Manual of 3 November 2026<br>
+  <div class="meta">Tool version 0.5.1 · Manual of 9 November 2026<br>
     Real-Time Monitoring (RTM) Handbook task team. Every picture in this manual shows the synthetic practice program
     “L2MN-DEMO”: no real household, name or phone number appears anywhere in it.</div>
 </section>
@@ -63,7 +63,7 @@
 <h2 class="part" style="break-before: page">Contents</h2>
 <div class="toc">
   <div class="p">Introduction</div>
-  <div>1 What the tool does</div><div>2 Files and folders</div><div>3 A round at a glance</div><div>4 Before you start</div><div>5 The tool with KoBoToolbox</div>
+  <div>1 What the tool does</div><div>2 Files and folders</div><div>3 A round at a glance</div><div>4 Before you start</div><div>5 The tool with KoBoToolbox</div><div>6 The tool with Survey Solutions</div>
   <div class="p">Part A · Enumerator</div>
   <div>A1 Open your assignment</div><div>A2 The screen at a glance</div><div>A3 The Today tab</div><div>A4 A household's panel</div>
   <div>A5 Log a call</div><div>A6 The result</div><div>A7 Booked callbacks</div><div>A8 A complete under 3 minutes</div>
@@ -82,6 +82,9 @@
   <div class="p">Part C · With KoBoToolbox</div>
   <div>C1 When this part applies</div><div>C2 The Philippines form: one submission per call attempt</div><div>C3 A form the tool does not know</div>
   <div>C4 A round, day by day</div><div>C5 Without a form of its own</div><div>C6 What the leader sees</div>
+  <div class="p">Part D · With Survey Solutions</div>
+  <div>D1 When this part applies</div><div>D2 The tool's own questionnaire</div><div>D3 A questionnaire the tool does not know</div>
+  <div>D4 A round, day by day</div><div>D5 What the leader sees</div>
   <div class="p">Reference</div>
   <div>R1 Call results</div><div>R2 Why a household is with an enumerator</div><div>R3 Every file the tool reads or writes</div>
 </div>
@@ -181,6 +184,22 @@ files, the manifest and the leader's session stay with the leader.</p>
   <tr><td><code>choices_households.csv</code></td><td>The tool, steps 2 and 4</td><td>Pasted over the list in the form's choices sheet, then the form is redeployed: each interviewer sees only their households. No phone numbers</td></tr>
   <tr><td><code>rtm_call_record.xlsx</code> and <code>households.csv</code></td><td>The tool's own form (<code>formats/kobo/</code>) and the media file the tool writes, step 2</td><td>For a program without a form of its own: one submission per call, the household picked from the media file, which holds the numbers (C5)</td></tr>
   <tr><td><code>{program}_R{nn}_kobo_review.csv</code></td><td>The tool, step 5</td><td>The submissions behind merge questions, with their <code>_uuid</code>, to find in the project's table view</td></tr>
+</table>
+
+<h3><span class="num">6</span>The tool with Survey Solutions</h3>
+<p>A program that interviews in Survey Solutions, the World Bank's survey platform, works with the tool the same way
+(Part D): Survey Solutions holds the questionnaire, the answers and the review of each interview, and the tool keeps
+the round. The leader's side is the <b class="ui">Survey Solutions</b> tab, again in five steps, and again with no
+network link. The table of section 5 holds, with two differences. Survey Solutions gives work out by
+<em>assignment</em>, so the list that goes out is an assignments upload with each interviewer's login, not a choices
+list. A move is a reassignment the leader makes in Headquarters, from a list the tool writes, because Survey
+Solutions has no file for it. Four files cross the boundary:</p>
+<table>
+  <tr><th>File</th><th>Made by</th><th>What it is for</th></tr>
+  <tr><td>The tabular export (<code>.zip</code>): Data Export, Tab separated</td><td>Survey Solutions Headquarters</td><td>Dropped on the Survey Solutions tab, step 3: the calls, joined to their interviews, split by interviewer and merged (D2, D3). Keep it in the leader's own folder: it holds the answers</td></tr>
+  <tr><td><code>assignments.tab</code></td><td>The tool, step 2</td><td>Uploaded under Survey Setup › Questionnaires › Upload assignments: one assignment per household, the login in <code>_responsible</code>. The tool's own questionnaire takes the numbers as identifying fields</td></tr>
+  <tr><td><code>{program}_R{nn}_suso_moves.csv</code></td><td>The tool, step 4</td><td>The moved households, with the logins before and after, the assignment ID and the interview keys, to reassign in Headquarters; whether the latest export already shows each move done, and whether a tablet holds the work</td></tr>
+  <tr><td><code>{program}_R{nn}_suso_review.csv</code></td><td>The tool, step 5</td><td>The interviews behind merge questions, by their key, to open under Interviews</td></tr>
 </table>
 
 <!-- ======================================================== Part A -->
@@ -900,7 +919,7 @@ bottom of the tab gives the training data, the features, the backtests and the m
   <tr><td>A file's integrity check fails</td><td>Ask for a fresh export; choose a version for each differing entry</td></tr>
 </table>
 
-<!-- ======================================================== reference -->
+<!-- ======================================================== Part C -->
 <h2 class="part">Part C · With KoBoToolbox<small>When enumerators record their calls in a KoBoToolbox form rather than in this tool</small></h2>
 
 <h3><span class="num">C1</span>When this part applies</h3>
@@ -993,6 +1012,84 @@ project.</p>
 (340 submissions, the same calls as the exports of Part B), the choices list the tool writes for it, and the tool's
 own form's files. Every phone number uses the invalid country code +000.</p>
 
+<!-- ======================================================== Part D -->
+<h2 class="part">Part D · With Survey Solutions<small>When enumerators interview in Survey Solutions rather than in this tool</small></h2>
+
+<h3><span class="num">D1</span>When this part applies</h3>
+<p>Survey Solutions gives work out by assignment: an interviewer can open interviews only from an assignment made to
+their login, and each interview then passes through review (completed, approved or rejected by the supervisor, then
+by headquarters). The tool keeps what Survey Solutions does not know: the round, the plan, the dial cap, the moves and
+the round's call log. The <b class="ui">Survey Solutions</b> tab walks the cycle in five steps (Figure D1): the
+questionnaire and the interviewers' logins (1); the assignments upload before the round (2); the export each day (3);
+the moves to make in Headquarters (4); and the interviews to look at (5).</p>
+<p>Step 1 is the codes table of the KoBoToolbox tab (C1): the code is the interviewer's login, read whatever its
+case or punctuation, and a code entered on either tab is the same entry. Step 2 names any enumerator still without a
+login before it writes the file, because Headquarters refuses a login it does not know. What a program needs: its questionnaire,
+with its calls either as a roster or as one interview per call attempt; the household list in the tool's columns
+(B3); the team (B7) with each interviewer's login; and, for a questionnaire the tool does not know, two answers
+once (D3). Nothing has been tried on a live server yet.</p>
+
+<h3><span class="num">D2</span>The tool's own questionnaire</h3>
+<p>For a program without a phone questionnaire, <code>formats/suso/README.md</code> specifies one to build once in
+Designer: one interview per household, its cover page the household's identifying fields (the ID, the name and the
+numbers first, since the dashboard card shows the first three), and a roster <code>calls</code> with one row per
+call: the number dialed, the call's start and end (timestamps), the result in the tool's codes (1 to 14, and 99 for
+a record without a call), the willingness to take part, a callback, an action and a note.</p>
+<p><b>Before the round</b>, step 2 writes <b class="ui">assignments.tab</b> from the current manifest: one row per
+household and released reserve, the identifying fields, the login in <code>_responsible</code> and 1 in
+<code>_quantity</code>. Upload it in Headquarters under Survey Setup › Questionnaires › the questionnaire › Upload
+assignments. It holds phone numbers, which go to the Survey Solutions server and nowhere else.</p>
+<p><b>Each day</b>, export the questionnaire in Headquarters (Data Export, Tab separated, all statuses), and add the
+zip under <b class="ui">Add the export (.zip)</b> in step 3 (Figure D2). The browser opens the zip. The tool joins
+each call to its interview and gives it to the interviewer who held the interview when the call started. It finds
+that in <code>interview__actions</code>, so a household reassigned between two calls keeps its first calls with the
+first interviewer. The tool then splits the export by interviewer and merges each part as a CSV export (B13). A
+timestamp is written in the tablet's time zone without an offset, and the tool places it in the round's zone. A
+complete needs a call of three minutes or more, from its start to its end.</p>
+<p>Step 3 also says what the export holds: the interviews by their status in Survey Solutions, how many were held by
+more than one interviewer, how many carry validation errors, and which the supervisor or headquarters rejected. A
+rejected interview is read as it stands and its complete still counts, since the interviewer corrects and resubmits
+it; the merge report notes it, household by household. A deleted interview is left out.</p>
+
+<h3><span class="num">D3</span>A questionnaire the tool does not know</h3>
+<p>A program's own questionnaire is read in two answers, each given once and kept in the session. First, step 3 asks
+which file of the export holds the calls (Figure D3): the interviews themselves, when each call attempt is an
+interview of its own (assignments of unlimited quantity, <code>_quantity</code> −1 in step 2); a roster of calls
+inside the interview; or neither, when the questionnaire records interviews only and the team logs its calls in the
+tool. Second, the mapping card of C3 opens with the export's own columns already chosen: the interviewer
+(<code>suso__interviewer</code>), the record (<code>suso__record</code>, the interview key) and, where the
+questionnaire has no call times, the interview's first answer and completion. Choose the household ID and the result,
+and say what each result value means. For such a questionnaire step 2 writes the household ID alone, under the name
+of its variable.</p>
+
+<h3><span class="num">D4</span>A round, day by day</h3>
+<ol>
+  <li><b>Before the round.</b> Prepare it as in B3 to B10, with each interviewer's login. Upload
+  <code>assignments.tab</code> (step 2).</li>
+  <li><b>Each day.</b> Add the latest export in step 3. Progress (B15), the call log (B16) and the analytics (B17)
+  follow, and the merge questions of B13 are raised where they apply.</li>
+  <li><b>Part-way through.</b> Move households on the Progress tab (B15). Step 4 then lists each moved household with
+  the login before and after, the assignment ID and any interview keys: reassign them in Headquarters (Assignments,
+  filter by the old login, tick, Assign; an interview already started under Interviews, the same way), in one batch a
+  day. The list's <b class="ui">In Headquarters</b> column reads the latest export: <em>done</em> once it shows the
+  assignment or an interview passed to the new login after the move, <em>pending</em> until then. Its
+  <b class="ui">Received</b> column says whether a tablet already holds the work: Survey Solutions warns that
+  reassigning such work can make extra interviews and asks for a confirmation. A call the previous interviewer makes
+  after the move is flagged as a double call.</li>
+  <li><b>When a merge question concerns an interview.</b> Step 5 lists the calls behind it by their record: the
+  interview key, and the roster row after <code>#</code>. Search the key under Interviews and reject the interview with
+  a comment when a call should be corrected.</li>
+  <li><b>Next round.</b> As in C4: the merged call log and actions file are the next round's history.</li>
+</ol>
+
+<h3><span class="num">D5</span>What the leader sees</h3>
+<figure><img class="w100" src="img/d1_suso_files.png"><figcaption><b>Figure D1.</b> The Survey Solutions tab, steps 1 and 2: the interviewers' logins, the questionnaire's settings and the assignments upload.</figcaption></figure>
+<figure><img class="w100" src="img/d2_suso_import.png"><figcaption><b>Figure D2.</b> Step 3 with the sample export added: 107 interviews holding 342 call records, split by interviewer and merged.</figcaption></figure>
+<figure><img class="w100" src="img/d3_suso_level.png"><figcaption><b>Figure D3.</b> An export the tool does not know: which of its files holds the calls.</figcaption></figure>
+<p>The samples: <code>samples/suso/</code> holds the synthetic program's round-5 calls as an export of the tool's own
+questionnaire (the same calls as the exports of Part B and the samples of Part C) and the assignments upload. Every
+phone number uses the invalid country code +000.</p>
+
 <!-- ======================================================== reference -->
 <h2 class="part">Reference</h2>
 
@@ -1045,7 +1142,9 @@ own form's files. Every phone number uses the invalid country code +000.</p>
   <tr><td><code>_calls.csv</code>, <code>_actions.csv</code>, <code>interviews.csv</code>, <code>calendar.csv</code>, <code>outcome_codes.csv</code>, <code>_merge_report.csv</code></td><td>Leader</td><td>The handbook's scripts and template; next round's leader</td><td>Leader's own</td><td>No</td></tr>
   <tr><td><code>_contact_updates.csv</code></td><td>Leader</td><td>Leader</td><td>Leader's own</td><td>Yes</td></tr>
   <tr><td>A KoBoToolbox form's export, one submission per call attempt (Part C)</td><td>KoBoToolbox</td><td>Leader (KoBoToolbox tab)</td><td>Leader's own</td><td>Usually yes: never the common folder</td></tr>
+  <tr><td>A Survey Solutions export (<code>.zip</code>, Part D)</td><td>Survey Solutions</td><td>Leader (Survey Solutions tab)</td><td>Leader's own</td><td>Usually yes: never the common folder</td></tr>
   <tr><td><code>choices_households.csv</code>, <code>households.csv</code>, <code>assignments.tab</code></td><td>Leader</td><td>The platform</td><td>Given to the platform only</td><td>All but the choices list</td></tr>
+  <tr><td><code>_suso_moves.csv</code>, <code>_kobo_review.csv</code>, <code>_suso_review.csv</code></td><td>Leader</td><td>Leader</td><td>Leader's own</td><td>No</td></tr>
   <tr><td><code>_risk_dropout.csv</code>, <code>_risk_return.csv</code></td><td>Leader</td><td>Leader</td><td>Leader's own</td><td>No</td></tr>
 </table>
 <p>The file formats are defined in <code>formats/README.md</code>, and <code>formats/check_formats.py</code> checks any
