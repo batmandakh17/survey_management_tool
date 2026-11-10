@@ -269,7 +269,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
 'use strict';
 (function (G) {
   const RTM = {};
-  RTM.VERSION = '0.5.1';
+  RTM.VERSION = '0.5.2';
   RTM.SCHEMA = { assign: 'rtm-assign-1.0', calllog: 'rtm-calllog-1.0', project: 'rtm-project-1.0', contacts: 'rtm-contacts-1.0' };
   RTM.MIN_COMPLETE_MIN = 3;            // Box 3.0: a complete is the first dial coded complete that lasted 3 minutes or more
 
@@ -2287,7 +2287,13 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       if (hc) {
         const seen = new Set();
         meta.byHH = {};
-        T.rows.forEach(r => { const h = String(r[hc] || '').trim(), k = r.interview__key || r.interview__id; if (!h || seen.has(k)) return; seen.add(k);
+        // from the main file when it carries the household ID: an interview opened without a call yet has no roster row,
+        // and it must still be found for the list of moves (seen on a live server: a reassigned interview with no answer)
+        const src = level !== 'main' && g.main.header.includes(hc)
+          ? g.main.rows.filter(m => String(m.interview__status).trim() !== '-1').map(m => { const i = info.get(m.interview__id) || {}; const st_ = String(m.interview__status == null ? '' : m.interview__status).trim();
+              return { [hc]: m[hc], interview__key: m.interview__key, interview__id: m.interview__id, assignment__id: m.assignment__id, suso__status: L.SUSO_STATUS[st_] || st_, suso__responsible: i.responsible || '', suso__interviewer: i.by || '' }; })
+          : T.rows;
+        src.forEach(r => { const h = String(r[hc] || '').trim(), k = r.interview__key || r.interview__id; if (!h || seen.has(k)) return; seen.add(k);
           (meta.byHH[h] = meta.byHH[h] || []).push({ key: k, iid: r.interview__id, assignment: r.assignment__id || '', status: r.suso__status, responsible: r.suso__responsible || r.suso__interviewer }); });
       }
       meta.summary = susoSummary(g, info, hc && level === 'main' ? m => String(m[hc] || '').trim() : hc ? m => { const r = T.rows.find(x => x.interview__id === m.interview__id); return r ? String(r[hc] || '').trim() : ''; } : null);
@@ -2320,8 +2326,11 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
   // assignment and interviews the latest export shows for it (so that they can be found and reassigned in Headquarters)
   // in_hq: 'done' when the latest export shows the assignment or an interview of the household passed to the new login after
   // the move (assignment__actions Reassigned, or interview__actions InterviewerAssigned); 'pending' when the export knows the
-  // household but shows no such change; 'not in the export' when it knows neither an assignment nor an interview of it.
-  // received_on_tablet says whether a tablet already holds the work, when the documentation's warning about extra interviews applies.
+  // household but shows no such change; 'no interview yet' when it knows neither an assignment nor an interview of it: the
+  // export's assignment history covers only the assignments that have an interview (seen on a 26.11 server), so until the
+  // household has one, Headquarters' Assignments list is the only place that shows the move.
+  // received_on_tablet says whether a tablet already holds the work, when the documentation's warning about extra interviews
+  // applies (web interviewing never produces the ReceivedByTablet actions, so it stays 'no' there).
   L.SUSO_MOVE_COLS = ['hhid', 'moved_at', 'from_enumerator', 'from_login', 'to_enumerator', 'to_login', 'assignment_id', 'interview_keys', 'interview_status', 'in_hq', 'received_on_tablet'];
   L.susoMoves = (M, codes, metas) => {
     const codeOf = L.codeOf(M, codes), last = new Map(), byHH = new Map(), assign = new Map(), timeline = new Map(), received = new Map();
@@ -2341,7 +2350,7 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       const got = aids.some(a => assign.has(a) && assign.get(a).received) || ints.some(i => received.has(i.iid));
       return { hhid: m.hhid, moved_at: m.at || '', from_enumerator: m.from, from_login: codeOf(m.from), to_enumerator: m.to, to_login: to,
         assignment_id: aids.join(' '), interview_keys: ints.map(i => i.key).join(' '), interview_status: ints.map(i => i.status).join(' '),
-        in_hq: done ? 'done' : known ? 'pending' : 'not in the export', received_on_tablet: known ? (got ? 'yes' : 'no') : '' };
+        in_hq: done ? 'done' : known ? 'pending' : 'no interview yet', received_on_tablet: known ? (got ? 'yes' : 'no') : '' };
     });
   };
   // a zip archive (a Survey Solutions export) as its tables: the same reader as the workbook's
@@ -2350,12 +2359,31 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
     let eocd = -1;
     for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
     if (eocd < 0) throw new Error('This is not a zip archive.');
-    const n = dv.getUint16(eocd + 10, true), entries = [];
-    let p = dv.getUint32(eocd + 16, true);
+    const big = i => Number(dv.getBigUint64(i, true));                          // zip64 fields are 8 bytes
+    let n = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true);
+    // a zip64 archive (a Survey Solutions server writes one) keeps the counts and offsets that overflow in a zip64 record
+    if ((n === 0xFFFF || p === 0xFFFFFFFF) && eocd >= 20 && dv.getUint32(eocd - 20, true) === 0x07064b50) {
+      const z = big(eocd - 20 + 8);
+      if (dv.getUint32(z, true) === 0x06064b50) { n = big(z + 32); p = big(z + 48); }
+    }
+    const entries = [];
     for (let k = 0; k < n; k++) {
       if (dv.getUint32(p, true) !== 0x02014b50) break;
-      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
-      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const method = dv.getUint16(p + 10, true);
+      let csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
+      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+      let off = dv.getUint32(p + 42, true);
+      // the zip64 extra field (id 1) carries, in this order, whichever of the three values the entry marks with all ones
+      for (let q = p + 46 + nl, end = q + el; q + 4 <= end;) {
+        const id = dv.getUint16(q, true), len = dv.getUint16(q + 2, true);
+        if (id === 1) {
+          let r = q + 4;
+          if (usize === 0xFFFFFFFF && r + 8 <= q + 4 + len) { usize = big(r); r += 8; }
+          if (csize === 0xFFFFFFFF && r + 8 <= q + 4 + len) { csize = big(r); r += 8; }
+          if (off === 0xFFFFFFFF && r + 8 <= q + 4 + len) { off = big(r); r += 8; }
+        }
+        q += 4 + len;
+      }
       entries.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, off });
       p += 46 + nl + el + cl;
     }
@@ -2670,9 +2698,15 @@ window.RTM_HOLIDAYS = {"meta":{"source":"Python package holidays 0.105","years":
       if (dec === 'reinterview') counted.set(h, cmp[0]);
       else counted.set(h, cmp.find(d => `keep:${d.event_id}` === dec) || cmp[0]);
     }
-    // 4. enumerators with no file
+    // 4. enumerators with no file; with a platform export (one file for the whole team, split by enumerator) an enumerator
+    //    without a record is not a missing export but one who has not logged a call yet, so the line informs and asks nothing
     for (const [e, r] of roster) {
       if (perEnum.has(e) || !r.households) continue;
+      if (platformFiles.length) {
+        issue({ key: `missing:${e}`, type: 'missing', severity: 'info', enumerator: e,
+          detail: `No record of ${e} in the platform export yet. Their ${R.plural(r.households, 'household')} show as "not reported" until they log a call.` });
+        continue;
+      }
       issue({ key: `missing:${e}`, type: 'missing', severity: 'action', enumerator: e,
         detail: `No export from ${e} for this round. Their ${R.plural(r.households, 'household')} show as "not reported", apart from completes and misses.`,
         choices: [{ value: 'acknowledged', label: 'Noted' }] });
@@ -5882,7 +5916,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
         <label>Variable of the household ID <input class="small" data-lsuso="idVar" value="${esc(out.idVar)}" placeholder="hhid"></label>
         <label>Interviews per assignment ${sel('quantity', [[1, '1: the calls are a roster in the interview'], [-1, 'no limit: one interview per call attempt']])}</label></div>
       <div class="btnrow"><button class="subtle" data-lact="export" data-what="suso" ${need ? 'disabled' : ''}>assignments.tab${M ? ` (${nMain} households${nRes ? ` and up to ${nRes} reserves` : ''})` : ''}</button> ${out.layout === 'rtm' ? '<span class="tag warn">has phone numbers</span>' : ''}</div>
-      <p class="muted small">One assignment per household and listed reserve, from the current manifest, the interviewer's login in <code>_responsible</code> and the number of interviews in <code>_quantity</code>. In Headquarters: Survey Setup › Questionnaires › the questionnaire › Upload assignments. Headquarters checks three things before it accepts the file: every column is a variable of the questionnaire (download its template there to compare the names), every row has a login in <code>_responsible</code>, and each login exists with the interviewer or supervisor role. With the tool's own questionnaire every column is one, so the interviewer sees the household's name, numbers and planned first call on the dashboard: the numbers go to the Survey Solutions server, which keeps them as it keeps the answers. With a program's own questionnaire the file carries the household ID alone, under its variable's name, and the interviewer takes the numbers from the questionnaire's own preload.</p></section>`;
+      <p class="muted small">One assignment per household and listed reserve, from the current manifest, the interviewer's login in <code>_responsible</code> and the number of interviews in <code>_quantity</code>. In Headquarters: Survey Setup › Questionnaires › the questionnaire › Upload assignments. Headquarters checks three things before it accepts the file: every column is a variable of the questionnaire (download its template there to compare the names), every row has a login in <code>_responsible</code>, and each login exists with the interviewer or supervisor role, <b>spelled exactly as the account was created, capitals included</b> (a login that differs only in case is refused as unknown, so type the logins in step 1 as Headquarters shows them). The upload page also asks for a default responsible; it applies only to rows without one. With the tool's own questionnaire every column is one, so the interviewer sees the household's name, numbers and planned first call on the dashboard: the numbers go to the Survey Solutions server, which keeps them as it keeps the answers. With a program's own questionnaire the file carries the household ID alone, under its variable's name, and the interviewer takes the numbers from the questionnaire's own preload.</p></section>`;
     const metas = G ? G.suso || [] : [];
     const pending = metas.filter(s => !s.level);
     const levelCard = s => `<div class="alert warn" id="lsusolevel"><b>Which file of ${esc(s.label)} holds the calls?</b> The export of the questionnaire <code>${esc(s.questionnaire)}</code>: ${R.plural(s.interviews, 'interview')}${s.actions ? `, ${R.plural(s.actions, 'action')} in interview__actions` : ', <b>without interview__actions</b> (add the whole zip: it says who held each interview)'}. The tool reads one row per call attempt: a roster of calls, or the interviews themselves when each call is an interview. The choice is kept for every later export of this questionnaire.
@@ -5893,7 +5927,7 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     const rows = G ? G.files.filter(susoRow) : [];
     const open = G ? G.issues.filter(i => i.status === 'open' && i.severity === 'action') : [];
     const step3 = `<section class="lcard"><h3>3 · Each day: the export</h3>
-      <p class="muted small">In Headquarters: Data Export, the questionnaire, <b>Tab separated</b>, all statuses (or those you follow), then download the zip and add it whole. The tool reads the main file, the roster that holds the calls and three service files: <code>interview__actions</code> says which interviewer held each interview when (a household moved during the round keeps its calls with the interviewer who made them), <code>interview__diagnostics</code> who is responsible for it, and <code>assignment__actions</code> who holds each assignment and whether a tablet has received it. The export is cumulative: add the latest zip, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A questionnaire the tool does not know is read once you say which file holds the calls and map its columns.</p>
+      <p class="muted small">In Headquarters: Data Export, the questionnaire, <b>Tab separated</b>, all statuses (or those you follow), then download the zip and add it whole (its Stata do-files and questionnaire folder are ignored). The tool reads the main file, the roster that holds the calls and three service files: <code>interview__actions</code> says which interviewer held each interview when (a household moved during the round keeps its calls with the interviewer who made them), <code>interview__diagnostics</code> who is responsible for it, and <code>assignment__actions</code> who holds each assignment and whether a tablet has received it. The export is cumulative: add the latest zip, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A questionnaire the tool does not know is read once you say which file holds the calls and map its columns.</p>
       ${M ? `<label class="btn">Add the export (.zip)<input type="file" id="lf-suso" accept=".zip,.tab" multiple></label>${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}` : '<p class="alert info">Write the round\'s files or open its manifest first: the merge checks every record against it.</p>'}
       ${pending.map(levelCard).join('')}
       ${chosen.map(s => `<p class="muted small">The calls of <code>${esc(s.questionnaire)}</code> are read from ${s.level === 'none' ? 'nowhere: the questionnaire records interviews only' : s.level === 'main' ? 'its interviews (one per call attempt)' : `the roster <code>${esc(s.level)}</code>`}. <button class="link" data-lact="susolevelreset" data-q="${esc(s.questionnaire)}">change</button></p>`).filter((x, i, a) => a.indexOf(x) === i).join('')}
@@ -5911,9 +5945,9 @@ window.RTM_RISK_CARD = "# Model card: dropout risk and return likelihood\n\nWrit
     const mv = moved ? L.susoMoves(M, pf.codes, metas) : [];
     const step4 = `<section class="lcard"><h3>4 · After moves during the round: Headquarters follows</h3>
       ${!moved ? '<p class="muted">No household has moved yet this round. Moves are made on the Progress tab; each one is recorded in the manifest, and this step then lists what to reassign in Headquarters.</p>'
-        : (() => { const pend = mv.filter(r => r.in_hq === 'pending'), done = mv.filter(r => r.in_hq === 'done'), unk = mv.filter(r => r.in_hq === 'not in the export'), got = pend.filter(r => r.received_on_tablet === 'yes');
+        : (() => { const pend = mv.filter(r => r.in_hq === 'pending'), done = mv.filter(r => r.in_hq === 'done'), unk = mv.filter(r => r.in_hq === 'no interview yet'), got = pend.filter(r => r.received_on_tablet === 'yes');
           return `<p>${R.plural(mv.length, 'household')} moved so far (the last move on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}). Reassign each in Headquarters to the login in <code>to_login</code>: under Assignments, filter by the old login and tick the household's assignment (its ID is in the list once the export holds it), then choose Assign; an interview already started (its key is in the list) is reassigned under Interviews the same way, and reaches the new interviewer at their next synchronization. Batch the day's moves. A call the previous interviewer makes after the move is flagged in the merge as a double call.</p>
-          <p class="muted small"><b>In Headquarters</b> reads the latest export: <b>done</b> when it shows the assignment or an interview passed to the new login after the move, <b>pending</b> when it does not yet, and <em>not in the export</em> when the export holds no assignment or interview of the household (export again after the upload). <b>Received</b> says whether a tablet already holds the work: Survey Solutions warns that reassigning work a tablet has received can create extra interviews, and asks for a confirmation.${mv.length ? ` Now: ${done.length} done, ${pend.length} pending${got.length ? ` (${got.length} already on a tablet)` : ''}${unk.length ? `, ${unk.length} not in the export` : ''}.` : ''}</p>
+          <p class="muted small"><b>In Headquarters</b> reads the latest export: <b>done</b> when it shows the assignment or an interview passed to the new login after the move, <b>pending</b> when it does not yet, and <em>no interview yet</em> when the export holds no interview of the household: the export's assignment history covers only households with an interview, so until then the Assignments list in Headquarters (filter by the new login) is the only place that confirms the move. <b>Received</b> says whether a tablet already holds the work: Survey Solutions warns that reassigning work a tablet has received can create extra interviews, and asks for a confirmation (web interviewing never shows it).${mv.length ? ` Now: ${done.length} done, ${pend.length} pending${got.length ? ` (${got.length} already on a tablet)` : ''}${unk.length ? `, ${unk.length} without an interview yet` : ''}.` : ''}</p>
           <div class="btnrow"><button class="subtle" data-lact="export" data-what="susomoves">${esc(`${M.program}_R${p2(M.round)}_suso_moves.csv`)} (${R.plural(mv.length, 'row')})</button></div>
           <table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>Assignment</th><th>Interviews</th><th>In Headquarters</th><th>Received</th></tr></thead><tbody>${mv.slice(0, 40).map(r => `<tr><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.from_login)}</td><td class="id">${esc(r.to_login)}</td><td class="id">${esc(r.assignment_id)}</td><td class="id small">${esc(r.interview_keys)}</td><td>${r.in_hq === 'done' ? '<span class="tag ok">done</span>' : r.in_hq === 'pending' ? '<b class="warn">pending</b>' : `<span class="muted">${esc(r.in_hq)}</span>`}</td><td>${esc(r.received_on_tablet)}</td></tr>`).join('')}</tbody></table>${mv.length > 40 ? `<p class="muted">First 40 of ${mv.length}.</p>` : ''}`; })()}</section>`;
     const rv = G ? L.reviewRows(G).filter(r => !r.record_id || susoKey(r.record_id)) : [];

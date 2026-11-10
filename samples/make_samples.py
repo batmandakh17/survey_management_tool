@@ -34,7 +34,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VERSION = "0.5.1"
+VERSION = "0.5.2"
 PROGRAM, COUNTRY, TZNAME = "L2MN-DEMO", "MN", "Asia/Ulaanbaatar"
 TZ = dt.timezone(dt.timedelta(hours=8))
 OFF = "+08:00"
@@ -767,8 +767,8 @@ SUSO_ASSIGN_COLS = ["hhid", "program", "round", "contact_name", "phone_1", "phon
 SUSO_MAIN_COLS = ["interview__key", "interview__id", "hhid", "program", "round", "contact_name", "phone_1", "phone_1_label", "phone_2", "phone_2_label", "phone_3", "phone_3_label",
                   "planned_date", "planned_hour", "psu", "stratum", "kind", "replaces", "rank", "n_calls", "ssSys_IRnd", "has__errors", "interview__status", "assignment__id"]
 SUSO_CALL_COLS = ["interview__key", "interview__id", "calls__id", "phone_slot", "call_start", "call_end", "result", "willing", "appointment", "action", "target_hhid", "note"]
-SUSO_ACT_COLS = ["interview__key", "interview__id", "date", "time", "action", "originator", "role", "responsible_name", "responsible_role"]
-SUSO_ASSIGN_ACT_COLS = ["assignment__id", "date", "time", "action", "originator", "role", "responsible_name", "responsible_role", "old__value", "new__value", "comment"]
+SUSO_ACT_COLS = ["interview__key", "interview__id", "date", "time", "action", "originator", "role", "responsible__name", "responsible__role"]
+SUSO_ASSIGN_ACT_COLS = ["assignment__id", "date", "time", "action", "originator", "role", "responsible__name", "responsible__role", "old__value", "new__value", "comment"]
 SUSO_DIAG_COLS = ["interview__key", "interview__id", "interview__status", "responsible", "interviewers", "rejections__sup", "rejections__hq", "entities__errors",
                   "interview__duration"]
 # interview__actions codes (docs.mysurvey.solutions, export file anatomy): 1 InterviewerAssigned, 2 FirstAnswerSet, 3 Completed, 12 Created, 14 Resumed, 15 Paused;
@@ -824,9 +824,9 @@ def write_suso_samples(out, logs, files):
     for r in as_rows:
         aid, login = assignment_id[r["hhid"]], r["_responsible"]
         d_, h_ = suso_utc(up_at)
-        aacts.append({"assignment__id": aid, "date": d_, "time": h_, "action": SUSO_AA["created"], "originator": "L01", "role": SUSO_ROLE_HQ, "responsible_name": login, "responsible_role": SUSO_ROLE_INT, "old__value": "", "new__value": "", "comment": ""})
+        aacts.append({"assignment__id": aid, "date": d_, "time": h_, "action": SUSO_AA["created"], "originator": "L01", "role": SUSO_ROLE_HQ, "responsible__name": login, "responsible__role": SUSO_ROLE_INT, "old__value": "", "new__value": "", "comment": ""})
         d_, h_ = suso_utc(got_at + dt.timedelta(minutes=int(login[-2:]) % 7))
-        aacts.append({"assignment__id": aid, "date": d_, "time": h_, "action": SUSO_AA["received"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT, "old__value": "", "new__value": "", "comment": ""})
+        aacts.append({"assignment__id": aid, "date": d_, "time": h_, "action": SUSO_AA["received"], "originator": login, "role": SUSO_ROLE_INT, "responsible__name": login, "responsible__role": SUSO_ROLE_INT, "old__value": "", "new__value": "", "comment": ""})
     mains, calls, acts, diags = [], [], [], []
     rejected = None                                 # the first completed interview of CATI02, in key order, is rejected by the supervisor
     keys = set()
@@ -855,7 +855,7 @@ def write_suso_samples(out, logs, files):
             t0 = first - dt.timedelta(minutes=2)
             for code, t, who, role in ((SUSO_A["created"], t0, login, SUSO_ROLE_INT), (SUSO_A["assigned"], t0, login, SUSO_ROLE_INT), (SUSO_A["first_answer"], first, login, SUSO_ROLE_INT)):
                 d_, h_ = suso_utc(t)
-                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": code, "originator": who, "role": role, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": code, "originator": who, "role": role, "responsible__name": login, "responsible__role": SUSO_ROLE_INT})
             last = first
             for i, x in enumerate(xs, start=1):
                 if x["_kind"] == "dial":
@@ -870,13 +870,13 @@ def write_suso_samples(out, logs, files):
                 calls.append({"interview__key": key, "interview__id": iid, "calls__id": i, **rec})
                 if i > 1:
                     d_, h_ = suso_utc(t_in)
-                    acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["resumed"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+                    acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["resumed"], "originator": login, "role": SUSO_ROLE_INT, "responsible__name": login, "responsible__role": SUSO_ROLE_INT})
                 d_, h_ = suso_utc(t_out + dt.timedelta(seconds=20))
-                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["paused"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["paused"], "originator": login, "role": SUSO_ROLE_INT, "responsible__name": login, "responsible__role": SUSO_ROLE_INT})
                 last = max(last, t_out)
             if done:
                 d_, h_ = suso_utc(last + dt.timedelta(seconds=40))
-                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["completed"], "originator": login, "role": SUSO_ROLE_INT, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+                acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["completed"], "originator": login, "role": SUSO_ROLE_INT, "responsible__name": login, "responsible__role": SUSO_ROLE_INT})
             secs = int(sum((parse(x.get("end_ts") or x["ts"]) - parse(x["ts"])).total_seconds() for x in xs if x["_kind"] == "dial" and x.get("ts")))
             diags.append({"interview__key": key, "interview__id": iid, "interview__status": 100 if done else 60, "responsible": login, "interviewers": 1, "rejections__sup": 0, "rejections__hq": 0,
                           "entities__errors": 0, "interview__duration": f"{secs // 86400:02d}.{secs % 86400 // 3600:02d}:{secs % 3600 // 60:02d}:{secs % 60:02d}"})
@@ -885,7 +885,7 @@ def write_suso_samples(out, logs, files):
     if rejected:                                   # the supervisor sends it back the next morning, with a comment the interviewer sees
         key, iid, login, last = rejected
         d_, h_ = suso_utc(dt.datetime.combine((last + dt.timedelta(days=1)).date(), dt.time(9, 10), tzinfo=TZ))
-        acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["rejected_sup"], "originator": "sup01", "role": SUSO_ROLE_SUP, "responsible_name": login, "responsible_role": SUSO_ROLE_INT})
+        acts.append({"interview__key": key, "interview__id": iid, "date": d_, "time": h_, "action": SUSO_A["rejected_sup"], "originator": "sup01", "role": SUSO_ROLE_SUP, "responsible__name": login, "responsible__role": SUSO_ROLE_INT})
         for m in mains:
             if m["interview__id"] == iid:
                 m["interview__status"] = 65

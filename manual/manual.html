@@ -54,7 +54,7 @@
     <div class="sub">User manual for enumerators and team leaders<br>Assignment, scheduling and call logs for phone panel surveys</div>
   </div>
   <img src="img/e03_today.png" alt="The enumerator's Today tab">
-  <div class="meta">Tool version 0.5.1 · Manual of 9 November 2026<br>
+  <div class="meta">Tool version 0.5.2 · Manual of 10 November 2026<br>
     Real-Time Monitoring (RTM) Handbook task team. Every picture in this manual shows the synthetic practice program
     “L2MN-DEMO”: no real household, name or phone number appears anywhere in it.</div>
 </section>
@@ -1027,20 +1027,27 @@ case or punctuation, and a code entered on either tab is the same entry. Step 2 
 login before it writes the file, because Headquarters refuses a login it does not know. What a program needs: its questionnaire,
 with its calls either as a roster or as one interview per call attempt; the household list in the tool's columns
 (B3); the team (B7) with each interviewer's login; and, for a questionnaire the tool does not know, two answers
-once (D3). Nothing has been tried on a live server yet.</p>
+once (D3). The cycle was run once on a Survey Solutions demo server (release 26.11, 10 November 2026) with the
+synthetic round: the upload, six web interviews, a rejection, two reassignments and the export, read back by the
+tool. What that run showed is folded into this part and into <code>formats/suso/README.md</code>.</p>
 
 <h3><span class="num">D2</span>The tool's own questionnaire</h3>
 <p>For a program without a phone questionnaire, <code>formats/suso/README.md</code> specifies one to build once in
 Designer: one interview per household, its cover page the household's identifying fields (the ID, the name and the
-numbers first, since the dashboard card shows the first three), and a roster <code>calls</code> with one row per
+numbers first: the tablet's dashboard card shows the first three, the web interviewer's dashboard all of them), and a
+roster <code>calls</code> with one row per
 call: the number dialed, the call's start and end (timestamps), the result in the tool's codes (1 to 14, and 99 for
 a record without a call), the willingness to take part, a callback, an action and a note.</p>
 <p><b>Before the round</b>, step 2 writes <b class="ui">assignments.tab</b> from the current manifest: one row per
 household and released reserve, the identifying fields, the login in <code>_responsible</code> and 1 in
 <code>_quantity</code>. Upload it in Headquarters under Survey Setup › Questionnaires › the questionnaire › Upload
-assignments. It holds phone numbers, which go to the Survey Solutions server and nowhere else.</p>
+assignments. Headquarters matches each login against the account exactly as it was created, capitals included: a
+login that differs only in case is refused as unknown and the whole file with it, so the logins of step 1 must be
+spelled as Headquarters shows them. The file holds phone numbers, which go to the Survey Solutions server and nowhere
+else.</p>
 <p><b>Each day</b>, export the questionnaire in Headquarters (Data Export, Tab separated, all statuses), and add the
-zip under <b class="ui">Add the export (.zip)</b> in step 3 (Figure D2). The browser opens the zip. The tool joins
+zip under <b class="ui">Add the export (.zip)</b> in step 3 (Figure D2). The browser opens the zip (the Stata do-files
+and the questionnaire folder in it are ignored). The tool joins
 each call to its interview and gives it to the interviewer who held the interview when the call started. It finds
 that in <code>interview__actions</code>, so a household reassigned between two calls keeps its first calls with the
 first interviewer. The tool then splits the export by interviewer and merges each part as a CSV export (B13). A
@@ -1072,10 +1079,12 @@ of its variable.</p>
   the login before and after, the assignment ID and any interview keys: reassign them in Headquarters (Assignments,
   filter by the old login, tick, Assign; an interview already started under Interviews, the same way), in one batch a
   day. The list's <b class="ui">In Headquarters</b> column reads the latest export: <em>done</em> once it shows the
-  assignment or an interview passed to the new login after the move, <em>pending</em> until then. Its
-  <b class="ui">Received</b> column says whether a tablet already holds the work: Survey Solutions warns that
-  reassigning such work can make extra interviews and asks for a confirmation. A call the previous interviewer makes
-  after the move is flagged as a double call.</li>
+  assignment or an interview passed to the new login after the move, <em>pending</em> until then, and <em>no
+  interview yet</em> for a household the export holds no interview of: the export's assignment history covers only
+  households with an interview, so until then the Assignments list in Headquarters is the place to confirm the move.
+  Its <b class="ui">Received</b> column says whether a tablet already holds the work: Survey Solutions warns that
+  reassigning such work can make extra interviews and asks for a confirmation (web interviewing never shows it). A
+  call the previous interviewer makes after the move is flagged as a double call.</li>
   <li><b>When a merge question concerns an interview.</b> Step 5 lists the calls behind it by their record: the
   interview key, and the roster row after <code>#</code>. Search the key under Interviews and reject the interview with
   a comment when a call should be corrected.</li>

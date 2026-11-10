@@ -1166,7 +1166,13 @@
       if (hc) {
         const seen = new Set();
         meta.byHH = {};
-        T.rows.forEach(r => { const h = String(r[hc] || '').trim(), k = r.interview__key || r.interview__id; if (!h || seen.has(k)) return; seen.add(k);
+        // from the main file when it carries the household ID: an interview opened without a call yet has no roster row,
+        // and it must still be found for the list of moves (seen on a live server: a reassigned interview with no answer)
+        const src = level !== 'main' && g.main.header.includes(hc)
+          ? g.main.rows.filter(m => String(m.interview__status).trim() !== '-1').map(m => { const i = info.get(m.interview__id) || {}; const st_ = String(m.interview__status == null ? '' : m.interview__status).trim();
+              return { [hc]: m[hc], interview__key: m.interview__key, interview__id: m.interview__id, assignment__id: m.assignment__id, suso__status: L.SUSO_STATUS[st_] || st_, suso__responsible: i.responsible || '', suso__interviewer: i.by || '' }; })
+          : T.rows;
+        src.forEach(r => { const h = String(r[hc] || '').trim(), k = r.interview__key || r.interview__id; if (!h || seen.has(k)) return; seen.add(k);
           (meta.byHH[h] = meta.byHH[h] || []).push({ key: k, iid: r.interview__id, assignment: r.assignment__id || '', status: r.suso__status, responsible: r.suso__responsible || r.suso__interviewer }); });
       }
       meta.summary = susoSummary(g, info, hc && level === 'main' ? m => String(m[hc] || '').trim() : hc ? m => { const r = T.rows.find(x => x.interview__id === m.interview__id); return r ? String(r[hc] || '').trim() : ''; } : null);
@@ -1199,8 +1205,11 @@
   // assignment and interviews the latest export shows for it (so that they can be found and reassigned in Headquarters)
   // in_hq: 'done' when the latest export shows the assignment or an interview of the household passed to the new login after
   // the move (assignment__actions Reassigned, or interview__actions InterviewerAssigned); 'pending' when the export knows the
-  // household but shows no such change; 'not in the export' when it knows neither an assignment nor an interview of it.
-  // received_on_tablet says whether a tablet already holds the work, when the documentation's warning about extra interviews applies.
+  // household but shows no such change; 'no interview yet' when it knows neither an assignment nor an interview of it: the
+  // export's assignment history covers only the assignments that have an interview (seen on a 26.11 server), so until the
+  // household has one, Headquarters' Assignments list is the only place that shows the move.
+  // received_on_tablet says whether a tablet already holds the work, when the documentation's warning about extra interviews
+  // applies (web interviewing never produces the ReceivedByTablet actions, so it stays 'no' there).
   L.SUSO_MOVE_COLS = ['hhid', 'moved_at', 'from_enumerator', 'from_login', 'to_enumerator', 'to_login', 'assignment_id', 'interview_keys', 'interview_status', 'in_hq', 'received_on_tablet'];
   L.susoMoves = (M, codes, metas) => {
     const codeOf = L.codeOf(M, codes), last = new Map(), byHH = new Map(), assign = new Map(), timeline = new Map(), received = new Map();
@@ -1220,7 +1229,7 @@
       const got = aids.some(a => assign.has(a) && assign.get(a).received) || ints.some(i => received.has(i.iid));
       return { hhid: m.hhid, moved_at: m.at || '', from_enumerator: m.from, from_login: codeOf(m.from), to_enumerator: m.to, to_login: to,
         assignment_id: aids.join(' '), interview_keys: ints.map(i => i.key).join(' '), interview_status: ints.map(i => i.status).join(' '),
-        in_hq: done ? 'done' : known ? 'pending' : 'not in the export', received_on_tablet: known ? (got ? 'yes' : 'no') : '' };
+        in_hq: done ? 'done' : known ? 'pending' : 'no interview yet', received_on_tablet: known ? (got ? 'yes' : 'no') : '' };
     });
   };
   // a zip archive (a Survey Solutions export) as its tables: the same reader as the workbook's
@@ -1229,12 +1238,31 @@
     let eocd = -1;
     for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
     if (eocd < 0) throw new Error('This is not a zip archive.');
-    const n = dv.getUint16(eocd + 10, true), entries = [];
-    let p = dv.getUint32(eocd + 16, true);
+    const big = i => Number(dv.getBigUint64(i, true));                          // zip64 fields are 8 bytes
+    let n = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true);
+    // a zip64 archive (a Survey Solutions server writes one) keeps the counts and offsets that overflow in a zip64 record
+    if ((n === 0xFFFF || p === 0xFFFFFFFF) && eocd >= 20 && dv.getUint32(eocd - 20, true) === 0x07064b50) {
+      const z = big(eocd - 20 + 8);
+      if (dv.getUint32(z, true) === 0x06064b50) { n = big(z + 32); p = big(z + 48); }
+    }
+    const entries = [];
     for (let k = 0; k < n; k++) {
       if (dv.getUint32(p, true) !== 0x02014b50) break;
-      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
-      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const method = dv.getUint16(p + 10, true);
+      let csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
+      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+      let off = dv.getUint32(p + 42, true);
+      // the zip64 extra field (id 1) carries, in this order, whichever of the three values the entry marks with all ones
+      for (let q = p + 46 + nl, end = q + el; q + 4 <= end;) {
+        const id = dv.getUint16(q, true), len = dv.getUint16(q + 2, true);
+        if (id === 1) {
+          let r = q + 4;
+          if (usize === 0xFFFFFFFF && r + 8 <= q + 4 + len) { usize = big(r); r += 8; }
+          if (csize === 0xFFFFFFFF && r + 8 <= q + 4 + len) { csize = big(r); r += 8; }
+          if (off === 0xFFFFFFFF && r + 8 <= q + 4 + len) { off = big(r); r += 8; }
+        }
+        q += 4 + len;
+      }
       entries.push({ name: dec.decode(u8.subarray(p + 46, p + 46 + nl)), method, csize, off });
       p += 46 + nl + el + cl;
     }
@@ -1549,9 +1577,15 @@
       if (dec === 'reinterview') counted.set(h, cmp[0]);
       else counted.set(h, cmp.find(d => `keep:${d.event_id}` === dec) || cmp[0]);
     }
-    // 4. enumerators with no file
+    // 4. enumerators with no file; with a platform export (one file for the whole team, split by enumerator) an enumerator
+    //    without a record is not a missing export but one who has not logged a call yet, so the line informs and asks nothing
     for (const [e, r] of roster) {
       if (perEnum.has(e) || !r.households) continue;
+      if (platformFiles.length) {
+        issue({ key: `missing:${e}`, type: 'missing', severity: 'info', enumerator: e,
+          detail: `No record of ${e} in the platform export yet. Their ${R.plural(r.households, 'household')} show as "not reported" until they log a call.` });
+        continue;
+      }
       issue({ key: `missing:${e}`, type: 'missing', severity: 'action', enumerator: e,
         detail: `No export from ${e} for this round. Their ${R.plural(r.households, 'household')} show as "not reported", apart from completes and misses.`,
         choices: [{ value: 'acknowledged', label: 'Noted' }] });

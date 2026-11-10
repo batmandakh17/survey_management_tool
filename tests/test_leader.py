@@ -1179,7 +1179,7 @@ def main():
         m0 = next(m for m in mains_ if m["interview__id"] == iid)
         import datetime as _dt
         t_mid = (_dt.datetime.fromisoformat(cs[1]["call_start"]) - _dt.timedelta(minutes=1)).replace(tzinfo=_dt.timezone(_dt.timedelta(hours=8))).astimezone(_dt.timezone.utc)
-        holder = next(a["responsible_name"] for a in acts_ if a["interview__id"] == iid)
+        holder = next(a["responsible__name"] for a in acts_ if a["interview__id"] == iid)
         other = "CATI01" if holder != "CATI01" else "CATI02"
         # the supervisor's InterviewerAssigned action, and from then on the new interviewer opening and pausing the interview
         a_lines = z.read("interview__actions.tab").decode("utf-8").rstrip("\n").split("\n")
@@ -1222,8 +1222,8 @@ def main():
             const G = LCORE.merge(st.manifest, parts.map(f => LCORE.readImport('mv/' + f.name.split('/').pop(), f.text, st.profiles)), new Map(), RTM.now(), {{ codes: st.platform.codes }});
             const M = Object.assign({{}}, st.manifest, {{ moves: [{{ hhid: {json.dumps(m0['hhid'])}, from: 'E07', to: 'E01', at: '2026-11-07T08:30:00+08:00', by: 'L01' }}, {{ hhid: '0199-999', from: 'E07', to: 'E01', at: '2026-11-07T08:30:00+08:00', by: 'L01' }}] }});
             return LCORE.susoMoves(M, st.platform.codes, G.suso); }})()""")
-        check("once the export shows the assignment reassigned to the new login after the move, the list says done; a household the export does not hold is marked so",
-              len(mv2) == 2 and mv2[0]["in_hq"] == "done" and mv2[1]["in_hq"] == "not in the export" and mv2[1]["received_on_tablet"] == "", mv2)
+        check("once the export shows the assignment reassigned to the new login after the move, the list says done; a household without an interview in the export is marked so (its assignment history is not exported before)",
+              len(mv2) == 2 and mv2[0]["in_hq"] == "done" and mv2[1]["in_hq"] == "no interview yet" and mv2[1]["received_on_tablet"] == "", mv2)
         # a reassignment that predates the move (a move back) does not count as done
         aa_old = z.read("assignment__actions.tab").decode("utf-8").rstrip("\n") + "\n" + "\t".join([m0["assignment__id"], "2026-11-01", "02:10:00", "7", "sup01", "2", "CATI01", "1", "CATI07", "CATI01", ""]) + "\n"
         mv3 = b.js(f"""(() => {{ const st = LEAD.state(), parts = st.imports.map(f => f.name.endsWith('assignment__actions.tab') ? {{ name: f.name, text: {json.dumps(aa_old)} }} : f);
@@ -1246,6 +1246,47 @@ def main():
             return LCORE.reviewRows(G).filter(r => r.issue === 'two_completes').map(r => r.record_id); }})()""")
         check("the review list names both completes of a household with their records: the interview key and, after #, the row of the calls roster",
               len(rv) == 2 and all(r.startswith(k1 + "#") for r in rv) and (k1 + "#99") in rv, rv)
+        # the same export as a server writes it: zip64 size fields (a Survey Solutions server writes them), the documentation's
+        # single-underscore responsible columns in one file, and do-files and a questionnaire folder beside the tables
+        z64 = os.path.join(SCRATCH, "rtm_call_record_1_Tabular_All_zip64.zip")
+        with zipfile.ZipFile(z64, "w", zipfile.ZIP_DEFLATED) as oz:
+            for n in z.namelist():
+                body = z.read(n)
+                if n == "interview__actions.tab":
+                    body = body.decode("utf-8").replace("responsible__name\tresponsible__role", "responsible_name\tresponsible_role").encode("utf-8")
+                with oz.open(n, "w", force_zip64=True) as w:
+                    w.write(b"\xef\xbb\xbf" + body if n.endswith(".tab") else body)
+            oz.writestr("calls.do", "* Stata labels\n"); oz.writestr("Questionnaire/ddi.xml", "<codeBook/>"); oz.writestr("Questionnaire/content.zip", b"PK\x05\x06" + b"\x00" * 18)
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-suso", [z64]); b.wait("LEAD.state().imports.length >= 4", timeout=30)
+        s64 = merged_now()
+        check("a zip64 archive with a byte-order mark on every table, do-files and a questionnaire folder (what a 26.11 server writes) reads like the plain zip, with either spelling of the responsible columns",
+              sorted(n.split("/")[-1] for n in b.js("LEAD.state().imports.map(f => f.name)")) == ["assignment__actions.tab", "calls.tab", "interview__actions.tab", "interview__diagnostics.tab", "rtm_call_record.tab"]
+              and s64["dials"] == exp_dials and s64["completes"] == py_cmp, [s64["dials"], s64["files"][:2]])
+        # an export early in the round, as a live server gave it: one interviewer's interviews only, one of them opened without a call
+        # and reassigned by the administrator (no roster row, so it exists in the main file alone)
+        e01 = set(a["interview__id"] for a in acts_ if a["responsible__name"] == "CATI01")
+        keep = lambda n, rows: "\t".join(open_cols(n)) + "\n" + "".join("\t".join(r[c] for c in open_cols(n)) + "\n" for r in rows if r["interview__id"] in e01)
+        open_cols = lambda n: z.read(n).decode("utf-8").split("\n", 1)[0].rstrip("\r").split("\t")
+        diag_ = tab("interview__diagnostics.tab")
+        extra_main = dict((c, "") for c in open_cols("rtm_call_record.tab")); extra_main.update({"interview__key": "11-22-33-44", "interview__id": "livenew1", "hhid": "0199-998", "interview__status": "60", "assignment__id": "9001", "has__errors": "0", "n_calls": "-999999999"})
+        new_acts = [["11-22-33-44", "livenew1", "2026-11-06", "01:00:00", "12", "CATI07", "1", "CATI07", "1"], ["11-22-33-44", "livenew1", "2026-11-06", "01:00:00", "1", "CATI07", "1", "CATI07", "1"],
+                    ["11-22-33-44", "livenew1", "2026-11-06", "09:10:00", "1", "admin", "4", "CATI01", "1"]]
+        live = os.path.join(SCRATCH, "rtm_call_record_1_Tabular_early.zip")
+        with zipfile.ZipFile(live, "w", zipfile.ZIP_DEFLATED) as oz:
+            oz.writestr("rtm_call_record.tab", keep("rtm_call_record.tab", mains_) + "\t".join(extra_main[c] for c in open_cols("rtm_call_record.tab")) + "\n")
+            oz.writestr("calls.tab", keep("calls.tab", calls_))
+            oz.writestr("interview__actions.tab", keep("interview__actions.tab", acts_) + "".join("\t".join(a) + "\n" for a in new_acts))
+            oz.writestr("interview__diagnostics.tab", keep("interview__diagnostics.tab", diag_))
+            oz.writestr("assignment__actions.tab", z.read("assignment__actions.tab"))
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-suso", [live]); b.wait("LEAD.state().imports.length >= 4", timeout=30)
+        sl = merged_now()
+        check("with a platform export, an enumerator without a record yet is noted as such (information), not asked about as a missing export",
+              sorted(i[2] for i in sl["issues"] if i[0] == "missing") == ["E02", "E07"] and all(i[4] == "info" for i in sl["issues"] if i[0] == "missing") and not any(i[1] == "open" and i[4] == "action" for i in sl["issues"]), [i for i in sl["issues"] if i[0] == "missing"])
+        mvl = b.js("""(() => { const st = LEAD.state(); return LCORE.susoMoves(Object.assign({}, st.manifest, { moves: [{ hhid: '0199-998', from: 'E07', to: 'E01', at: '2026-11-06T17:00:00+08:00', by: 'L01' }] }), st.platform.codes, LEAD.merged().G.suso); })()""")
+        check("an interview opened without a call and reassigned by the administrator is found through the main file: the move reads done, with the interview's key and assignment",
+              len(mvl) == 1 and mvl[0]["in_hq"] == "done" and mvl[0]["interview_keys"] == "11-22-33-44" and mvl[0]["assignment_id"] == "9001", mvl)
         # a program's own questionnaire: one interview per call attempt, its result in its own codes, a household roster beside it
         own = {"COMPLETE": 11, "PARTIAL": 12, "APPOINTMENT": 13, "REFUSAL_SOFT": 21, "REFUSAL_HARD": 22, "NO_ANSWER": 31, "BUSY": 32, "SWITCHED_OFF": 33, "DEAD_NUMBER": 41,
                "WRONG_NUMBER": 42, "NOT_AVAILABLE": 14, "LANGUAGE": 51, "OTHER": 99, "BLOCKED": 34}
