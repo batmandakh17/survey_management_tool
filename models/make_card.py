@@ -70,6 +70,55 @@ def tiers_text():
     return " ".join(out) + " The program-only refit is tested separately, on the program's own rounds, before the tool offers it."
 
 
+def calibrations_text():
+    """Which programs a model learns from: the choices the tool offers and how each did on the programs it left out."""
+    C = M.get("calibrations")
+    if not C:
+        return ""
+    S_ = C["region_summary"]
+    regs = "; ".join(f"{r['label']} (UN M49 {r['m49']}): {', '.join(r['programs'])}" for r in C["regions"])
+    out = ["## Which programs the model learns from\n",
+           f"The leader chooses what each model learns from: all the programs (the default, the model above), one UN M49 sub-region "
+           f"({regs}), one program, or any group. Every combination was fitted like the bundled model, on the same tables: "
+           f"{len(C['dropout'])} versions of the dropout model and {len(C['return'])} of the return model. Each is tested on every "
+           "program it leaves out, and the tool shows those tests beside the choice.\n",
+           "### Does the region matter? Each program left out, learned from the others in three ways\n"]
+    cell = lambda t: "–" if not t else f"{f2(t['auc'])} · {pct(t['capture_high'])} · {pct(t['predicted'], 1)}"
+    rows = [[p, pct(x["all_others_test"]["rate"], 1), cell(x["all_others_test"]), cell(x["same_region_test"]), cell(x["other_region_test"]),
+             f"{x['best_single']} {f2(x['best_single_test']['auc'])}", f"{x['worst_single']} {f2(x['worst_single_test']['auc'])}"] for p, x in S_.items()]
+    out.append(table(["Program left out", "Loss rate", "From all the others", "From its own region only", "From the other region only",
+                      "Best single program (AUC)", "Worst single program (AUC)"], rows))
+    n = len(S_)
+    better = [p for p, x in S_.items() if x["same_region_test"] and x["same_region_test"]["auc"] > x["all_others_test"]["auc"]]
+    closer = [p for p, x in S_.items() if x["same_region_test"] and abs(x["same_region_test"]["predicted"] - x["same_region_test"]["rate"])
+              < abs(x["all_others_test"]["predicted"] - x["all_others_test"]["rate"])]
+    other_ok = [p for p, x in S_.items() if x["other_region_test"] and x["other_region_test"]["auc"] >= x["all_others_test"]["auc"]]
+    out.append(f"\nEach cell: AUC · losses in the high tier · the loss rate the model gives (the program's actual rate is in the second "
+               f"column). Learned from its own region only, the model ranked the left-out program better than the model learned from all the "
+               f"others in {len(better)} of {n} programs{' (' + ', '.join(better) + ')' if better else ''}, and as well or better from the other "
+               f"region only in {len(other_ok)} of {n}. So the ranking, which is what the tiers use, does not improve by staying within a region: "
+               f"more programs help more than nearer ones. The level does: from its own region the model's loss rate was closer to the actual "
+               f"one in {len(closer)} of {n} programs. The level matters only once chances are shown, and the tool shows them after recalibrating "
+               "on the program's own rounds, whatever the version. The model from all programs therefore stays the default; a region, a single "
+               "program or a group is offered for a leader who wants the programs nearest to theirs, with its own tests beside it.\n")
+    singles = {k: v for k, v in C["dropout"].items() if "+" not in k and v.get("own_rounds")}
+    if singles:
+        out.append("A program learning from itself: fitted on its own earlier rounds, each program ranked its later rounds with AUC "
+                   + ", ".join(f"{k} {f2(v['own_rounds']['auc'])}" for k, v in singles.items())
+                   + " (the rolling-origin test above). A single-program version is that model fitted on every round, for a new panel in the "
+                   "same country.\n")
+    unused = {k: v["unused"] for k, v in C["dropout"].items() if v["unused"] and "+" not in k}
+    if unused:
+        lab = {f["key"]: f["label"].lower() for f in M["dropout"]["features"]}
+        out.append("A version learns nothing about a feature its programs do not record: "
+                   + "; ".join(f"{k}, {', '.join(lab[u] for u in us)}" for k, us in unused.items())
+                   + ". The tool lists such features beside the choice.\n")
+    out.append("The return model can learn from L2PHL, L2Indo or both: the two programs that redial almost every missed household. "
+               "Its tests, each trained on one and tested on the other, are the table above. The tier rule decided on the tests of the "
+               "model from all programs applies to every version.\n")
+    return "\n".join(out)
+
+
 def main():
     lines = []
     w = lines.append
@@ -163,6 +212,7 @@ def main():
                      f2(rr.get("auc_other_recalibrated")), f"{rr.get('brier_other_recalibrated', 0):.4f} / {rr.get('brier_null', 0):.4f}", tier(x["tiers"]["high"]), tier(low_tier("return", x["tiers"]))])
     w(table(["Program tested", "Household-rounds", "Return rate", "AUC, trained on the other", "AUC, tenure only", "Brier / no model",
              "AUC, recalibrated on own rounds", "Brier recalibrated / no model", "High tier: return rate, trained on the other", "Low tier" + (" (all but the high tier)" if "medium" not in M["tiers"]["return"] else "") + ", trained on the other"], rows))
+    w("\n" + calibrations_text())
     w("\n## Where the models do poorly\n")
     lo = min(S["dropout_leave_one_program_out"].values(), key=lambda x: x["auc"])
     worst = [p for p, x in S["dropout_leave_one_program_out"].items() if x["auc"] == lo["auc"]][0]
@@ -190,6 +240,9 @@ def main():
     w("- **Leader only.** Enumerators never see a household's tier. The tier is not written into assignment files; it only moves high "
       "tier households earlier in the plan of first dials, as Section 3.4's box asks.")
     w("- **Features behind the score.** The three groups of features that move the score most, with the household's own values.")
+    if M.get("calibrations"):
+        w("- **What it learns from.** All programs by default; a region, one program or any group on the leader's choice, with that "
+          "version's tests on the programs it leaves out. The choice is saved with the session, logged, and written into the risk list.")
     w("- **The program's own data.** After two rounds with outcomes, the tool offers a recalibration, backtested on the program's own "
       "rounds; after about 300 own losses, a refit. The leader switches only after seeing the backtest, and the card says which version is "
       "active.")

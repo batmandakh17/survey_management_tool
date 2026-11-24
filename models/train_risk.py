@@ -7,9 +7,12 @@ Interviewed = a completed call-log case, as the handbook's build script defines 
 operational only (D8) and use only what is known before the round predicted. Data: the six dial-log programs' case and
 dial tables in country_experience/_handbook_work/ (local, unpublished). Writes only coefficients and validation
 aggregates, with no household ID and with cells under 10 suppressed:
-  models/risk_models.json     what the tool bundles: features, coefficients, intercepts, tiers, model card
+  models/risk_models.json     what the tool bundles: features, coefficients, intercepts, tiers, model card, and the
+                              calibrations: the same model fitted on every combination of the programs (all six, a region,
+                              one program, any group), each tested on the programs it leaves out
   models/validation.json      every backtest table
-Run:  python3 models/train_risk.py
+Run:  python3 models/train_risk.py                  (everything)
+      python3 models/train_risk.py --calibrations   (only the combinations, added to the files as they are)
 """
 import json
 import math
@@ -594,9 +597,124 @@ def main():
                                              "auc_other_recalibrated": v["other_recalibrated"]["auc"], "brier_other_recalibrated": v["other_recalibrated"]["brier"],
                                              "brier_null": v["other_recalibrated"]["brier_null"]} for c, v in roll_r.items()},
     }
+    out["calibrations"] = calibrations(D, R, val, bundled=out)
+    val["calibrations"] = out["calibrations"]
     json.dump(out, open(os.path.join(HERE, "risk_models.json"), "w"), indent=1)
     json.dump(val, open(os.path.join(HERE, "validation.json"), "w"), indent=1, default=float)
     print(f"written models/risk_models.json and models/validation.json in {time.time() - t0:.0f} s; tiers used: dropout {tiers_d}, return {tiers_r}")
+
+
+# ------------------------------------------------------------------ calibrations: which programs a model learns from
+# A leader may want the model of the programs nearest to theirs: all six, one region, one program, or any combination. The
+# regions are the UN M49 sub-regions, a public standard. Every combination is fitted here (63 for dropout, 3 for return; the
+# fit is the bundled model's, on fewer programs) and tested on every program it leaves out: that is the evidence the tool shows
+# beside the choice. Only coefficients and aggregates are written.
+COUNTRY = {"UZB": "UZ", "TAJ": "TJ", "KGZ": "KG", "KAZ": "KZ", "PHL": "PH", "IND": "ID"}
+REGIONS = [
+    {"key": "central_asia", "label": "Central Asia", "m49": "143", "programs": ["UZB", "TAJ", "KGZ", "KAZ"],
+     "countries": ["KZ", "KG", "TJ", "TM", "UZ"]},
+    {"key": "south_eastern_asia", "label": "South-eastern Asia", "m49": "035", "programs": ["PHL", "IND"],
+     "countries": ["BN", "KH", "ID", "LA", "MY", "MM", "PH", "SG", "TH", "TL", "VN"]},
+]
+REGION_OF = {p: r["key"] for r in REGIONS for p in r["programs"]}
+
+
+def sig6(x):
+    return float(f"{x:.6g}")
+
+
+def subsets(progs):
+    out = []
+    for mask in range(1, 2 ** len(progs)):
+        out.append([p for i, p in enumerate(progs) if mask >> i & 1])
+    return out
+
+
+def key_of(progs):
+    return "+".join(LABEL[p] for p in PROGRAMS if p in progs)
+
+
+def transfer(y, p, rounds):
+    """A model applied to a program it did not learn from: the ranking (AUC, losses in the top tier), and the level."""
+    y = np.asarray(y, float)
+    a = auc(y, p)
+    t = tiers_of(p, rounds)
+    return {"n": int(len(y)), "events": int(y.sum()), "rate": round(float(y.mean()), 4), "predicted": round(float(p.mean()), 4),
+            "auc": round(a, 4) if a is not None else None, "brier": round(float(np.mean((p - y) ** 2)), 4),
+            "brier_null": round(float(np.mean((y.mean() - y) ** 2)), 4),
+            "capture_high": round(float(y[t == "high"].sum() / y.sum()), 4) if y.sum() else None}
+
+
+def calibrations(D, R, val, bundled=None):
+    """Every combination of training programs, its coefficients and its tests on the programs it leaves out."""
+    t0 = time.time()
+    out = {"programs": [{"code": p, "label": LABEL[p], "country": COUNTRY[p], "region": REGION_OF[p]} for p in PROGRAMS],
+           "regions": [{**{k: v for k, v in r.items() if k != "programs"}, "programs": [LABEL[p] for p in r["programs"]]} for r in REGIONS],
+           "all": {"dropout": key_of(PROGRAMS), "return": key_of(RETURN_PROGRAMS)}, "dropout": {}, "return": {}}
+    for kind, P, progs, specs in (("dropout", D, PROGRAMS, DROP_FEATURES), ("return", R, RETURN_PROGRAMS, RET_FEATURES)):
+        feats = [k for k, _, _ in specs]
+        own = (val.get(kind, {}).get("rolling_origin") or {})
+        for S in subsets(progs):
+            sub = P[P["program"].isin(S)]
+            st = standardise(sub, feats)
+            m = fit_logit(design(sub, feats, st), sub["y"].values, sub["program"].values)
+            if bundled is not None and len(S) == len(progs):
+                diff = max(abs(float(b) - f["coef"]) for b, f in zip(m["coef"], bundled[kind]["features"]))
+                assert diff < 1e-8, f"{kind}: the fit on every program differs from the bundled model by {diff}"
+            entry = {"programs": [LABEL[p] for p in PROGRAMS if p in S], "pairs": int(len(sub)), "events": int(sub["y"].sum()),
+                     "rate": round(float(sub["y"].mean()), 4), "n": {LABEL[k]: v for k, v in m["n"].items()},
+                     "intercepts": {LABEL[k]: sig6(v) for k, v in m["intercepts"].items()}, "mean_intercept": sig6(m["mean_intercept"]),
+                     "mean": [sig6(st[k][0]) for k in feats], "sd": [sig6(st[k][1]) for k in feats], "coef": [sig6(float(b)) for b in m["coef"]],
+                     "unused": [k for k in feats if not sub[k].notna().any()], "held_out": {}}
+            for c in progs:
+                if c in S:
+                    continue
+                te = P[P["program"] == c]
+                p_ = predict(m, design(te, feats, st))
+                entry["held_out"][LABEL[c]] = transfer(te["y"].values, p_, te["round"].values)
+            if len(S) == 1 and S[0] in own:                    # one program: its own earlier rounds predicting its later ones
+                o = own[S[0]]["own_rounds_only"]
+                entry["own_rounds"] = {"steps": own[S[0]]["steps"], "auc": o["auc"], "capture_high": o["capture_high"], "n": o["n"], "events": o["events"]}
+            out[kind][key_of(S)] = entry
+        print(f"  calibrations, {kind}: {len(out[kind])} combinations of {len(progs)} programs")
+    # the region question in one table: each program left out, learned from everything else, from its own region only, from the other region
+    summary = {}
+    for c in PROGRAMS:
+        others = [p for p in PROGRAMS if p != c]
+        same = [p for p in others if REGION_OF[p] == REGION_OF[c]]
+        other = [p for p in others if REGION_OF[p] != REGION_OF[c]]
+        row = {"all_others": key_of(others), "same_region": key_of(same) if same else None, "other_region": key_of(other) if other else None}
+        singles = {LABEL[p]: out["dropout"][key_of([p])]["held_out"][LABEL[c]] for p in others}
+        best = max(singles, key=lambda k: singles[k]["auc"])
+        worst = min(singles, key=lambda k: singles[k]["auc"])
+        row.update({"best_single": best, "worst_single": worst})
+        for k in ("all_others", "same_region", "other_region"):
+            row[k + "_test"] = out["dropout"][row[k]]["held_out"][LABEL[c]] if row[k] else None
+        row["best_single_test"], row["worst_single_test"] = singles[best], singles[worst]
+        summary[LABEL[c]] = row
+    out["region_summary"] = summary
+    print(f"  calibrations written in {time.time() - t0:.0f} s")
+    return out
+
+
+def calibrations_only():
+    """Fit every combination of programs on the local tables and add them to the bundled files; the rest is left as it is."""
+    D, R = [], []
+    for c in PROGRAMS:
+        d, r, _ = build_pairs(c)
+        D.append(d)
+        if r is not None:
+            R.append(r)
+    D, R = pd.concat(D, ignore_index=True), pd.concat(R, ignore_index=True)
+    D["y"], R["y"] = D["y"].astype(float), R["y"].astype(float)
+    out = json.load(open(os.path.join(HERE, "risk_models.json")))
+    val = json.load(open(os.path.join(HERE, "validation.json")))
+    cal = calibrations(D, R, val, bundled=out)
+    out["calibrations"] = cal
+    val["calibrations"] = cal
+    json.dump(out, open(os.path.join(HERE, "risk_models.json"), "w"), indent=1)
+    json.dump(val, open(os.path.join(HERE, "validation.json"), "w"), indent=1, default=float)
+    print("added the calibrations to models/risk_models.json and models/validation.json")
 
 
 def tiers_only():
@@ -618,4 +736,4 @@ def tiers_only():
 
 
 if __name__ == "__main__":
-    sys.exit(tiers_only() if "--tiers-only" in sys.argv else main())
+    sys.exit(tiers_only() if "--tiers-only" in sys.argv else calibrations_only() if "--calibrations" in sys.argv else main())

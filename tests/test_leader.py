@@ -1025,7 +1025,7 @@ def main():
         b.click('[data-lact="tab"][data-t="platform"]'); time.sleep(0.3)
         txt = b.js("document.querySelector('.panel').innerText")
         check("the KoBoToolbox tab walks the round's cycle: the form and the codes, the list out, the export in each day, after moves, the records to look at",
-              all(h in txt for h in ("1 · The form", "2 · Before the round", "3 · Each day", "4 · After moves", "5 · Records to look at")) and b.js("!!document.querySelector('#lf-platform') && !!document.querySelector('[data-lpcode=\"E07\"]')"), txt[:300])
+              all(h in txt for h in ("1 · The form", "2 · Before the round", "3 · Each day", "4 · During the round", "5 · Records to look at")) and b.js("!!document.querySelector('#lf-platform') && !!document.querySelector('[data-lpcode=\"E07\"]')"), txt[:300])
         b.set_files("#lf-platform", [KOBO]); b.wait("LEAD.state().imports.length === 1")
         k = merged_now()
         check("a KoBoToolbox export (one submission per call, semicolon CSV) is recognised, split by enumerator and merged as unverified CSV exports",
@@ -1135,6 +1135,12 @@ def main():
               all(r["filter_int_id"] == "INT-07" for r in ch2 if r["enumerator_id"] == "E07") and b.js("LCORE.enumMapper(LEAD.state().manifest, LEAD.state().platform.codes)('int07')") == "E07"
               and b.js("LCORE.enumMapper(LEAD.state().manifest, LEAD.state().platform.codes)('CATI07')") == "E07", [r for r in ch2 if r["enumerator_id"] == "E07"][:1])
         b.js("""(() => { const el = document.querySelector('[data-lpcode="E07"]'); el.value = ''; el.dispatchEvent(new Event('change', {bubbles: true})); return true; })()""")
+        # step 4: the list as written against the manifest now (the code of E07 changed since the list was written)
+        k4 = lambda: b.js("[...document.querySelectorAll('.lcard')].find(c => /4 · During the round: the form follows the manifest/.test(c.innerText)).innerText")
+        check("step 4 of the KoBoToolbox tab compares the list as written with the one the manifest gives now: after a change, it asks for the list again",
+              "The list has changed since it was written" in k4() and "choices_households.csv" in k4(), k4()[:300])
+        before = snapshot(); b.click('[data-lact="export"][data-what="choices"]'); wait_new("choices_households*.csv", before); time.sleep(0.2)
+        check("written again, the form's list matches the manifest", "The form's list matches the manifest" in k4(), k4()[60:400])
 
         # ================= E2. exports of Survey Solutions (proposal K.9) =================
         import zipfile
@@ -1144,7 +1150,7 @@ def main():
         b.click('[data-lact="tab"][data-t="suso"]'); time.sleep(0.3)
         txt = b.js("document.querySelector('.panel').innerText")
         check("the Survey Solutions tab walks the same cycle: the questionnaire and the logins, the assignments out, the export in each day, after moves, the interviews to look at",
-              all(h in txt for h in ("1 · The questionnaire", "2 · Before the round", "3 · Each day", "4 · After moves", "5 · Interviews to look at")) and b.js("!!document.querySelector('#lf-suso') && !!document.querySelector('[data-lpcode=\"E07\"]')"), txt[:300])
+              all(h in txt for h in ("1 · The questionnaire", "2 · Before the round", "3 · Each day", "4 · During the round", "5 · Interviews to look at")) and b.js("!!document.querySelector('#lf-suso') && !!document.querySelector('[data-lpcode=\"E07\"]')"), txt[:300])
         b.set_files("#lf-suso", [SUSO]); b.wait("LEAD.state().imports.length >= 4")
         names = b.js("LEAD.state().imports.map(f => f.name)")
         s1 = merged_now()
@@ -1209,6 +1215,78 @@ def main():
         check("for a program's own questionnaire the file carries the household ID alone under its variable's name, and 'no limit' writes _quantity -1 (one interview per call attempt)",
               list(at2[0].keys()) == ["hh_code", "_responsible", "_quantity"] and all(r["_quantity"] == "-1" for r in at2) and len(at2) == len(at), at2[:2])
         b.js("""(() => { const set = (k, v) => { const el = document.querySelector(`[data-lsuso="${k}"]`); el.value = v; el.dispatchEvent(new Event('change', {bubbles: true})); }; set('layout', 'rtm'); set('idVar', 'hhid'); set('quantity', '1'); return true; })()""")
+        # ---- Headquarters follows the manifest (step 4): what was uploaded, what is new since, what to close ----
+        card = lambda n: b.js(f"[...document.querySelectorAll('.lcard')].find(c => c.querySelector('h3') && c.querySelector('h3').innerText.startsWith('{n} ·')).innerText")
+        ups = b.js("LEAD.state().platform.uploads.map(u => [u.file, u.hhids.length, !!u.undone])")
+        check("each assignments file written is recorded as uploaded, and step 4 then finds every household and released reserve of the manifest in Headquarters",
+              len(ups) == 2 and ups[0] == ["assignments.tab", 144, False] and "Headquarters has an assignment for every household and released reserve" in card(4), [ups, card(4)[:400]])
+        check("step 2 warns that the whole file uploaded again would give every household already there a second assignment (seen on a live server)",
+              "second assignment" in card(2) and "every household again" in card(2) and "Uploaded, as recorded here" in card(2))
+        added = b.js("""(() => { const g = LEAD.merged(), inExp = new Set(g.G.suso.flatMap(s => Object.keys(s.byHH || {})));
+            const t = LCORE.susoTargets(LEAD.state().manifest).filter(x => !inExp.has(x.hhid)).slice(-3).map(x => x.hhid);
+            LEAD.state().platform.uploads.forEach(u => { u.hhids = u.hhids.filter(h => !t.includes(h)); }); LEAD.refresh(); return t; })()""")
+        txt = card(4)
+        check("households added after the upload (here three taken out of the record) are offered in a file of their own, named in step 4",
+              len(added) == 3 and "3 households of the manifest have no assignment in Headquarters yet" in txt and all(h in txt for h in added) and "assignments_new.tab (3 assignments)" in txt, txt[:500])
+        before = snapshot(); b.click('[data-lact="export"][data-what="susonew"]'); fn = wait_new("assignments_new*.tab", before)
+        an = list(csv.DictReader(open(fn, encoding="utf-8"), delimiter="\t"))
+        check("assignments_new.tab holds only those households, in the full file's columns, and its upload is recorded: step 4 then has nothing left to upload",
+              sorted(r["hhid"] for r in an) == sorted(added) and list(an[0].keys()) == list(at[0].keys()) and b.js("LEAD.state().platform.uploads.slice(-1)[0].file") == "assignments_new.tab"
+              and "Headquarters has an assignment for every household" in card(4), [an[:1], card(4)[:300]])
+        b.click(f'[data-lact="susoundo"][data-i="{len(ups)}"]'); time.sleep(0.2)
+        check("a file written but not uploaded is marked so in step 2, and its households are offered again", "3 households of the manifest have no assignment" in card(4)
+              and b.js("LEAD.state().events.filter(e => e.what === 'suso_upload_undone').length") == 1)
+        before = snapshot(); b.click('[data-lact="export"][data-what="susonew"]'); wait_new("assignments_new*.tab", before); time.sleep(0.2)
+        cl = b.js("""(() => { const g = LEAD.merged(), st = LEAD.state();
+            const rows = LCORE.susoClose(st.manifest, g.C, st.platform.codes, g.G.suso, { quantity: 1, inHQ: LCORE.susoInHQ(st.platform.uploads, g.G.suso) });
+            const state = Object.fromEntries([...g.C.values()].map(c => [c.hhid, c.state])); const ints = new Map(); g.G.suso.forEach(s => Object.entries(s.byHH || {}).forEach(([h, xs]) => ints.set(h, xs)));
+            return { rows, state, open: Object.fromEntries([...ints].map(([h, xs]) => [h, xs.filter(x => !/^(Completed|Approved)/.test(x.status)).length])), has: [...ints.keys()] }; })()""")
+        now = {r["hhid"]: r for r in cl["rows"] if r["when"] == "now"}
+        end = {r["hhid"]: r for r in cl["rows"] if r["when"] == "round end"}
+        st_ = cl["state"]
+        want_now = {h for h, s in st_.items() if s in ("released", "replaced", "remove_requested") and (cl["open"].get(h, 0) > 0 or h not in cl["has"])}
+        check("to close now: every household released for the round, replaced or asked to be removed, unless its interview is already completed",
+              want_now <= set(now) and now.get("0113-004", {}).get("reason") == "removal asked" and now.get("0102-002", {}).get("reason") == "replaced", [sorted(want_now - set(now))[:5], list(now.items())[:2]])
+        ns = [h for h, s in st_.items() if s == "not_started" and h not in cl["has"]]
+        check("at the end of the round: a household never opened keeps an open assignment, closed under Assignments; one with an open interview is completed by its interviewer, keeping its calls",
+              ns and all(end.get(h, {}).get("what_to_do", "").startswith("Assignments: filter by the login") for h in ns)
+              and any(r["what_to_do"].startswith("the interviewer completes") and r["interview_keys"] for r in end.values()), [ns[:3], list(end.items())[:2]])
+        check("a household complete with its interview completed is never listed: its assignment of one is used up",
+              not any(st_.get(h) == "complete" and cl["open"].get(h, 0) == 0 and h in cl["has"] for h in list(now) + list(end)))
+        before = snapshot(); b.click('[data-lact="export"][data-what="susoclose"]'); fcl = wait_new("*_suso_close*.csv", before)
+        cr = list(csv.DictReader(open(fcl, encoding="utf-8")))
+        check("the close list downloads with when, the reason, the login, the assignment and interviews and what to do; no name or phone number",
+              len(cr) == len(cl["rows"]) and list(cr[0].keys()) == ["when", "hhid", "reason", "login", "assignment_id", "interview_keys", "interview_status", "what_to_do"] and "+000" not in open(fcl).read())
+        # Headquarters' list of interviewers: the logins as Headquarters spells them; names, e-mails and phones are not kept
+        hqf = os.path.join(SCRATCH, "interviewers_hq.tab")
+        with open(hqf, "w", encoding="utf-8") as hf:
+            hf.write("﻿i_name\ti_id\ti_supervisorName\ti_fullName\ti_email\ti_phone\n" + "cati01\tid1\tsup01\tPerson Withaname\tone@example.org\t0000001\n"
+                     + "CATI02\tid2\tsup01\t\t\t\n" + "int09\tid9\tsup01\t\t\t\n")
+        b.set_files("#lf-hqusers", [hqf]); b.wait("!!LEAD.state().platform.hq")
+        c1 = card(1)
+        check("Headquarters' interviewer list (TAB, as a 26.11 server writes it): a login with other capitals is corrected to its spelling, a login missing from it is named, and its unused accounts listed",
+              b.js("LEAD.state().platform.codes.E01") == "cati01" and "E01, CATI01 became cati01" in c1 and "Not in Headquarters' list: E07 (CATI07)" in c1 and "int09" in c1
+              and "not in Headquarters' list as spelled" in card(2) and "E07: CATI07" in card(2), [b.js("JSON.stringify(LEAD.state().platform.codes)"), c1[-600:]])
+        check("only the login and the supervisor are kept from the list: no name, e-mail or phone number in the session",
+              all(x not in b.js("JSON.stringify(LEAD.state().platform.hq)") for x in ("Person", "example.org", "0000001")) and b.js("LEAD.state().events.filter(e => e.what === 'suso_hq_logins').length") == 1)
+        b.click('[data-lact="hqforget"]')
+        b.js("""(() => { const el = document.querySelector('[data-lpcode="E01"]'); el.value = ''; el.dispatchEvent(new Event('change', {bubbles: true})); return true; })()"""); time.sleep(0.2)
+        # an earlier round's interview in the same export (one questionnaire for every round): left out by the round column
+        m_lines = z.read("rtm_call_record.tab").decode("utf-8").rstrip("\n").split("\n")
+        mcols = m_lines[0].split("\t"); ri, ii = mcols.index("round"), mcols.index("interview__id")
+        old = m_lines[1].split("\t"); old_iid = old[ii]; old[ri] = "4"; m_lines[1] = "\t".join(old)
+        old_calls = sum(1 for c in calls_ if c["interview__id"] == old_iid and c["result"] != "99" and c["call_start"] != "##N/A##")
+        z4 = os.path.join(SCRATCH, "rtm_call_record_1_Tabular_rounds.zip")
+        with zipfile.ZipFile(z4, "w", zipfile.ZIP_DEFLATED) as oz:
+            for n in z.namelist():
+                oz.writestr(n, "\n".join(m_lines) + "\n" if n == "rtm_call_record.tab" else z.read(n))
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-suso", [z4]); b.wait("LEAD.state().imports.length >= 4", timeout=30); time.sleep(0.3)
+        s4 = merged_now()
+        check("one questionnaire for every round: an earlier round's interview in the cumulative export is left out, by the round column, from the summary and from the calls",
+              "1 interview of other rounds left out (by the round column)" in card(3) and sum(s4["dials"].values()) == sum(exp_dials.values()) - old_calls and old_calls > 0, [sum(s4["dials"].values()), sum(exp_dials.values()), old_calls])
+        b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
+        b.set_files("#lf-suso", [SUSO]); b.wait("LEAD.state().imports.length >= 4", timeout=30); time.sleep(0.3)
         # the moves to make in Headquarters, with the assignment and interview the export shows for each household
         mv = b.js(f"""(() => {{ const st = LEAD.state(), M = Object.assign({{}}, st.manifest, {{ moves: [{{ hhid: {json.dumps(m0['hhid'])}, from: 'E07', to: 'E01', at: '2026-11-07T08:30:00+08:00', by: 'L01' }}] }});
             return LCORE.susoMoves(M, st.platform.codes, LEAD.merged().G.suso); }})()""")
@@ -1301,6 +1379,11 @@ def main():
                 u = utc(t, r["utc_offset"]); pa.append([key, iid2, u.strftime("%Y-%m-%d"), u.strftime("%H:%M:%S"), code, login(r["operator"]), "1", login(r["operator"]), "1"])
             pr.append([key, iid2, "1", "Member 1", "35"])
             pd.append([key, iid2, "100", login(r["operator"]), "1", "0", "0", "0", "00.00:05:00"])
+        # an earlier round's call in the same cumulative export: this questionnaire has no round column, so its date tells it
+        pm.append(["99-99-99-01", "earlier1", "0101-001", "11", "0.5", "0", "100", "4999"])
+        for code, t in (("12", "2026-10-01 02:00:00"), ("1", "2026-10-01 02:00:00"), ("2", "2026-10-01 02:00:00"), ("3", "2026-10-01 02:20:00")):
+            pa.append(["99-99-99-01", "earlier1", t[:10], t[11:], code, "CATI01", "1", "CATI01", "1"])
+        pr.append(["99-99-99-01", "earlier1", "1", "Member 1", "35"]); pd.append(["99-99-99-01", "earlier1", "100", "CATI01", "1", "0", "0", "0", "00.00:20:00"])
         own_zip = os.path.join(SCRATCH, "phone_survey_1_Tabular_All.zip")
         with zipfile.ZipFile(own_zip, "w", zipfile.ZIP_DEFLATED) as oz:
             for n, head, rows in (("phone_survey.tab", ["interview__key", "interview__id", "household_id", "call_outcome", "ssSys_IRnd", "has__errors", "interview__status", "assignment__id"], pm),
@@ -1323,6 +1406,9 @@ def main():
         s2 = merged_now()
         check("mapped once, a program's own questionnaire with one interview per call attempt merges like a known layout: the same dials and completes per enumerator (start and end from interview__actions)",
               s2["dials"] == exp_dials and s2["completes"] == py_cmp and b.js("LEAD.state().platform.suso.phone_survey") == "main", [s2["dials"], s2["completes"], s2["files"][:3]])
+        check("without a round column, an earlier round's call in the cumulative export is told by its date: left out of the calls with one note, and out of the summary",
+              any("1 row from before the round window left out" in (f[4] or "") for f in s2["files"]) and "1 interview of other rounds left out (by the date of the first action)" in b.js("document.querySelector('.panel').innerText"),
+              [f[4] for f in s2["files"]][:3])
         b.click('[data-lact="clearimports"]'); b.wait("LEAD.state().imports.length === 0")
         b.set_files("#lf-suso", [own_zip]); b.wait("LEAD.state().imports.length === 4")
         check("the next export of the same questionnaire is read at once, with the saved level and mapping", merged_now()["dials"] == exp_dials and not b.js("!!document.querySelector('#lsusolevel') || !!document.querySelector('#lmap')"), merged_now()["files"][:2])

@@ -119,6 +119,18 @@ Step 2 names any enumerator still without a login before it writes the file. The
 tool's own questionnaire holds phone numbers: they go to the Survey Solutions server, which keeps them as it keeps
 the answers, and nowhere else.
 
+**The logins as Headquarters spells them.** Under **Teams and Roles › Interviewers**, *Download report as* TAB (or
+CSV) gives the list of interviewer accounts. Added in step 1, it is read for two columns only, `i_name` (the login) and
+`i_supervisorName`; its other columns (`i_fullName`, `i_email`, `i_phone`, device and sync details) are not read or
+kept. A login the tool has with other capitals or punctuation is corrected to Headquarters' spelling, an enumerator
+whose login is not in the list is named, and step 2 then checks every login it writes against the list.
+
+**One upload per household.** Headquarters creates an assignment for every row it receives and does not look for one
+already there: on the live server, the same household uploaded a second time got a second assignment. So the tool
+records every assignments file it writes as uploaded (a file written but not uploaded is marked so in step 2, and
+assignments uploaded from another session can be recorded there), the full file is uploaded once, and step 4 writes
+the later additions in `assignments_new.tab`, with only them.
+
 ## 4. Each day: the export
 
 In Headquarters, **Data Export**: the questionnaire, **Tab separated**, all statuses (or those the team follows).
@@ -157,6 +169,12 @@ the round's zone too.
 **Missing values.** `##N/A##` (text) and `-999999999` (numeric) mean a question was due but not answered; a question
 that was not enabled (the callback when no appointment was made) is an empty cell. The tool reads all three as empty.
 
+**Rounds.** One questionnaire may serve every round, and its export is then cumulative. The tool reads this round's
+interviews only: by the round column when the layout has one (the tool's own questionnaire does), else by the
+interview's first action, on or after the first day of the round window. The calls follow the same rule: a row
+without a round value whose call starts before the window is an earlier round's. Step 3 says how many interviews it
+left out and by which rule. The export's **Date range** filter narrows the file in Headquarters too.
+
 **Statuses.** Step 3 summarises the export: interviews by `interview__status`, those held by more than one
 interviewer (`interviewers` in the diagnostics, or a change of holder in the actions), those with `has__errors` = 1,
 and those rejected (status 65 or 125; a completed interview that Headquarters rejects goes straight back to the
@@ -164,7 +182,31 @@ interviewer as 65). A rejected interview is read as it stands and a complete it 
 corrects and resubmits it; the merge report carries one information line per such household (`suso_rejected`). An
 interview with status -1 (deleted) is left out.
 
-## 5. After moves: the list to reassign in Headquarters
+## 5. During the round: Headquarters follows the manifest
+
+A KoBoToolbox list is written again whole and redeployed, so the form holds whatever the manifest says. Survey
+Solutions takes one change at a time and keeps each assignment until it is used up or closed. So step 4 lists the
+three kinds of change the manifest makes, against what was uploaded and what the latest export shows, to batch once a
+day.
+
+**Assignments to upload.** Households of the manifest, and released reserves, that Headquarters has no assignment for
+yet: added during the round, or replacements released since the last upload. A household counts as in Headquarters
+when an upload recorded it or when the export holds an interview of it. `assignments_new.tab` has the full file's
+columns and only these rows; its upload is recorded like the first.
+
+**Assignments to close**, `{program}_R{nn}_suso_close.csv`: `when` (`now` or `round end`), `hhid`, `reason`, `login`,
+`assignment_id`, `interview_keys`, `interview_status`, `what_to_do`. Headquarters sends an interviewer every
+assignment that is open and still owes an interview (Assignment Status page), so a household that is done for the
+round stays on the dashboard until its assignment is closed. Now: a household released for the round, replaced, or
+whose removal is asked; a reserve whose household is complete; and, with one interview per call attempt, a household
+complete. At the end of the round, as things stand: every other assignment still open, and every interview still
+open. What to do depends on the assignment: one of quantity 1 is used up once its interview is opened (the live
+server showed it Open with 1 of 1 collected, and off the dashboard), so its open interview is completed by the
+interviewer, which keeps its calls; an assignment without an interview, or of unlimited quantity, is closed under
+**Assignments** (filter by the login, tick, Close). A household complete with its interview completed is never
+listed.
+
+**Households to reassign**: the list below.
 
 Survey Solutions has no file route for reassigning, so step 4 writes `{program}_R{nn}_suso_moves.csv`. It has one
 row per household moved this round, with its last move: `hhid`, `moved_at`, `from_enumerator`, `from_login`,
@@ -226,6 +268,11 @@ export zip, compares its files and columns with this layout, and shows what the 
   offset, `-999999999` and `##N/A##` for unanswered questions, an empty cell for a disabled one.
 - The export zip carries zip64 size fields (every entry's sizes in the extra field), a byte-order mark on every table,
   a do-file per table and a `Questionnaire/` folder. Version 0.5.1 of the tool could not open it; 0.5.2 can.
+- Uploading a household that already has an assignment creates a second one ("1 assignment created"; the copy was
+  archived). An assignment of quantity 1 whose interview was opened stays Open with 1 of 1 collected and leaves the
+  dashboard.
+- The Interviewers list downloads as TAB or CSV with the columns `i_name` (the login), `i_id`, `i_supervisorName`,
+  `i_fullName`, `i_email`, `i_phone`, then device and sync details.
 - The Headquarters Interviews search matches the full key, the start of the key and the household ID; a middle piece
   of the key matches nothing.
 

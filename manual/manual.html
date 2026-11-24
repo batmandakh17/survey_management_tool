@@ -54,7 +54,7 @@
     <div class="sub">User manual for enumerators and team leaders<br>Assignment, scheduling and call logs for phone panel surveys</div>
   </div>
   <img src="img/e03_today.png" alt="The enumerator's Today tab">
-  <div class="meta">Tool version 0.5.2 · Manual of 10 November 2026<br>
+  <div class="meta">Tool version 0.6.0 · Manual of 10 November 2026<br>
     Real-Time Monitoring (RTM) Handbook task team. Every picture in this manual shows the synthetic practice program
     “L2MN-DEMO”: no real household, name or phone number appears anywhere in it.</div>
 </section>
@@ -873,8 +873,8 @@ round under way appears as “so far”.</p>
 <h3><span class="num">B18</span>Risk lists</h3>
 <p>The <b class="ui">Risk lists</b> tab is for the leader only. Two models rank households to order the work:</p>
 <ul>
-  <li><b>Dropout risk</b> ranks last round's respondents by how likely they are to be missed this round. It was trained
-  on the handbook's six programs with dial logs.</li>
+  <li><b>Dropout risk</b> ranks last round's respondents by how likely they are to be missed this round. It learns
+  from the handbook's six programs with dial logs, or from those you choose (below).</li>
   <li><b>Return likelihood</b> ranks the households interviewed two rounds ago and missed last round by how likely
   they are to come back. It was trained on two programs and is weak: use it only to order redials.</li>
 </ul>
@@ -883,9 +883,21 @@ round under way appears as “so far”.</p>
 one household and never a reason to drop one (Section 3.3.5). Enumerators never see tiers, and tiers are not written
 into assignment files; the high dropout tier only gets earlier first dials in the plan. The models use operational
 features only, never demographic ones.</p>
+<p><b>Which programs the models learn from.</b> The card under the explanation chooses it, for each model. Pick
+<b class="ui">All six</b> (the default), a region (<b class="ui">Central Asia</b>: L2CU, L2T, L2KGZ and L2Kaz;
+<b class="ui">South-eastern Asia</b>: L2PHL and L2Indo, the UN M49 sub-regions), one program, or tick any group. Each
+of the 63 versions was fitted like the bundled model, and the card shows how the chosen one did on every program it
+left out: its AUC with a 95% interval, the losses its high tier held, and the loss rate it gave against the actual
+one. For a country with a program of its own, or in one of the two regions, the card also compares, on that region's
+programs left out of training, the model from all the others with the model from the region alone. In those tests
+the regional model gets the loss <em>level</em> closer but ranks households no better: more programs help the ranking
+more than nearer ones, which is why all six stay the default. A version also names the features its programs do not
+record, which then carry no weight. The return model can learn from L2PHL, L2Indo or both. Changing the choice drops
+a recalibration fitted to the earlier version (backtest again), and is logged, saved with the session and written
+into the downloaded list.</p>
 <p>Each list shows the household, its enumerator, its tier, its score against the round's average, and what moves
 the score most. Use the tier buttons to filter, and <b class="ui">Download this list</b> to keep it.</p>
-<figure><img class="w100" src="img/l14_risk.png"><figcaption><b>Figure B26.</b> The risk lists: the explanation and the dropout list's high tier.</figcaption></figure>
+<figure><img class="w100" src="img/l14b_learns.png"><img class="w100" src="img/l14_risk.png"><figcaption><b>Figure B26.</b> The risk lists: which programs the models learn from (here Central Asia, with its tests on the two programs it left out), and the dropout list's high tier.</figcaption></figure>
 <p><b>This program's own data.</b> Applied to a new program, the models rank households usefully but their chances are
 not calibrated, so the list shows a score, not a chance. Once two rounds have outcomes, click <b class="ui">Backtest on
 this program's own rounds</b>. The tool reads the result out in words, from the backtest's 95% interval:</p>
@@ -973,7 +985,10 @@ later file with the same columns is read without asking.
 When the Philippines form, or the tool's own, gives a result value its built-in map does not know (a code added when
 the form was redeployed), step 3 lists the value with its count and asks what it means; the answer is kept in your
 session. A number dialed becomes the household's slot (number 1, 2
-or 3) through the household list, which must be open; the number itself is not kept.</p>
+or 3) through the household list, which must be open; the number itself is not kept.
+A form's export holds every round so far. With a round column, the rows of other rounds are left out; without one,
+the rows whose call starts before the first day of the round window are taken as earlier rounds' and left out, with
+one note in step 3.</p>
 
 <h3><span class="num">C4</span>A round, day by day</h3>
 <ol>
@@ -984,10 +999,12 @@ or 3) through the household list, which must be open; the number itself is not k
   analytics (B17) follow, and every merge question of B13 is raised where it applies: a call on another
   interviewer's household, two completes, a call after a move, an interviewer without records; step 3 lists the open
   ones too.</li>
-  <li><b>Part-way through.</b> Move households on the Progress tab (B15, <em>Move waiting households</em>). Step 4
-  then writes the list again: give it to the form and redeploy, batching the day's moves, since a redeploy reaches
-  the interviewers only when they reload the form. The moved households appear with their new interviewer, and a
-  call the previous interviewer makes after the move is flagged as a double call.</li>
+  <li><b>Part-way through: the form follows the manifest.</b> Move households on the Progress tab (B15, <em>Move
+  waiting households</em>), add households or release replacements. Step 4 compares the list as written with the one
+  the manifest gives now and says when it has changed: write it again, give it to the form and redeploy, batching the
+  day's changes, since a redeploy reaches the interviewers only when they reload the form. The list is written whole,
+  so one redeploy carries every change; Survey Solutions takes them one at a time instead (D4). A call the previous
+  interviewer makes after a move is flagged as a double call.</li>
   <li><b>When a merge question concerns a submission.</b> Step 5 lists every dial behind a merge question with the
   form's own record ID (<code>_uuid</code>), so that you can find the submission in the project's table view, set its
   validation status or ask the interviewer.</li>
@@ -1043,8 +1060,16 @@ household and released reserve, the identifying fields, the login in <code>_resp
 <code>_quantity</code>. Upload it in Headquarters under Survey Setup › Questionnaires › the questionnaire › Upload
 assignments. Headquarters matches each login against the account exactly as it was created, capitals included: a
 login that differs only in case is refused as unknown and the whole file with it, so the logins of step 1 must be
-spelled as Headquarters shows them. The file holds phone numbers, which go to the Survey Solutions server and nowhere
-else.</p>
+spelled as Headquarters shows them. The surest way is to add Headquarters' own list in step 1: under Teams and Roles ›
+Interviewers, <b>Download report as TAB</b> (or CSV), then <b class="ui">Add Headquarters' list of interviewers</b>.
+The tool reads each login and supervisor and nothing else (the list's names, e-mails and phone numbers are not
+kept), corrects a login it has with other capitals to Headquarters' spelling, and names any enumerator whose login is
+not in the list. The file holds phone numbers, which go to the Survey Solutions server and nowhere else.</p>
+<p>The tool records each assignments file it writes as uploaded. Headquarters creates an assignment for every row it
+receives, with no check for one already there: on the live server, the same household uploaded twice had two
+assignments. So upload the full file once; step 4 writes the later additions in a file of their own. A file written
+but not uploaded is marked so in step 2 (<b class="ui">not uploaded</b>), and assignments uploaded from another
+session can be recorded there too.</p>
 <p><b>Each day</b>, export the questionnaire in Headquarters (Data Export, Tab separated, all statuses), and add the
 zip under <b class="ui">Add the export (.zip)</b> in step 3 (Figure D2). The browser opens the zip (the Stata do-files
 and the questionnaire folder in it are ignored). The tool joins
@@ -1057,6 +1082,11 @@ complete needs a call of three minutes or more, from its start to its end.</p>
 more than one interviewer, how many carry validation errors, and which the supervisor or headquarters rejected. A
 rejected interview is read as it stands and its complete still counts, since the interviewer corrects and resubmits
 it; the merge report notes it, household by household. A deleted interview is left out.</p>
+<p>One questionnaire may serve every round, and its export then holds every round so far. The tool reads this
+round's interviews only: by the round column, which the tool's own questionnaire has, or else by the interview's
+first action, on or after the first day of the round window. Step 3 says how many interviews of other rounds it left
+out. The export's <b>Date range</b> filter in Headquarters narrows the file too. The same rule applies to a
+KoBoToolbox form without a round column (C3).</p>
 
 <h3><span class="num">D3</span>A questionnaire the tool does not know</h3>
 <p>A program's own questionnaire is read in two answers, each given once and kept in the session. First, step 3 asks
@@ -1075,7 +1105,18 @@ of its variable.</p>
   <code>assignments.tab</code> (step 2).</li>
   <li><b>Each day.</b> Add the latest export in step 3. Progress (B15), the call log (B16) and the analytics (B17)
   follow, and the merge questions of B13 are raised where they apply.</li>
-  <li><b>Part-way through.</b> Move households on the Progress tab (B15). Step 4 then lists each moved household with
+  <li><b>Part-way through: Headquarters follows the manifest.</b> A KoBoToolbox list is written again whole (C4);
+  Survey Solutions takes one change at a time, so step 4 lists three kinds, to batch once a day (Figure D4).
+  <b>Assignments to upload:</b> households added during the round and replacements released since the last upload,
+  in <code>assignments_new.tab</code>, which holds only them. <b>Households to reassign:</b> the moves, below.
+  <b>Assignments to close:</b> Headquarters keeps sending an interviewer every assignment that is open and still owes
+  an interview, so a household released for the round, replaced or asked to be removed stays on the dashboard until
+  its assignment is closed (Assignments, filter by the login, tick, Close); a reserve whose household is complete is
+  closed too. An assignment of one interview is used up once its interview is opened; that interview stays on the
+  interviewer's list until it is completed, and completing it keeps its calls. The list also gives, as things stand,
+  what to close or finish at the end of the round, so that the next round starts on a clean dashboard;
+  <code>{program}_R{nn}_suso_close.csv</code> holds both.</li>
+  <li><b>Moves.</b> Move households on the Progress tab (B15). Step 4 then lists each moved household with
   the login before and after, the assignment ID and any interview keys: reassign them in Headquarters (Assignments,
   filter by the old login, tick, Assign; an interview already started under Interviews, the same way), in one batch a
   day. The list's <b class="ui">In Headquarters</b> column reads the latest export: <em>done</em> once it shows the
@@ -1095,6 +1136,7 @@ of its variable.</p>
 <figure><img class="w100" src="img/d1_suso_files.png"><figcaption><b>Figure D1.</b> The Survey Solutions tab, steps 1 and 2: the interviewers' logins, the questionnaire's settings and the assignments upload.</figcaption></figure>
 <figure><img class="w100" src="img/d2_suso_import.png"><figcaption><b>Figure D2.</b> Step 3 with the sample export added: 107 interviews holding 342 call records, split by interviewer and merged.</figcaption></figure>
 <figure><img class="w100" src="img/d3_suso_level.png"><figcaption><b>Figure D3.</b> An export the tool does not know: which of its files holds the calls.</figcaption></figure>
+<figure><img class="w100" src="img/d4_suso_follow.png"><figcaption><b>Figure D4.</b> Step 4: Headquarters follows the manifest. Assignments to upload, households to reassign, and assignments to close now and at the end of the round.</figcaption></figure>
 <p>The samples: <code>samples/suso/</code> holds the synthetic program's round-5 calls as an export of the tool's own
 questionnaire (the same calls as the exports of Part B and the samples of Part C) and the assignments upload. Every
 phone number uses the invalid country code +000.</p>

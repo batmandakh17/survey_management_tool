@@ -88,7 +88,9 @@ Choose "Team leader" at the top. The sample files are in `samples/leader/`.
    holidays, each as the handbook defines it.
 10. **Read the risk lists.** With the history open, the Risk lists tab ranks round 4's respondents by dropout
     risk and the households missed in round 4 by the chance of their return. These lists are for the leader
-    only; tiers are tied to workload. Press "Backtest on this program's own rounds" to see how the models do
+    only; tiers are tied to workload. The card above the lists chooses what each model learns from: all six
+    programs with dial logs, Central Asia, South-eastern Asia, one program or any group, each with its tests on
+    the programs it left out. Press "Backtest on this program's own rounds" to see how the models do
     on this program. On the synthetic sample the verdict is "too few outcomes to judge", with 64
     household-rounds and 9 losses tested. The model card follows the lists.
 11. **Save the session.** "Save leader session" keeps the inputs, the imports and your decisions in one file,
@@ -131,12 +133,17 @@ after the manifest is open:
    when it started, and merges: the same dials and completes per enumerator as the other samples.
 2. **A program's own questionnaire.** An export the tool does not know asks which of its files holds the calls (a
    roster, or the interviews themselves when each call attempt is an interview), then for the column mapping.
-3. **What Headquarters takes in.** Step 2 writes *assignments.tab* for Upload assignments, with each interviewer's
-   login in `_responsible` (compare `samples/suso/assignments.tab`).
-4. **Moves and review.** Step 4 lists the moved households with the logins before and after, the assignment ID and
-   the interview keys, to reassign in Headquarters, and reads from the next export whether each move is done there
-   and whether a tablet already holds the work; step 5 lists the interviews behind merge questions by their key.
-   Step 3 also summarises each export (interviews by status, handovers, errors, rejected interviews).
+3. **What Headquarters takes in.** Step 1 reads Headquarters' own list of interviewers (Teams and Roles ›
+   Interviewers › Download report as TAB) for the logins as Headquarters spells them, and nothing else from it.
+   Step 2 writes *assignments.tab* for Upload assignments, with each interviewer's login in `_responsible` (compare
+   `samples/suso/assignments.tab`), and records the upload: Headquarters would give a household uploaded twice a
+   second assignment.
+4. **Headquarters follows the manifest.** As the KoBoToolbox tab writes the form's list again when the manifest
+   changes, step 4 lists what Headquarters needs: households added or replacements released since the upload
+   (*assignments_new.tab*, only them), the moved households to reassign (with the logins, the assignment ID and the
+   interview keys, and whether the next export shows each move done), and the assignments to close: released,
+   replaced or removal asked now, and what is still open at the end of the round. Step 5 lists the interviews behind
+   merge questions by their key. Step 3 summarises each export, this round's interviews only.
 
 ## Try the enumerator view
 
@@ -172,7 +179,7 @@ after the manifest is open:
 |---|---|
 | `rtm_interview_tool.html` | The tool, built from `src/` |
 | `src/` | `core.js` (log, scheduler, files), `enum_view.js` (enumerator view), `leader_core.js` (rules, planning, merge), `leader_stats.js` (analytics), `leader_risk.js` (risk models), `leader_view.js` (leader view), `app.css`, `shell.html`, `holidays_data.js` |
-| `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally), `risk_models.json` and `validation.json` (coefficients and aggregates only), `coef_significance.py` and `coefficients.json` (each coefficient's household-clustered standard error, z and p), `make_card.py` and `MODEL_CARD.md` |
+| `models/` | `train_risk.py` (training and backtests on the handbook's harmonized tables, kept locally; `--calibrations` fits the model on every combination of the six programs and tests each on the programs it leaves out), `risk_models.json` and `validation.json` (coefficients and aggregates only), `coef_significance.py` and `coefficients.json` (each coefficient's household-clustered standard error, z and p), `make_card.py` and `MODEL_CARD.md` |
 | `holidays/make_holidays.py` | Writes the bundled holiday table (Python package `holidays`, 2025–2030) |
 | `formats/` | File definitions, JSON Schemas, and `check_formats.py`; `formats/kobo/` the KoBoToolbox layouts, `formats/suso/` the Survey Solutions questionnaire and layouts |
 | `manual/` | The user manual (`manual.html`, `RTM_interview_tool_manual.pdf`) and the worked examples (`examples.html`, `RTM_interview_tool_examples.pdf`: 48 situations from a round, each with the steps in the tool and a picture); `make_screens.py` and `make_examples.py` take the pictures on the synthetic samples, `make_pdf.py` prints either page |

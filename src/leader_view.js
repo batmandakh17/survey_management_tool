@@ -54,7 +54,7 @@
       team: [], criteria: [], rule: { name: 'keep_same', rotation_share: null, seed: randomSeed(), order_by: 'psu', method: 'random' },
       spread: 0.5, margin: 0.15, policy: { active: true, triggers: ['REFUSAL_HARD', 'ALL_NUMBERS_DEAD'] }, protect: false,
       plan: null, generated: null, manifest: null, imports: [], resolutions: [], events: [], unsaved: 0,
-      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } }, profiles: [], platform: { codes: {}, extra: {}, suso: {}, out: { layout: 'rtm', idVar: 'hhid', quantity: 1 } },
+      risk: { dropout: { kind: 'pooled' }, return: { kind: 'pooled' }, base: { dropout: 'all', return: 'all' } }, profiles: [], platform: { codes: {}, extra: {}, suso: {}, out: { layout: 'rtm', idVar: 'hhid', quantity: 1 }, uploads: [], hq: null, written: {} },
     };
     st.genesis = R.sha256(R.canon({ program: st.program, round: st.round, leader: st.leader, started_at: st.started_at }));
     logEv('started', {});
@@ -552,17 +552,28 @@
       review: () => [`${base}_kobo_review.csv`, R.toCSV(L.reviewRows(g.G).filter(r => !susoKey(r.record_id)), L.REVIEW_COLS)],
       // the assignments upload, the moves to make in Headquarters and the interviews to look at (proposal K.9)
       suso: () => ['assignments.tab', L.susoAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null, st.platform.codes, st.platform.out)],
+      susonew: () => ['assignments_new.tab', L.susoAssignments(M, derived().hh.households, st.plan ? st.plan.plans : null, st.platform.codes,
+        Object.assign({}, st.platform.out, { only: new Set(L.susoNew(M, st.platform.uploads, g ? g.G.suso : []).map(t => t.hhid)) }))],
       susomoves: () => [`${base}_suso_moves.csv`, R.toCSV(L.susoMoves(M, st.platform.codes, g.G.suso), L.SUSO_MOVE_COLS)],
+      susoclose: () => [`${base}_suso_close.csv`, R.toCSV(L.susoClose(M, g.C, st.platform.codes, g.G.suso, { quantity: st.platform.out.quantity, inHQ: L.susoInHQ(st.platform.uploads, g.G.suso) }), L.SUSO_CLOSE_COLS)],
       susoreview: () => [`${base}_suso_review.csv`, R.toCSV(L.reviewRows(g.G).filter(r => !r.record_id || susoKey(r.record_id)), L.REVIEW_COLS)],
       visits: () => [`${base}_field_visits.csv`, R.toCSV(L.fieldVisits(M, g.G, g.C).filter(v => !v.outcome).map(v => { const H = derived().hh.households.get(v.hhid) || {}, ph = H.phones || [];
         return { hhid: v.hhid, enumerator_id: v.enumerator, psu: v.psu, stratum: v.stratum, contact_name: H.name || '', phone_1: (ph[0] || {}).number || '', phone_2: (ph[1] || {}).number || '', phone_3: (ph[2] || {}).number || '',
           why: v.reason, dials: v.dials, last_result: v.last, asked_at: v.at }; }), ['hhid', 'enumerator_id', 'psu', 'stratum', 'contact_name', 'phone_1', 'phone_2', 'phone_3', 'why', 'dials', 'last_result', 'asked_at'])],
       sms: () => [`${base}_messages_${smsDay()}.csv`, R.toCSV(L.smsList(M, g.C, st.plan ? st.plan.plans : null, derived().hh.households, smsDay()), L.SMS_COLS)],
     };
-    if (['kobo', 'choices', 'suso', 'visits', 'sms'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: these files need the contacts.', 'warn');
+    if (['kobo', 'choices', 'suso', 'susonew', 'visits', 'sms'].includes(what) && !(derived().hh && !derived().hh.errors.length)) return toast('Open the household list on the Prepare tab first: these files need the contacts.', 'warn');
     const [name, text] = files[what]();
     sh().download(name, text, name.endsWith('.csv') ? 'text/csv' : name.endsWith('.tab') ? 'text/tab-separated-values' : 'application/json');
     logEv('exported', { file: name });
+    // what the platform now holds: the KoBoToolbox list as written, the Survey Solutions assignments as uploaded
+    if (what === 'kobo' || what === 'choices') { st.platform.written[what] = { at: R.localISO(R.now()), by: st.leader, sha: R.sha256(text) }; render(); }
+    if (what === 'suso' || what === 'susonew') {
+      const ids = text.split('\n').slice(1).filter(Boolean).map(l => l.split('\t')[0]);
+      st.platform.uploads.push({ at: R.localISO(R.now()), by: st.leader, file: name, hhids: ids, layout: st.platform.out.layout });
+      logEv('suso_upload_recorded', { file: name, assignments: ids.length });
+      invalidate(); render();
+    }
   }
 
   // ---- saving and reopening the leader's session (A.6) ----
@@ -615,10 +626,12 @@
       inputs: o.inputs, plan: null, generated: o.generated, manifest: o.manifest, imports: o.imports || [], resolutions: o.resolutions || [], events: o.events || [], unsaved: 0 };
     Object.assign(st, o.settings);
     st.risk = st.risk || { dropout: { kind: 'pooled' }, return: { kind: 'pooled' } };
+    st.risk.base = st.risk.base || { dropout: 'all', return: 'all' };
     st.criteria = Array.isArray(st.criteria) ? st.criteria : [];
     st.profiles = Array.isArray(st.profiles) ? st.profiles : [];
     const obj = k => (st.platform && st.platform[k] && typeof st.platform[k] === 'object' ? st.platform[k] : {});
-    st.platform = { codes: obj('codes'), extra: obj('extra'), suso: obj('suso'), out: Object.assign({ layout: 'rtm', idVar: 'hhid', quantity: 1 }, obj('out')) };
+    st.platform = { codes: obj('codes'), extra: obj('extra'), suso: obj('suso'), out: Object.assign({ layout: 'rtm', idVar: 'hhid', quantity: 1 }, obj('out')),
+      uploads: st.platform && Array.isArray(st.platform.uploads) ? st.platform.uploads : [], hq: (st.platform && st.platform.hq) || null, written: obj('written') };
     (st.team || []).forEach(t => { t.attrs = t.attrs || {}; });
     if (st.cal && st.cal.day_list === undefined) st.cal.day_list = null;
     if (st.cal && !st.cal.self) st.cal.self = { reschedule: true, availability: true, push_first_calls: false };
@@ -654,9 +667,11 @@
     const ids = [...holder.keys()].sort();
     const drows = ids.map(h => LRISK.dropoutRow(model, X, h, c - 1)).filter(Boolean);
     const rrows = ids.map(h => LRISK.returnRow(model, X, h, c - 2)).filter(Boolean);
-    const out = { model, X, holder, c, history: X.rounds };
-    out.dropout = LRISK.tiers(model, LRISK.score(model.dropout, drows, st.risk.dropout), model.tiers.dropout);
-    out.return = LRISK.tiers(model, LRISK.score(model.return, rrows, st.risk.return), model.tiers.return);
+    // the version of each model the leader chose to learn from: all programs, a region, one program or a group
+    const spec = { dropout: LRISK.spec(model, 'dropout', st.risk.base.dropout), return: LRISK.spec(model, 'return', st.risk.base.return) };
+    const out = { model, X, holder, c, history: X.rounds, spec };
+    out.dropout = LRISK.tiers(model, LRISK.score(spec.dropout, drows, st.risk.dropout), model.tiers.dropout);
+    out.return = LRISK.tiers(model, LRISK.score(spec.return, rrows, st.risk.return), model.tiers.return);
     out.own = { dropout: LRISK.ownPairs(model, X, 'dropout'), return: LRISK.ownPairs(model, X, 'return') };
     cache.r = out;
     return out;
@@ -1214,11 +1229,11 @@
   }
 
   // the code each enumerator has in the platform (the KoBoToolbox interviewer code, the Survey Solutions login): one list for both tabs
-  function codesTable(head, placeholder, written) {
+  function codesTable(head, placeholder, written, listId) {
     const M = st.manifest, pf = st.platform, ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
     const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
     return ids.length ? `<table class="grid small"><thead><tr><th>Enumerator</th><th>${esc(head)}</th></tr></thead><tbody>
-        ${ids.map(id => `<tr><td class="id">${esc(id)}</td><td><input class="small" data-lpcode="${esc(id)}" value="${esc(codeOf(id) === id ? (pf.codes[id] || '') : codeOf(id))}" placeholder="${esc(placeholder)}"></td></tr>`).join('')}</tbody></table>
+        ${ids.map(id => `<tr><td class="id">${esc(id)}</td><td><input class="small" data-lpcode="${esc(id)}" value="${esc(codeOf(id) === id ? (pf.codes[id] || '') : codeOf(id))}" placeholder="${esc(placeholder)}"${listId ? ` list="${listId}"` : ''}></td></tr>`).join('')}</tbody></table>
         <p class="muted small">Empty means the enumerator's ID itself. Several codes for one interviewer, separated by commas, are all read as that interviewer (a typing slip, an old code); the first is written into ${esc(written)}. The platform's records are read under the tool's ID through the code, whatever its case or punctuation. A code entered before the files are written goes into the manifest (Prepare tab, step 5, shows the same column); one entered later is kept in this session. The KoBoToolbox and Survey Solutions tabs share this list.</p>` : '<p class="muted">Add the team on the Prepare tab (step 5), or open the round\'s manifest on the Import tab.</p>';
   }
   // result values of a built-in layout that its map does not know, and the values already mapped, for the layouts given
@@ -1251,9 +1266,16 @@
       ${unknownCodesCard(g ? g.recs.filter(r => r.kind === 'platform') : [], ['rtm_kobo', 'phl_kobo'])}
       ${platRows.length ? `<table class="grid small"><thead><tr><th>File</th><th>Kind</th><th>Enumerator</th><th class="num">Rows</th><th>Used</th></tr></thead><tbody>${platRows.map(f => `<tr><td>${esc(f.name)}</td><td>${esc(f.kind)}</td><td class="id">${esc(f.enumerator_id)}</td><td class="num">${f.count || ''}</td><td>${esc(f.use)}</td></tr>`).join('')}</tbody></table>` : ''}
       ${open.length ? `<h4>Needs your decision <span class="count warn">${open.length}</span></h4>${open.map(issueCard).join('')}` : (platRows.length ? '<p class="alert ok">No merge question is open.</p>' : '')}</section>`;
-    const step4 = `<section class="lcard"><h3>4 · After moves during the round: the form follows</h3>
-      ${!moved ? '<p class="muted">No household has moved yet this round. Moves are made on the Progress tab; each one is recorded in the manifest, and this step then writes the list again.</p>'
-        : `<p>${R.plural(moved, 'move')} so far (the last on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}). Write the list again and redeploy the form, so that each moved household sits with its new interviewer. Batch the day's moves: a redeploy reaches the interviewers only when they reload the form. A call the previous interviewer makes after the move is flagged in the merge as a double call.</p>${listBtns(true)}`}</section>`;
+    // the list as written against the list the manifest gives now: a move, a household added or a replacement released changes it
+    const wr = st.platform.written || {}, wrote = Object.keys(wr).filter(k => wr[k]);
+    const nowSha = !need && wrote.length ? { choices: R.sha256(L.koboChoices(M, d.hh.households, st.platform.codes)), kobo: R.sha256(L.koboHouseholds(M, d.hh.households, st.plan ? st.plan.plans : null)) } : {};
+    const changed = wrote.filter(k => nowSha[k] && nowSha[k] !== wr[k].sha);
+    const names = { choices: 'choices_households.csv', kobo: 'households.csv' };
+    const step4 = `<section class="lcard"><h3>4 · During the round: the form follows the manifest</h3>
+      ${!wrote.length ? '<p class="muted">Write the list on step 2 first; this step then says when the manifest has changed it (a move, a household added, a replacement released).</p>'
+        : changed.length ? `<p class="alert warn"><b>The list has changed since it was written</b> (${esc(changed.map(k => `${names[k]}, written ${wr[k].at.slice(0, 16).replace('T', ' ')}`).join('; '))}): write it again and redeploy the form, so that each household sits with its interviewer${moved ? `. ${R.plural(moved, 'move')} so far, the last on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}` : ''}.</p>`
+        : `<p class="alert ok">The form's list matches the manifest (${esc(wrote.map(k => `${names[k]}, written ${wr[k].at.slice(0, 16).replace('T', ' ')}`).join('; '))}).</p>`}
+      <p class="muted small">The list is written whole, so a redeploy carries every change at once: moved households to their new interviewers, households added during the round, replacements released. Batch the day's changes: a redeploy reaches the interviewers only when they reload the form. A call the previous interviewer makes after a move is flagged in the merge as a double call.</p>${wrote.length ? listBtns(true) : ''}</section>`;
     const rv = G ? L.reviewRows(G).filter(r => !susoKey(r.record_id)) : [];
     const step5 = `<section class="lcard"><h3>5 · Records to look at in KoBoToolbox</h3>
       <p class="muted small">Every dial behind a merge question that needs or had your decision, with the form's own record ID (<code>_uuid</code>), so that you can find the submission in the project's table view, set its validation status or ask the interviewer.</p>
@@ -1265,6 +1287,20 @@
   }
 
   // ---- Survey Solutions: the same cycle with a questionnaire in Survey Solutions (proposal K.9) ----
+  // Headquarters' list of interviewers (step 1): the logins as Headquarters spells them, which the upload needs
+  function hqCard() {
+    const M = st.manifest, pf = st.platform, hq = pf.hq;
+    const ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
+    const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
+    const m = hq ? L.matchLogins(ids, codeOf, hq.logins) : null;
+    return `<div class="hq"><p class="small"><label class="btn subtle">Add Headquarters' list of interviewers (TAB or CSV)<input type="file" id="lf-hqusers" accept=".tab,.txt,.csv"></label>
+      ${hq ? ` <span class="muted">${esc(hq.file)}, read ${esc(hq.at.slice(0, 16).replace('T', ' '))} by ${esc(hq.by)}: ${R.plural(hq.logins.length, 'interviewer')}.</span> <button class="link" data-lact="hqforget">forget it</button>` : ''}</p>
+      <p class="muted small">In Headquarters: Teams and Roles › Interviewers, then <b>Download report as TAB</b> (or CSV) at the foot of the list. The tool reads each interviewer's login and supervisor (the columns <code>i_name</code> and <code>i_supervisorName</code>) and nothing else: the list's names, e-mails and phone numbers are not kept. A login the tool has with other capitals or punctuation is corrected to Headquarters' spelling, which the upload needs.</p>
+      ${m ? `<datalist id="hqlogins">${hq.logins.map(u => `<option value="${esc(u.login)}">`).join('')}</datalist>
+        ${(hq.fixed || []).length ? `<p class="alert info small">Corrected to Headquarters' spelling when the list was read: ${esc(hq.fixed.map(f => `${f.id}, ${f.from} became ${f.to}`).join('; '))}.</p>` : ''}
+        ${m.missing.length ? `<p class="alert warn small"><b>Not in Headquarters' list:</b> ${esc(m.missing.map(x => `${x.id}${x.own ? ' (no login: its ID would be used)' : ` (${x.login})`}`).join(', '))}. Type the login from the list in the table above, or create the account in Headquarters.</p>` : '<p class="alert ok small">Every enumerator\'s login is in Headquarters\' list, as spelled.</p>'}
+        ${m.unused.length ? `<p class="muted small">Accounts in Headquarters that no enumerator uses: ${esc(m.unused.join(', '))}.</p>` : ''}` : ''}</div>`;
+  }
   const susoRow = f => !!f.suso;
   // a record of a Survey Solutions export: the interview key (12-34-56-78), with the roster row after "#"
   const susoKey = id => /^\d\d-\d\d-\d\d-\d\d(#|$)/.test(String(id || ''));
@@ -1274,20 +1310,27 @@
     const hasHH = !!(d.hh && !d.hh.errors.length);
     const step1 = `<section class="lcard"><h3>1 · The questionnaire and the interviewers' logins</h3>
       <p class="muted small">For a team that interviews in Survey Solutions rather than in this tool's enumerator view: the tool's own questionnaire (<code>formats/suso/README.md</code>: one interview per household, the calls a roster), or a program's own questionnaire whose calls are a roster or whose interviews are one per call attempt. The tool keeps the leader's side: the assignment, the plan, the merge, progress and the moves during the round. What crosses the boundary is a file each way: the assignments go to Headquarters (2), the export comes in each day (3), moves follow (4), and the interviews to look at go back (5).</p>
-      ${codesTable('Login in Survey Solutions (the interviewer\'s user name)', 'int07', 'the assignments file (_responsible)')}</section>`;
+      ${codesTable('Login in Survey Solutions (the interviewer\'s user name)', 'int07', 'the assignments file (_responsible)', pf.hq ? 'hqlogins' : '')}
+      ${hqCard()}</section>`;
     const need = !M ? 'Write the round\'s files (Prepare tab) or open its manifest (Import tab) first.' : !hasHH ? 'Open the household list on the Prepare tab (step 1): the assignments need the contacts.' : '';
     const sel = (k, opts) => `<select data-lsuso="${k}">${opts.map(([v, l]) => `<option value="${esc(String(v))}" ${String(out[k]) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(t => t.id);
     const codeOf = L.codeOf(M || { enumerators: st.team.map(t => ({ enumerator_id: t.id, platform_id: t.platform_id })) }, pf.codes);
     const noLogin = ids.filter(id => codeOf(id) === id);
+    const notInHq = pf.hq ? ids.filter(id => codeOf(id) !== id && !pf.hq.logins.some(u => u.login === codeOf(id))) : [];
     const nMain = M ? M.households.length : 0, nRes = M ? M.households.reduce((n, h) => n + (h.replacements || []).length, 0) : 0;
+    const ups = pf.uploads.map((u, i) => Object.assign({ i }, u)).filter(u => !u.undone);
+    const upList = ups.length ? `<p class="small"><b>Uploaded, as recorded here:</b> ${ups.map(u => `${esc(u.file)} on ${esc(u.at.slice(0, 16).replace('T', ' '))} by ${esc(u.by)}, ${R.plural(u.hhids.length, 'assignment')} <button class="link" data-lact="susoundo" data-i="${u.i}">not uploaded</button>`).join('; ')}. The tool counts these as in Headquarters; a file written but not uploaded should be marked so, or its households would never be offered again.</p>` : '';
     const step2 = `<section class="lcard"><h3>2 · Before the round: the assignments go to Headquarters</h3>
       ${need ? `<p class="alert info">${esc(need)}</p>` : ''}
       ${!need && noLogin.length ? `<p class="alert warn"><b>${R.plural(noLogin.length, 'enumerator')} without a login</b> (${esc(noLogin.join(', '))}): the file would carry their IDs in <code>_responsible</code>, and Headquarters refuses a login it does not know. Enter the logins in step 1 first.</p>` : ''}
+      ${!need && notInHq.length ? `<p class="alert warn"><b>${R.plural(notInHq.length, 'login')} not in Headquarters' list as spelled</b> (${esc(notInHq.map(id => `${id}: ${codeOf(id)}`).join(', '))}): Headquarters would refuse every row of ${notInHq.length === 1 ? 'it' : 'them'}. Correct the logins in step 1, or create the accounts.</p>` : ''}
+      ${upList}${!ups.length && M ? `<p class="muted small">No upload recorded in this session. If the round's assignments are already in Headquarters (uploaded from another session or an earlier version), <button class="link" data-lact="susomarkall">record them as uploaded</button>, so that the file is not uploaded twice.</p>` : ''}
       <div class="row3"><label>Questionnaire ${sel('layout', [['rtm', 'the tool\'s own (every column)'], ['id', 'the program\'s own (the household ID only)']])}</label>
         <label>Variable of the household ID <input class="small" data-lsuso="idVar" value="${esc(out.idVar)}" placeholder="hhid"></label>
         <label>Interviews per assignment ${sel('quantity', [[1, '1: the calls are a roster in the interview'], [-1, 'no limit: one interview per call attempt']])}</label></div>
-      <div class="btnrow"><button class="subtle" data-lact="export" data-what="suso" ${need ? 'disabled' : ''}>assignments.tab${M ? ` (${nMain} households${nRes ? ` and up to ${nRes} reserves` : ''})` : ''}</button> ${out.layout === 'rtm' ? '<span class="tag warn">has phone numbers</span>' : ''}</div>
+      <div class="btnrow"><button class="subtle" data-lact="export" data-what="suso" ${need ? 'disabled' : ''}>assignments.tab${ups.length ? ', every household again' : M ? ` (${nMain} households${nRes ? ` and up to ${nRes} reserves` : ''})` : ''}</button> ${out.layout === 'rtm' ? '<span class="tag warn">has phone numbers</span>' : ''}</div>
+      ${ups.length ? '<p class="alert warn small">Headquarters creates an assignment for every row it receives, so the whole file uploaded again would give each household already there a second assignment. For households added since, step 4 writes a file with only them.</p>' : ''}
       <p class="muted small">One assignment per household and listed reserve, from the current manifest, the interviewer's login in <code>_responsible</code> and the number of interviews in <code>_quantity</code>. In Headquarters: Survey Setup › Questionnaires › the questionnaire › Upload assignments. Headquarters checks three things before it accepts the file: every column is a variable of the questionnaire (download its template there to compare the names), every row has a login in <code>_responsible</code>, and each login exists with the interviewer or supervisor role, <b>spelled exactly as the account was created, capitals included</b> (a login that differs only in case is refused as unknown, so type the logins in step 1 as Headquarters shows them). The upload page also asks for a default responsible; it applies only to rows without one. With the tool's own questionnaire every column is one, so the interviewer sees the household's name, numbers and planned first call on the dashboard: the numbers go to the Survey Solutions server, which keeps them as it keeps the answers. With a program's own questionnaire the file carries the household ID alone, under its variable's name, and the interviewer takes the numbers from the questionnaire's own preload.</p></section>`;
     const metas = G ? G.suso || [] : [];
     const pending = metas.filter(s => !s.level);
@@ -1299,7 +1342,7 @@
     const rows = G ? G.files.filter(susoRow) : [];
     const open = G ? G.issues.filter(i => i.status === 'open' && i.severity === 'action') : [];
     const step3 = `<section class="lcard"><h3>3 · Each day: the export</h3>
-      <p class="muted small">In Headquarters: Data Export, the questionnaire, <b>Tab separated</b>, all statuses (or those you follow), then download the zip and add it whole (its Stata do-files and questionnaire folder are ignored). The tool reads the main file, the roster that holds the calls and three service files: <code>interview__actions</code> says which interviewer held each interview when (a household moved during the round keeps its calls with the interviewer who made them), <code>interview__diagnostics</code> who is responsible for it, and <code>assignment__actions</code> who holds each assignment and whether a tablet has received it. The export is cumulative: add the latest zip, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. A questionnaire the tool does not know is read once you say which file holds the calls and map its columns.</p>
+      <p class="muted small">In Headquarters: Data Export, the questionnaire, <b>Tab separated</b>, all statuses (or those you follow), then download the zip and add it whole (its Stata do-files and questionnaire folder are ignored). The tool reads the main file, the roster that holds the calls and three service files: <code>interview__actions</code> says which interviewer held each interview when (a household moved during the round keeps its calls with the interviewer who made them), <code>interview__diagnostics</code> who is responsible for it, and <code>assignment__actions</code> who holds each assignment and whether a tablet has received it. The export is cumulative: add the latest zip, and the tool splits it by interviewer and merges each part as it merges the enumerators' CSV exports, every merge question raised where it applies. One questionnaire may serve every round: the tool reads this round's interviews only, by the round column (the tool's own questionnaire has one) or, without one, by the interview's first action on or after the round window's first day. The export's <b>Date range</b> filter narrows it too. A questionnaire the tool does not know is read once you say which file holds the calls and map its columns.</p>
       ${M ? `<label class="btn">Add the export (.zip)<input type="file" id="lf-suso" accept=".zip,.tab" multiple></label>${st.imports.length ? ` <button class="link" data-lact="clearimports">Remove all ${st.imports.length} files</button>` : ''}` : '<p class="alert info">Write the round\'s files or open its manifest first: the merge checks every record against it.</p>'}
       ${pending.map(levelCard).join('')}
       ${chosen.map(s => `<p class="muted small">The calls of <code>${esc(s.questionnaire)}</code> are read from ${s.level === 'none' ? 'nowhere: the questionnaire records interviews only' : s.level === 'main' ? 'its interviews (one per call attempt)' : `the roster <code>${esc(s.level)}</code>`}. <button class="link" data-lact="susolevelreset" data-q="${esc(s.questionnaire)}">change</button></p>`).filter((x, i, a) => a.indexOf(x) === i).join('')}
@@ -1311,17 +1354,37 @@
         <table class="grid small"><thead><tr><th>Status in Survey Solutions</th><th class="num">Interviews</th></tr></thead><tbody>${st_.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td></tr>`).join('')}</tbody></table>
         <p class="muted small">${[su.handovers ? `${R.plural(su.handovers, 'interview')} held by more than one interviewer` : 'No interview held by more than one interviewer', su.errors ? `${su.errors} with validation errors` : 'none with validation errors',
           su.rejected.length ? `<b>${R.plural(su.rejected.length, 'interview')} rejected</b> (${esc(su.rejected.slice(0, 6).map(r => r.key).join(', '))}${su.rejected.length > 6 ? ', …' : ''}): their calls are read as recorded and are noted in the merge report` : 'none rejected',
-          s.deleted ? `${R.plural(s.deleted, 'deleted interview')} left out` : '', s.assign && s.assign.size ? `${R.plural(s.assign.size, 'assignment')} in assignment__actions` : 'no assignment__actions file (step 4 then cannot say which moves Headquarters already shows)'].filter(Boolean).join('; ')}.</p>`; }).join('')}
+          s.deleted ? `${R.plural(s.deleted, 'deleted interview')} left out` : '', s.otherRounds ? `${R.plural(s.otherRounds, 'interview')} of other rounds left out (by ${s.roundBy === 'column' ? 'the round column' : 'the date of the first action'})` : '', s.assign && s.assign.size ? `${R.plural(s.assign.size, 'assignment')} in assignment__actions` : 'no assignment__actions file (step 4 then cannot say which moves Headquarters already shows)'].filter(Boolean).join('; ')}.</p>`; }).join('')}
       ${open.length ? `<h4>Needs your decision <span class="count warn">${open.length}</span></h4>${open.map(issueCard).join('')}` : (rows.length ? '<p class="alert ok">No merge question is open.</p>' : '')}</section>`;
     const moved = M && M.moves && M.moves.length ? M.moves.length : 0;
     const mv = moved ? L.susoMoves(M, pf.codes, metas) : [];
-    const step4 = `<section class="lcard"><h3>4 · After moves during the round: Headquarters follows</h3>
+    // what Headquarters still needs from the manifest: new assignments, reassignments (the moves) and assignments to close
+    const recorded = ups.length > 0 || metas.some(s => s.byHH && Object.keys(s.byHH).length);
+    const fresh = M && recorded ? L.susoNew(M, pf.uploads, metas) : [];
+    const closeRows = M && recorded && g ? L.susoClose(M, g.C, pf.codes, metas, { quantity: out.quantity, inHQ: L.susoInHQ(pf.uploads, metas) }) : [];
+    const nowRows = closeRows.filter(r => r.when === 'now'), endRows = closeRows.filter(r => r.when !== 'now');
+    const tally = rs => { const m = new Map(); rs.forEach(r => m.set(r.what_to_do, (m.get(r.what_to_do) || 0) + 1)); return [...m].map(([w, n]) => `${n}: ${esc(w)}`).join('; '); };
+    const newPart = `<h4>Assignments to upload</h4>${!M ? '' : !recorded ? '<p class="muted">Nothing uploaded yet: step 2 writes the first file, and this list then follows the manifest.</p>'
+      : fresh.length ? `<p>${R.plural(fresh.length, 'household')} of the manifest ${fresh.length === 1 ? 'has' : 'have'} no assignment in Headquarters yet (added during the round, or replacements released since the last upload): ${esc(fresh.slice(0, 12).map(t => t.hhid).join(', '))}${fresh.length > 12 ? ', …' : ''}.</p>
+        <div class="btnrow"><button class="subtle" data-lact="export" data-what="susonew" ${need ? 'disabled' : ''}>assignments_new.tab (${R.plural(fresh.length, 'assignment')})</button> ${out.layout === 'rtm' ? '<span class="tag warn">has phone numbers</span>' : ''}</div>
+        <p class="muted small">Upload it as in step 2. It holds only these households, so none already in Headquarters gets a second assignment; the tool records the upload.</p>`
+      : '<p class="alert ok">Headquarters has an assignment for every household and released reserve of the manifest.</p>'}`;
+    const closeTable = rs => `<table class="grid small"><thead><tr><th>Household</th><th>Why</th><th>Login</th><th>Assignment</th><th>Interviews</th><th>What to do</th></tr></thead><tbody>${rs.slice(0, 40).map(r => `<tr><td class="id">${esc(r.hhid)}</td><td>${esc(r.reason)}</td><td class="id">${esc(r.login)}</td><td class="id">${esc(r.assignment_id)}</td><td class="id small">${esc(r.interview_keys)}${r.interview_status ? ` <span class="muted">${esc(r.interview_status)}</span>` : ''}</td><td class="small">${esc(r.what_to_do)}</td></tr>`).join('')}</tbody></table>${rs.length > 40 ? `<p class="muted">First 40 of ${rs.length}.</p>` : ''}`;
+    const closePart = `<h4>Assignments to close</h4>${!M || !recorded ? '<p class="muted">The list follows once assignments are uploaded.</p>' : `
+      <p class="muted small">Headquarters keeps sending an interviewer every assignment that is open and still owes an interview, so a household released, replaced or asked to be removed stays on the dashboard until its assignment is closed (Assignments: filter by the login, tick, Close). An assignment of one interview is used up once its interview is opened; that interview stays on the interviewer's list until it is completed, and completing it keeps its calls.${+out.quantity === -1 ? ' With one interview per call attempt an assignment is never used up: close it as soon as its household is complete.' : ''} At the end of the round, close or finish the rest, so that the next round starts on a clean dashboard.</p>
+      ${nowRows.length ? `<p><b>Now: ${R.plural(nowRows.length, 'household')}.</b></p>${closeTable(nowRows)}` : '<p class="alert ok">Nothing to close now.</p>'}
+      ${endRows.length ? `<p><b>At the end of the round, as things stand: ${R.plural(endRows.length, 'household')}</b> <span class="muted small">(${tally(endRows)})</span>.</p>` : ''}
+      ${closeRows.length ? `<div class="btnrow"><button class="subtle" data-lact="export" data-what="susoclose">${esc(`${M.program}_R${p2(M.round)}_suso_close.csv`)} (${R.plural(closeRows.length, 'row')}, now and at the end of the round)</button></div>` : ''}`}`;
+    const step4 = `<section class="lcard"><h3>4 · During the round: Headquarters follows the manifest</h3>
+      <p class="muted small">A KoBoToolbox list is written again whole; Survey Solutions takes one change at a time. So this step lists each kind of change the manifest has made since the upload: assignments to upload, households to reassign, assignments to close. Batch them once a day.</p>
+      ${newPart}<h4>Households to reassign</h4>
       ${!moved ? '<p class="muted">No household has moved yet this round. Moves are made on the Progress tab; each one is recorded in the manifest, and this step then lists what to reassign in Headquarters.</p>'
         : (() => { const pend = mv.filter(r => r.in_hq === 'pending'), done = mv.filter(r => r.in_hq === 'done'), unk = mv.filter(r => r.in_hq === 'no interview yet'), got = pend.filter(r => r.received_on_tablet === 'yes');
           return `<p>${R.plural(mv.length, 'household')} moved so far (the last move on ${esc((M.moves[M.moves.length - 1].at || '').slice(0, 16).replace('T', ' '))}). Reassign each in Headquarters to the login in <code>to_login</code>: under Assignments, filter by the old login and tick the household's assignment (its ID is in the list once the export holds it), then choose Assign; an interview already started (its key is in the list) is reassigned under Interviews the same way, and reaches the new interviewer at their next synchronization. Batch the day's moves. A call the previous interviewer makes after the move is flagged in the merge as a double call.</p>
           <p class="muted small"><b>In Headquarters</b> reads the latest export: <b>done</b> when it shows the assignment or an interview passed to the new login after the move, <b>pending</b> when it does not yet, and <em>no interview yet</em> when the export holds no interview of the household: the export's assignment history covers only households with an interview, so until then the Assignments list in Headquarters (filter by the new login) is the only place that confirms the move. <b>Received</b> says whether a tablet already holds the work: Survey Solutions warns that reassigning work a tablet has received can create extra interviews, and asks for a confirmation (web interviewing never shows it).${mv.length ? ` Now: ${done.length} done, ${pend.length} pending${got.length ? ` (${got.length} already on a tablet)` : ''}${unk.length ? `, ${unk.length} without an interview yet` : ''}.` : ''}</p>
           <div class="btnrow"><button class="subtle" data-lact="export" data-what="susomoves">${esc(`${M.program}_R${p2(M.round)}_suso_moves.csv`)} (${R.plural(mv.length, 'row')})</button></div>
-          <table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>Assignment</th><th>Interviews</th><th>In Headquarters</th><th>Received</th></tr></thead><tbody>${mv.slice(0, 40).map(r => `<tr><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.from_login)}</td><td class="id">${esc(r.to_login)}</td><td class="id">${esc(r.assignment_id)}</td><td class="id small">${esc(r.interview_keys)}</td><td>${r.in_hq === 'done' ? '<span class="tag ok">done</span>' : r.in_hq === 'pending' ? '<b class="warn">pending</b>' : `<span class="muted">${esc(r.in_hq)}</span>`}</td><td>${esc(r.received_on_tablet)}</td></tr>`).join('')}</tbody></table>${mv.length > 40 ? `<p class="muted">First 40 of ${mv.length}.</p>` : ''}`; })()}</section>`;
+          <table class="grid small"><thead><tr><th>Household</th><th>From</th><th>To</th><th>Assignment</th><th>Interviews</th><th>In Headquarters</th><th>Received</th></tr></thead><tbody>${mv.slice(0, 40).map(r => `<tr><td class="id">${esc(r.hhid)}</td><td class="id">${esc(r.from_login)}</td><td class="id">${esc(r.to_login)}</td><td class="id">${esc(r.assignment_id)}</td><td class="id small">${esc(r.interview_keys)}</td><td>${r.in_hq === 'done' ? '<span class="tag ok">done</span>' : r.in_hq === 'pending' ? '<b class="warn">pending</b>' : `<span class="muted">${esc(r.in_hq)}</span>`}</td><td>${esc(r.received_on_tablet)}</td></tr>`).join('')}</tbody></table>${mv.length > 40 ? `<p class="muted">First 40 of ${mv.length}.</p>` : ''}`; })()}
+      ${closePart}</section>`;
     const rv = G ? L.reviewRows(G).filter(r => !r.record_id || susoKey(r.record_id)) : [];
     const step5 = `<section class="lcard"><h3>5 · Interviews to look at in Survey Solutions</h3>
       <p class="muted small">Every call behind a merge question that needs or had your decision, with its record: the interview key (as Headquarters shows it, <code>12-34-56-78</code>) and, after <code>#</code>, the row of the calls roster. Under Interviews, paste the key into the search box (the search matches a value from its start, so the whole key or the household ID works, a middle part does not); open the interview, and reject it to the interviewer with a comment when a call should be corrected.</p>
@@ -1404,10 +1467,75 @@
   function riskTab() {
     const r = riskData();
     const intro = `<section class="lcard"><h3>Risk lists, for the leader only</h3>
-      <p>Two models, both backtested before use. <b>Dropout risk</b> ranks the households interviewed last round by how likely they are to be missed this round; it was trained on the handbook's six programs with dial logs. <b>Return likelihood</b> ranks the households interviewed two rounds ago and missed last round by how likely they are to come back; it was trained on L2PHL and L2Indo only, the two programs that redial almost every missed household, and it is weak. The model card below gives how well each does.</p>
+      <p>Two models, both backtested before use. <b>Dropout risk</b> ranks the households interviewed last round by how likely they are to be missed this round; it learns from the handbook's six programs with dial logs, or from those chosen below. <b>Return likelihood</b> ranks the households interviewed two rounds ago and missed last round by how likely they are to come back; it was trained on L2PHL and L2Indo only, the two programs that redial almost every missed household, and it is weak. The model card below gives how well each does.</p>
       <p class="muted small">Tiers are tied to workload: within this round, the top ${pc(r ? r.model.tiers.high : 0.15)} of households by score are high, the next ${pc(r ? r.model.tiers.medium : 0.35)} medium, the rest low.${(window.RTM_RISK && !window.RTM_RISK.tiers.return.includes('medium')) ? ` The return model has two tiers only, high and low: ${mergedWhy()}.` : ''} A tier says how similar households fared; it is never a prediction about one household, and never a reason to drop one (Section 3.3.5). Enumerators never see tiers, and tiers are not written into assignment files; the high dropout tier only moves households earlier in the plan of first dials. Only operational features are used, never demographic ones; the model card below lists them, and those left out on purpose.</p></section>`;
-    if (!r) return intro + '<p class="muted">Open earlier rounds on the Prepare tab (step 2): the models need last round’s interviews to score this round’s households.</p>' + `<section class="lcard">${LRISK.cardHTML()}</section>`;
-    return intro + riskList('dropout', r) + riskList('return', r) + ownData(r) + `<section class="lcard">${LRISK.cardHTML()}</section>`;
+    if (!r) return intro + baseCard() + '<p class="muted">Open earlier rounds on the Prepare tab (step 2): the models need last round’s interviews to score this round’s households.</p>' + `<section class="lcard">${LRISK.cardHTML()}</section>`;
+    return intro + baseCard() + riskList('dropout', r) + riskList('return', r) + ownData(r) + `<section class="lcard">${LRISK.cardHTML()}</section>`;
+  }
+  // ---- which programs each model learns from: all, a region (UN M49), one program, or any group (train_risk.py, calibrations) ----
+  const countryName = c => String(COUNTRIES[c] || c || '').replace(/\s*\([^)]*\)\s*$/, '');      // "Uzbekistan (L2CU)" -> "Uzbekistan"
+  const progName = (model, label) => { const p = LRISK.cal(model).programs.find(x => x.label === label) || {}; return `${label} (${countryName(p.country)})`; };
+  function baseLabel(model, kind, key) {
+    const c = LRISK.cal(model), k = LRISK.norm(model, kind, key), b = LRISK.base(model, kind, k);
+    if (!c || !b) return 'all programs';
+    if (k === 'all') return `${b.programs.length === 2 ? 'both' : `all ${NUMW[b.programs.length] || b.programs.length}`} programs (${b.programs.join(', ')})`;
+    const reg = c.regions.find(g => g.programs.length === b.programs.length && g.programs.every(p => b.programs.includes(p)));
+    return reg ? `${reg.label} (${b.programs.join(', ')})` : b.programs.length === 1 ? `${b.programs[0]} alone` : b.programs.join(', ');
+  }
+  function baseCard() {
+    const model = LRISK.model(), c = LRISK.cal(model);
+    if (!c) return '';
+    const cname = countryName(st.country), own = LRISK.programIn(model, st.country), reg = LRISK.regionOf(model, st.country);
+    const near = own ? `${esc(cname)} has its own L2 program with dial logs, ${esc(own)}, in ${esc(reg.label)}.`
+      : reg ? `${esc(cname)} is in ${esc(reg.label)} (UN M49 sub-region), whose L2 programs with dial logs are ${esc(reg.programs.join(', '))}.`
+      : `No L2 program with dial logs is in ${esc(cname)}'s UN M49 sub-region, so all programs are the natural choice.`;
+    const aucCell = t => { if (!t || t.auc === null) return '–'; const [lo, hi] = aucCI(t.auc, t.events, t.n - t.events); return `${nm(t.auc, 2)} <span class="muted">(${nm(lo, 2)}–${nm(hi, 2)})</span>`; };
+    const part = (kind, label) => {
+      const key = LRISK.norm(model, kind, st.risk.base[kind]), b = LRISK.base(model, kind, key), all = c.all[kind].split('+');
+      const chip = ([k, t]) => { const kk = LRISK.norm(model, kind, k); return `<button class="chip ${kk === key ? 'on' : ''}" data-lact="riskbase" data-k="${kind}" data-key="${esc(kk)}">${esc(t)}</button>`; };
+      const groups = [['all', all.length === 2 ? 'Both' : `All ${NUMW[all.length] || all.length}`]].concat(kind === 'dropout' ? c.regions.map(g => [LRISK.keyOf(model, g.programs), g.label]) : []);
+      const singles = all.map(p => [p, `${p}${p === own ? ' (this country)' : ''}`]);
+      const boxes = all.length > 2 ? `<p class="small"><b>Or any group:</b></p><div class="checks">${all.map(p => `<label class="inline"><input type="checkbox" data-lriskprog="${kind}" data-p="${esc(p)}" ${b.programs.includes(p) ? 'checked' : ''}> ${esc(progName(model, p))}</label>`).join('')}</div>` : '';
+      const btns = kind === 'dropout' ? `<p class="small"><b>All or a region:</b></p><div class="filters">${groups.map(chip).join('')}</div>
+        <p class="small"><b>One program:</b></p><div class="filters">${singles.map(chip).join('')}</div>${boxes}`
+        : `<div class="filters">${groups.concat(singles.map(([k, t]) => [k, `${t} alone`])).map(chip).join('')}</div>`;
+      const ev = kind === 'dropout' ? 'losses' : 'returns', rateW = kind === 'dropout' ? 'Loss rate' : 'Return rate';
+      const held = Object.entries(b.held_out);
+      const tests = held.length ? `<table class="grid small"><thead><tr><th>Program it did not learn from</th><th class="num">Household-rounds</th><th class="num">AUC (95% interval)</th><th class="num">${kind === 'dropout' ? 'Losses' : 'Returns'} in the high tier</th><th class="num">${rateW}: model / actual</th></tr></thead><tbody>
+          ${held.map(([p, t]) => `<tr><td>${esc(progName(model, p))}</td><td class="num">${Number(t.n).toLocaleString('en-US')}</td><td class="num">${aucCell(t)}</td><td class="num">${pc(t.capture_high)}</td><td class="num">${pc(t.predicted, 1)} / ${pc(t.rate, 1)}</td></tr>`).join('')}</tbody></table>`
+        : `<p class="muted small">Every program is in it, so none is left to test it on: the model card's tables of each program left out test this model's form on programs it had not seen.</p>`;
+      const ownLine = b.own_rounds ? `<p class="muted small">Fitted on its own earlier rounds, ${esc(b.programs[0])} ranked its later rounds with AUC ${nm(b.own_rounds.auc, 2)} (${R.plural(b.own_rounds.steps, 'round')} tested, ${b.own_rounds.events} ${ev}): the test of a program learning from itself.</p>` : '';
+      const unused = (b.unused || []).map(k => (model[kind].features.find(f => f.key === k) || {}).label || k);
+      return `<h4>${label}</h4>
+        <p>Learns from <b>${esc(baseLabel(model, kind, key))}</b>: ${Number(b.pairs).toLocaleString('en-US')} household-rounds, ${pc(b.rate, 1)} ${kind === 'dropout' ? 'lost' : 'returned'}.${kind === 'return' ? ' Only L2PHL and L2Indo redial almost every missed household, so the return model can learn from them alone; a program in Central Asia uses one or both.' : ''}</p>
+        ${btns}
+        ${unused.length ? `<p class="muted small">Not recorded by these programs, so carrying no weight in this version: ${esc(unused.join('; ').toLowerCase())}.</p>` : ''}
+        ${tests}${ownLine}`;
+    };
+    // the region question, from the backtests: on the programs nearest to this one, left out of training, how each choice did
+    const S = c.region_summary || {}, rows = reg ? (own ? [own].concat(reg.programs.filter(p => p !== own)) : reg.programs) : [];
+    const cell = (t, k) => (t ? `${nm(t.auc, 2)} <span class="muted">· ${pc(t.capture_high)} · ${pc(t.predicted, 1)}</span>` : '–');
+    const better = rows.filter(p => S[p].same_region_test && S[p].same_region_test.auc > S[p].all_others_test.auc).length;
+    const closer = rows.filter(p => S[p].same_region_test && Math.abs(S[p].same_region_test.predicted - S[p].same_region_test.rate) < Math.abs(S[p].all_others_test.predicted - S[p].all_others_test.rate)).length;
+    const nearTable = rows.length ? `<h4>How each choice did on the ${esc(reg.label)} programs, each left out of training</h4>
+      <table class="grid small"><thead><tr><th>Program left out</th><th class="num">Loss rate</th><th class="num">From all the others</th><th class="num">From its own region only</th><th class="num">From the other region only</th><th>Best single program</th></tr></thead><tbody>
+      ${rows.map(p => { const x = S[p]; return `<tr><td>${esc(progName(model, p))}${p === own ? ' <span class="tag">this country</span>' : ''}</td><td class="num">${pc(x.all_others_test.rate, 1)}</td><td class="num">${cell(x.all_others_test)}</td><td class="num">${cell(x.same_region_test)}</td><td class="num">${cell(x.other_region_test)}</td><td>${esc(x.best_single)} <span class="muted">${nm(x.best_single_test.auc, 2)}</span></td></tr>`; }).join('')}</tbody></table>
+      <p class="muted small">Each cell: AUC · losses in the high tier · the loss rate the model gives. From its own region only, the model ranked the left-out program better than the model from all the others in ${better} of ${rows.length} ${rows.length === 1 ? 'program' : 'programs'}, and gave a loss rate closer to the actual one in ${closer} of ${rows.length}. The ranking is what the tiers use, so more programs help more than nearer ones; the rate matters only once chances are shown, which the tool does after recalibrating on this program's own rounds. The model card has the same test for every program.</p>` : '';
+    return `<section class="lcard"><h3>Which programs the models learn from</h3>
+      <p>${near} Each model can learn from all programs, from one region, from one program, or from any group: tick the programs, or pick a preset. Every version was fitted on the handbook's tables like the bundled model, and tested on the programs it leaves out (below). Changing it changes which households rank high; a recalibration on this program's own rounds is then fitted again, after a new backtest. The choice is saved with the session and logged.</p>
+      ${nearTable}${part('dropout', 'Dropout risk')}${part('return', 'Return likelihood')}</section>`;
+  }
+  function setRiskBase(kind, key) {
+    const model = LRISK.model(), k = LRISK.norm(model, kind, key), prev = st.risk.base[kind] || 'all';
+    if (k === prev) return render();
+    const was = st.risk[kind].kind;
+    st.risk.base[kind] = k;
+    if (was === 'recalibrated') st.risk[kind] = { kind: 'pooled' };
+    ui['bt_' + kind] = null;
+    logEv('risk_base_switched', { model: kind, from: prev, to: k, programs: (LRISK.base(model, kind, k) || {}).programs || [], recalibration_dropped: was === 'recalibrated' ? true : undefined });
+    cache.r = undefined;
+    toast(`${kind === 'dropout' ? 'Dropout risk' : 'Return likelihood'} now learns from ${baseLabel(model, kind, k)}.${was === 'recalibrated' ? ' Its recalibration was fitted to the earlier version, so the model as trained is in use again: backtest before recalibrating.' : ''}`, 'ok');
+    render();
   }
   function riskList(kind, r) {
     const list = r[kind], v = st.risk[kind], cal = calibrated(kind);
@@ -1433,7 +1561,8 @@
   }
   // the bundled model, named by what it was trained on: six programs for dropout, two for return
   const NUMW = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-  const trainedName = (r, kind) => { const k = Object.keys((r.model[kind] || {}).n || {}).length; return `the model as trained on ${NUMW[k] || k} programs`; };
+  const trainedName = (r, kind) => (LRISK.cal(r.model) ? `the model as trained on ${baseLabel(r.model, kind, st.risk.base[kind])}`
+    : (k => `the model as trained on ${NUMW[k] || k} programs`)(Object.keys((r.model[kind] || {}).n || {}).length));
   const ownRounds = (r, kind) => new Set(r.own[kind].map(p => p._.outcome)).size;
   // a 95% interval for an AUC (Hanley and McNeil, 1982), from the number of events and non-events tested
   const aucCI = (a, n1, n0) => {
@@ -1481,10 +1610,11 @@
       const ex = LRISK.explain(kind, s);
       return { model: kind, round: r.c, hhid: s.row._.hhid, enumerator_id: (r.holder.get(s.row._.hhid) || {}).e || '', tier: s.tier,
         relative_to_round_average: s.relative === null ? '' : s.relative.toFixed(2), chance: cal ? s.p.toFixed(3) : '', model_version: st.risk[kind].kind,
+        learned_from: ((LRISK.base(r.model, kind, st.risk.base[kind]) || {}).programs || []).join(' '),
         driver_1: ex[0] ? `${ex[0].text} (${ex[0].up ? '+' : '-'})` : '', driver_2: ex[1] ? `${ex[1].text} (${ex[1].up ? '+' : '-'})` : '', driver_3: ex[2] ? `${ex[2].text} (${ex[2].up ? '+' : '-'})` : '' };
     });
     const name = `${st.program}_R${p2(r.c)}_risk_${kind}.csv`;
-    sh().download(name, R.toCSV(rows, ['model', 'round', 'hhid', 'enumerator_id', 'tier', 'relative_to_round_average', 'chance', 'model_version', 'driver_1', 'driver_2', 'driver_3']), 'text/csv');
+    sh().download(name, R.toCSV(rows, ['model', 'round', 'hhid', 'enumerator_id', 'tier', 'relative_to_round_average', 'chance', 'model_version', 'learned_from', 'driver_1', 'driver_2', 'driver_3']), 'text/csv');
     logEv('exported', { file: name });
   }
 
@@ -1555,9 +1685,18 @@
       case 'logmore': ui.logMore += 300; render(); break;
       case 'rkfilter': ui['rk_' + el.dataset.k] = el.dataset.f; render(); break;
       case 'riskcsv': riskCSV(el.dataset.k); break;
-      case 'backtest': { const r = riskData(); ui['bt_' + el.dataset.k] = LRISK.backtest(r.model, r.X, el.dataset.k); logEv('risk_backtest', { model: el.dataset.k }); render(); break; }
+      case 'riskbase': setRiskBase(el.dataset.k, el.dataset.key); break;
+      case 'hqforget': st.platform.hq = null; logEv('suso_hq_logins_forgotten', {}); invalidate(); render(); break;
+      case 'susoundo': { const u = st.platform.uploads[+el.dataset.i]; if (!u) break; u.undone = true; logEv('suso_upload_undone', { file: u.file, at: u.at, assignments: u.hhids.length }); invalidate(); toast(`${u.file} is no longer counted as in Headquarters: its households are offered again in step 4.`, 'ok'); render(); break; }
+      case 'susomarkall': {
+        const M = st.manifest; if (!M) break;
+        const ids = L.susoTargets(M).map(t => t.hhid);
+        st.platform.uploads.push({ at: R.localISO(R.now()), by: st.leader, file: 'uploaded before this session', hhids: ids, layout: st.platform.out.layout, manual: true });
+        logEv('suso_upload_recorded', { file: 'uploaded before this session', assignments: ids.length, manual: true }); invalidate(); render(); break;
+      }
+      case 'backtest': { const r = riskData(); ui['bt_' + el.dataset.k] = LRISK.backtest(r.model, r.X, el.dataset.k, r.spec[el.dataset.k]); logEv('risk_backtest', { model: el.dataset.k, learned_from: st.risk.base[el.dataset.k] }); render(); break; }
       case 'usever': {
-        const r = riskData(), k = el.dataset.k, v = LRISK.fitVersion(r.model, r.X, k, el.dataset.v);
+        const r = riskData(), k = el.dataset.k, v = LRISK.fitVersion(r.model, r.X, k, el.dataset.v, r.spec[k]);
         st.risk[k] = Object.assign(v, { at: R.localISO(R.now()), by: st.leader });
         logEv('risk_model_switched', { model: k, version: v.kind, fitted_on: v.fitted_on, events: v.events });
         cache.r = undefined; render(); break;
@@ -1600,6 +1739,24 @@
       logEv('history_opened', { files: t.files.length }); invalidate(); stale(); suggestFromHistory(); invalidate(); return render();
     }
     if ((t.id === 'lf-imports' || t.id === 'lf-platform' || t.id === 'lf-suso') && t.files.length) return addImports([...t.files]);
+    if (t.id === 'lf-hqusers' && file) {
+      const res = L.readHqUsers(file.name, await file.text());
+      t.value = '';
+      if (res.error) { toast(`${file.name}: ${res.error}`, 'warn'); return render(); }
+      const M = st.manifest, ids = M ? M.enumerators.map(e => e.enumerator_id) : st.team.map(x => x.id);
+      const codeOf = L.codeOf(M || { enumerators: st.team.map(x => ({ enumerator_id: x.id, platform_id: x.platform_id })) }, st.platform.codes);
+      const m = L.matchLogins(ids, codeOf, res.logins);
+      m.fixed.forEach(f => {                                   // Headquarters' spelling first (reading the export ignores case anyway)
+        const rest = L.codeList(st.platform.codes[f.id] || '').filter(x => x !== f.from && x !== f.to);
+        st.platform.codes[f.id] = [f.to].concat(rest).join(', ');
+        const tm = st.team.find(x => x.id === f.id); if (tm && !M) tm.platform_id = f.to;
+      });
+      st.platform.hq = { file: file.name, at: R.localISO(R.now()), by: st.leader, logins: res.logins.map(u => ({ login: u.login, supervisor: u.supervisor })), fixed: m.fixed };
+      logEv('suso_hq_logins', { file: file.name, interviewers: res.logins.length, corrected: m.fixed.map(f => f.id), missing: m.missing.map(x => x.id) });
+      invalidate();
+      toast(`Headquarters lists ${R.plural(res.logins.length, 'interviewer')}${m.fixed.length ? `; ${R.plural(m.fixed.length, 'login')} corrected to its spelling` : ''}${m.missing.length ? `; ${m.missing.length} not in it` : ''}.`, m.missing.length ? 'warn' : 'ok');
+      return render();
+    }
     if (t.id === 'lf-manifest' && file) {
       let o; try { o = JSON.parse(await sh().readText(file)); } catch (x) { return toast(`${file.name} is not readable JSON.`, 'warn'); }
       if (!L.validManifest(o)) return toast(`${file.name} is not a round manifest.`, 'warn');
@@ -1626,6 +1783,13 @@
     if (t.dataset.lattr !== undefined) { const x = st.team[+t.dataset.lattr]; x.attrs = x.attrs || {}; x.attrs[t.dataset.c] = t.value.trim(); logEv('enumerator_values', { id: x.id, criterion: t.dataset.c, values: L.splitVals(t.value) }); stale(); return render(); }
     if (t.dataset.lvisit !== undefined) { const h = t.dataset.lvisit, q = ui.visits.get(h) || { hhid: h }; q.outcome = t.value || undefined; ui.visits.set(h, q); return render(); }
     if (t.dataset.lvisitnote !== undefined) { const h = t.dataset.lvisitnote, q = ui.visits.get(h) || { hhid: h }; q.note = t.value.trim(); ui.visits.set(h, q); return; }
+    if (t.dataset.lriskprog !== undefined) {
+      const kind = t.dataset.lriskprog, model = LRISK.model(), cur = LRISK.base(model, kind, st.risk.base[kind]);
+      const set = new Set(cur ? cur.programs : []);
+      if (t.checked) set.add(t.dataset.p); else set.delete(t.dataset.p);
+      if (!set.size) { toast('Keep at least one program: the model has to learn from somewhere.', 'warn'); return render(); }
+      return setRiskBase(kind, LRISK.keyOf(model, [...set]));
+    }
     if (t.dataset.lsuso !== undefined) { const k = t.dataset.lsuso; st.platform.out[k] = k === 'quantity' ? parseInt(t.value, 10) : t.value.trim(); logEv('suso_setting', { [k]: st.platform.out[k] }); return render(); }
     if (t.dataset.lsusolevel !== undefined) { const q = t.dataset.lsusolevel; if (t.value) st.platform.suso[q] = t.value; else delete st.platform.suso[q]; ui.map = null;
       logEv('suso_calls_level', { questionnaire: q, level: t.value || null }); invalidate(); return render(); }

@@ -111,6 +111,30 @@ Rolling origin: at each round, only the rounds whose outcomes were already known
 | L2PHL | 1,405 | 59.1% | 0.61 | 0.55 | 0.3916 / 0.2418 | 0.59 | 0.2326 / 0.2376 | 74.5% (68.2%–80.0%) | 56.4% (53.6%–59.2%) |
 | L2Indo | 1,675 | 36.1% | 0.60 | 0.57 | 0.3738 / 0.2306 | 0.62 | 0.2254 / 0.2272 | 52.2% (46.0%–58.4%) | 33.3% (30.9%–35.7%) |
 
+## Which programs the model learns from
+
+The leader chooses what each model learns from: all the programs (the default, the model above), one UN M49 sub-region (Central Asia (UN M49 143): L2CU, L2T, L2KGZ, L2Kaz; South-eastern Asia (UN M49 035): L2PHL, L2Indo), one program, or any group. Every combination was fitted like the bundled model, on the same tables: 63 versions of the dropout model and 3 of the return model. Each is tested on every program it leaves out, and the tool shows those tests beside the choice.
+
+### Does the region matter? Each program left out, learned from the others in three ways
+
+| Program left out | Loss rate | From all the others | From its own region only | From the other region only | Best single program (AUC) | Worst single program (AUC) |
+|---|---|---|---|---|---|---|
+| L2CU | 1.0% | 0.72 · 41% · 3.2% | 0.70 · 39% · 2.5% | 0.72 · 41% · 8.3% | L2KGZ 0.72 | L2PHL 0.69 |
+| L2T | 6.8% | 0.75 · 42% · 4.3% | 0.75 · 42% · 3.8% | 0.76 · 43% · 13.5% | L2PHL 0.75 | L2CU 0.72 |
+| L2KGZ | 3.0% | 0.72 · 44% · 3.5% | 0.71 · 45% · 3.1% | 0.73 · 45% · 11.8% | L2T 0.73 | L2Kaz 0.70 |
+| L2Kaz | 9.1% | 0.75 · 35% · 3.8% | 0.74 · 34% · 3.5% | 0.73 · 35% · 13.6% | L2T 0.74 | L2Indo 0.70 |
+| L2PHL | 22.9% | 0.72 · 29% · 10.0% | 0.67 · 28% · 27.7% | 0.72 · 29% · 8.7% | L2T 0.72 | L2Indo 0.67 |
+| L2Indo | 15.3% | 0.69 · 31% · 4.4% | 0.69 · 31% · 13.9% | 0.69 · 31% · 4.2% | L2T 0.70 | L2CU 0.66 |
+
+Each cell: AUC · losses in the high tier · the loss rate the model gives (the program's actual rate is in the second column). Learned from its own region only, the model ranked the left-out program better than the model learned from all the others in 1 of 6 programs (L2Indo), and as well or better from the other region only in 4 of 6. So the ranking, which is what the tiers use, does not improve by staying within a region: more programs help more than nearer ones. The level does: from its own region the model's loss rate was closer to the actual one in 4 of 6 programs. The level matters only once chances are shown, and the tool shows them after recalibrating on the program's own rounds, whatever the version. The model from all programs therefore stays the default; a region, a single program or a group is offered for a leader who wants the programs nearest to theirs, with its own tests beside it.
+
+A program learning from itself: fitted on its own earlier rounds, each program ranked its later rounds with AUC L2CU 0.74, L2T 0.73, L2KGZ 0.72, L2Kaz 0.75, L2PHL 0.72, L2Indo 0.68 (the rolling-origin test above). A single-program version is that model fitted on every round, for a new panel in the same country.
+
+A version learns nothing about a feature its programs do not record: L2CU, a refusal last round before the interview; L2T, a number not working or switched off last round, a refusal last round before the interview; L2KGZ, a number not working or switched off last round, a refusal last round before the interview; L2Indo, length of the last interview (minutes). The tool lists such features beside the choice.
+
+The return model can learn from L2PHL, L2Indo or both: the two programs that redial almost every missed household. Its tests, each trained on one and tested on the other, are the table above. The tier rule decided on the tests of the model from all programs applies to every version.
+
+
 ## Where the models do poorly
 
 - **Levels do not carry between programs.** Loss rates range from 1.0% to 22.9%. Applied as it is to a program it has not seen, the dropout model ranks households usefully but its chances are off: in three of the six programs its Brier score is worse than having no model. The tool therefore shows a new program only the tier and how far a household is above the round's average, and shows a chance only after recalibrating on the program's own rounds.
@@ -125,4 +149,5 @@ Rolling origin: at each round, only the rounds whose outcomes were already known
 - **Tiers, tied to workload.** Within the round, the top 15% of households by score are high, the next 35% medium, the rest low. The dropout model keeps high, medium, low: no two adjacent tiers' 95% intervals overlapped in any held-out test of the model as trained or recalibrated. For the return model the medium and low tiers overlapped in L2PHL's rolling-origin test of the recalibrated model (60.5% and 57.0%), so its tiers are merged to high and low, the low tier taking the rest. The program-only refit is tested separately, on the program's own rounds, before the tool offers it.
 - **Leader only.** Enumerators never see a household's tier. The tier is not written into assignment files; it only moves high tier households earlier in the plan of first dials, as Section 3.4's box asks.
 - **Features behind the score.** The three groups of features that move the score most, with the household's own values.
+- **What it learns from.** All programs by default; a region, one program or any group on the leader's choice, with that version's tests on the programs it leaves out. The choice is saved with the session, logged, and written into the risk list.
 - **The program's own data.** After two rounds with outcomes, the tool offers a recalibration, backtested on the program's own rounds; after about 300 own losses, a refit. The leader switches only after seeing the backtest, and the card says which version is active.

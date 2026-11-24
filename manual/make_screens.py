@@ -274,7 +274,10 @@ def main():
         crop("l12_analytics", ["__card('Continuation and retention')"], max_h=700)
         crop("l13_analytics_effort", ["__card('Dials per complete')"], max_h=760)
         b.click('[data-lact="tab"][data-t="risk"]'); time.sleep(0.5)
-        crop("l14_risk", ["__card('Risk lists, for the leader only')", "__card('Dropout risk:')"], max_h=900)
+        crop("l14_risk", ["__card('Dropout risk:')"], max_h=760)
+        b.click('[data-lact="riskbase"][data-k="dropout"][data-key="L2CU+L2T+L2KGZ+L2Kaz"]'); time.sleep(0.4)
+        crop("l14b_learns", ["__card('Which programs the models learn from')"], max_h=1150)
+        b.click('[data-lact="riskbase"][data-k="dropout"][data-key="all"]'); time.sleep(0.4)
         b.click('[data-lact="backtest"][data-k="dropout"]'); b.wait("!!LEAD.ui.bt_dropout", timeout=60)
         crop("l15_backtest", ["__card(\"This program's own data\")"], max_h=760)
         b.click('[data-lact="save"]'); b.wait("APP.modal")
@@ -376,6 +379,9 @@ def main():
         b.set_files("#lf-suso", [os.path.join(S, "suso", "rtm_call_record_1_Tabular_All.zip")])
         b.wait("LEAD.state().imports.length >= 4"); time.sleep(0.5)
         crop("d2_suso_import", ["__card('3 · Each day')"], hls=["document.querySelector('#lf-suso').parentElement"], max_h=900)
+        if b.js("!!document.querySelector('[data-lact=\"susomarkall\"]')"):
+            b.click('[data-lact="susomarkall"]'); time.sleep(0.4)
+        crop("d4_suso_follow", ["__card('4 · During the round')"], max_h=1100)
         # an export the tool does not know: one interview per call attempt, beside a household roster
         import zipfile as _zip, datetime as _dt
         own_zip = os.path.join(WORK, "phone_survey_1_Tabular_All.zip")

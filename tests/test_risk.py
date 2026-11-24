@@ -190,6 +190,88 @@ def main():
         b.click('[data-lact="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("!LEAD.state()")
         b.set_files("#lf-project", [fp]); b.wait("!!LEAD.state()")
         check("the model version in use is saved with the leader session and restored", b.js("LEAD.state().risk.dropout.kind") == "recalibrated" and close(b.js("LEAD.state().risk.dropout.a"), js["cal"]["a"], 1e-9))
+
+        # ---- which programs the models learn from: all, a region, one program, any group (train_risk.py, calibrations) ----
+        CAL = MJ["calibrations"]
+        dk_ = [f["key"] for f in MJ["dropout"]["features"]]
+        allk = CAL["all"]["dropout"]
+        check("every combination of the six programs is bundled for dropout (63) and of the two for return (3), each with one coefficient, mean and SD per feature and a test on every program it leaves out",
+              len(CAL["dropout"]) == 63 and len(CAL["return"]) == 3
+              and all(len(v["coef"]) == len(dk_) == len(v["mean"]) == len(v["sd"]) and sorted(v["held_out"]) == sorted(set(CAL["all"]["dropout"].split("+")) - set(v["programs"])) for v in CAL["dropout"].values())
+              and all(len(v["coef"]) == len(MJ["return"]["features"]) for v in CAL["return"].values()))
+        check("the combination of all six is the bundled model (to six significant digits), and the regions are the UN M49 sub-regions of the programs' countries",
+              all(close(a, f["coef"], 1e-5) for a, f in zip(CAL["dropout"][allk]["coef"], MJ["dropout"]["features"]))
+              and {r["key"]: r["programs"] for r in CAL["regions"]} == {"central_asia": ["L2CU", "L2T", "L2KGZ", "L2Kaz"], "south_eastern_asia": ["L2PHL", "L2Indo"]}
+              and all(p["country"] in next(r["countries"] for r in CAL["regions"] if r["key"] == p["region"]) for p in CAL["programs"]))
+        def spec_of(kind, key):
+            v = CAL[kind][key]
+            return {"mean_intercept": v["mean_intercept"], "features": [dict(f, mean=v["mean"][j], sd=v["sd"][j], coef=v["coef"][j]) for j, f in enumerate(MJ[kind]["features"])]}
+        lp_js = json.loads(b.js("""(() => { const m = LRISK.model(), L = LCORE;
+            const H = L.buildHistory(LEAD.state().inputs.history.map(f => L.readHistoryFile(f.name, f.text)), {tz: 'Asia/Ulaanbaatar'});
+            const input = []; for (const [r, ds] of H.dials) ds.forEach(x => input.push({hhid: x.hhid, round: r, wall: x.wall, status: x.status, cmp_code: x.cmp, dur: x.dur, operator: x.operator}));
+            const X = LRISK.facts(LSTATS.build(input), m), out = {};
+            for (const key of ['L2CU+L2T+L2KGZ+L2Kaz', 'L2PHL', 'L2T+L2Indo']) { const sp = LRISK.spec(m, 'dropout', key); out[key] = {};
+              for (const f of X.F.values()) { if (!f.completed) continue; const d = LRISK.dropoutRow(m, X, f.hhid, f.round); if (d) out[key][f.hhid + '|' + f.round] = LRISK.score(sp, [d], {kind: 'pooled'})[0].lp; } }
+            const sr = LRISK.spec(m, 'return', 'L2Indo'), rr = {};
+            for (const f of X.F.values()) { if (!f.completed) continue; const r = LRISK.returnRow(m, X, f.hhid, f.round); if (r) rr[f.hhid + '|' + f.round] = LRISK.score(sr, [r], {kind: 'pooled'})[0].lp; }
+            out.ret = rr; return JSON.stringify(out); })()"""))
+        bad = [(key, k) for key in ("L2CU+L2T+L2KGZ+L2Kaz", "L2PHL", "L2T+L2Indo") for k, row in py_d.items() if not close(ref_risk.lp(spec_of("dropout", key), row), lp_js[key].get(k), 1e-9)]
+        bad += [("ret", k) for k, row in py_r.items() if not close(ref_risk.lp(spec_of("return", "L2Indo"), row), lp_js["ret"].get(k), 1e-9)]
+        check("scores of a region, a single program and a cross-region group (and of L2Indo's return model) equal those versions applied in Python, for every household-round", not bad, bad[:5])
+        b.click('[data-lact="tab"][data-t="risk"]'); time.sleep(0.3)
+        card = b.js("[...document.querySelectorAll('.lcard')].find(c => /Which programs the models learn from/.test(c.innerText)).innerText")
+        check("the choice card says the program's country (Mongolia) has no L2 program in its UN M49 sub-region, and the default is all six programs",
+              "No L2 program with dial logs is in Mongolia" in card and "Learns from all six programs" in card and b.js("LEAD.state().risk.base.dropout") == "all")
+        ca = "L2CU+L2T+L2KGZ+L2Kaz"
+        b.click(f'[data-lact="riskbase"][data-k="dropout"][data-key="{ca}"]'); b.wait(f"LEAD.state().risk.base.dropout === '{ca}'")
+        ev = b.js("LEAD.state().events.filter(e => e.what === 'risk_base_switched')")
+        txt = b.js("document.querySelector('.panel').innerText")
+        check("choosing Central Asia switches the dropout model, drops the recalibration fitted to the earlier version, and logs who, when and which programs",
+              b.js("LEAD.state().risk.dropout.kind") == "pooled" and ev and ev[-1]["to"] == ca and ev[-1]["programs"] == ["L2CU", "L2T", "L2KGZ", "L2Kaz"] and ev[-1].get("recalibration_dropped") is True and ev[-1]["logged_by"] == "L01"
+              and "Model in use: the model as trained on Central Asia (L2CU, L2T, L2KGZ, L2Kaz)" in txt, [ev[-1:] if ev else None])
+        held = CAL["dropout"][ca]["held_out"]
+        check("its tests on the programs it left out are shown: L2PHL and L2Indo with the bundled AUC and the losses in the high tier",
+              all(f"{held[p]['auc']:.2f}" in txt for p in ("L2PHL", "L2Indo")) and "Program it did not learn from" in txt and "L2PHL (Philippines)" in txt, [held])
+        spec_ca = spec_of("dropout", ca)
+        cand = sorted([(ref_risk.lp(spec_ca, row), k.split("|")[0]) for k, row in py_d.items() if k.endswith("|4") and k.split("|")[0] in mains], key=lambda x: (-x[0], x[1]))
+        n = len(cand)
+        py_ca = {h: ("high" if (i + 1) / n <= 0.15 else "medium" if (i + 1) / n <= 0.5 else "low") for i, (_, h) in enumerate(cand)}
+        js_ca = {h: t for h, t in b.js("LEAD.riskData().dropout.map(s => [s.row._.hhid, s.tier])")}
+        check("the tiers are those of the Central Asia version: the same rule on its scores", js_ca == py_ca and js_ca != py_tiers, [[h for h in py_ca if js_ca.get(h) != py_ca[h]][:5]])
+        def tick(p, on):
+            b.js(f"""(() => {{ const el = document.querySelector('[data-lriskprog="dropout"][data-p="{p}"]'); el.checked = {str(on).lower()}; el.dispatchEvent(new Event('change', {{bubbles: true}})); return true; }})()"""); time.sleep(0.2)
+        for p in ("L2T", "L2KGZ", "L2Kaz"):
+            tick(p, False)
+        check("unticking programs builds any group: Central Asia less three programs is L2CU alone, with L2CU's own-rounds test shown",
+              b.js("LEAD.state().risk.base.dropout") == "L2CU" and "Fitted on its own earlier rounds, L2CU ranked its later rounds" in b.js("document.querySelector('.panel').innerText"))
+        tick("L2CU", False)
+        check("the last program cannot be unticked: a model has to learn from somewhere", b.js("LEAD.state().risk.base.dropout") == "L2CU")
+        tick("L2PHL", True)
+        check("a group across regions is a combination of its own (L2CU and L2PHL)", b.js("LEAD.state().risk.base.dropout") == "L2CU+L2PHL")
+        unused_t = CAL["dropout"]["L2T"]["unused"]
+        b.click('[data-lact="riskbase"][data-k="dropout"][data-key="L2T"]'); b.wait("LEAD.state().risk.base.dropout === 'L2T'")
+        check("a version names the features its programs do not record (L2T: numbers and refusals carry no weight)",
+              unused_t == ["number_problem", "refusal"] and "Not recorded by these programs, so carrying no weight in this version" in b.js("document.querySelector('.panel').innerText"))
+        b.click('[data-lact="riskbase"][data-k="return"][data-key="L2Indo"]'); b.wait("LEAD.state().risk.base.return === 'L2Indo'")
+        rt = CAL["return"]["L2Indo"]["held_out"]["L2PHL"]
+        check("the return model learns from L2PHL, L2Indo or both; learned from L2Indo, it is tested on L2PHL", f"{rt['auc']:.2f}" in b.js("document.querySelector('.panel').innerText"), rt)
+        before = {p: os.path.getmtime(p) for p in glob.glob(os.path.join(DL, "*"))}
+        b.click('[data-lact="riskcsv"][data-k="dropout"]')
+        t0 = time.time(); f = None
+        while time.time() - t0 < 15 and not f:
+            f = next((p for p in glob.glob(os.path.join(DL, "*_risk_dropout*.csv")) if p not in before or os.path.getmtime(p) > before[p]), None); time.sleep(0.2)
+        rows = list(csv.DictReader(open(f, encoding="utf-8"))) if f else []
+        check("the risk list says which programs the model learned from", rows and all(r["learned_from"] == "L2T" for r in rows))
+        before = {p: os.path.getmtime(p) for p in glob.glob(os.path.join(DL, "*"))}
+        b.click('[data-lact="save"]'); b.wait("APP.modal"); b.click('[data-act="modalok"]')
+        t0 = time.time(); fp = None
+        while time.time() - t0 < 15 and not fp:
+            fp = next((p for p in glob.glob(os.path.join(DL, "leader_*.json")) if p not in before or os.path.getmtime(p) > before[p]), None); time.sleep(0.2)
+        b.click('[data-lact="close"]'); b.wait("APP.modal"); b.js("(document.querySelector('[data-act=\"modalalt\"]') || document.querySelector('[data-act=\"modalok\"]')).click(); true"); b.wait("!LEAD.state()")
+        b.set_files("#lf-project", [fp]); b.wait("!!LEAD.state()")
+        check("the programs each model learns from are saved with the session and restored", b.js("JSON.stringify(LEAD.state().risk.base)") == json.dumps({"dropout": "L2T", "return": "L2Indo"}, separators=(",", ":")))
+        b.click('[data-lact="tab"][data-t="risk"]'); time.sleep(0.3)
+        b.shot(os.path.join(SCREENS, "risk_03_learns_from.png"), full=True)
     finally:
         b.close()
     passed = sum(ok for _, ok in results)

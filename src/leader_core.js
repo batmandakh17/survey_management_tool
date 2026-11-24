@@ -901,13 +901,17 @@
         const prof = xc ? Object.assign({}, f.profile, { codes: Object.assign({}, f.profile.codes, xc) }) : f.profile, roundCol = (prof.columns || {}).round;
         // a layout of another kind (an interview form without its attempts, saved by an earlier version) is not read
         if (prof.kind !== 'calls') { extra.push({ name: f.name, kind: prof.name, enumerator_id: '', exported_at: '', count: f.rows.length, use: 'not merged: the tool reads platform files with one row per call attempt' }); continue; }
-        let otherRound = 0, noSlot = 0, noId = 0;
+        let otherRound = 0, before = 0, noSlot = 0, noId = 0;
         const recs = [];
+        // a platform export is cumulative: without a round value, a call that starts before the round window is an earlier round's
+        const w0 = M.calendar && M.calendar.window_start ? R.zoned(M.calendar.window_start, 0, 0, tz).getTime() : 0;
+        const startMs = v => { const p = isoParts(v); return p.wall ? Date.parse(p.wall.replace(' ', 'T') + (p.off || (tz ? offsetAt(p.wall, tz) : ''))) || 0 : 0; };
         f.rows.forEach((r0, i) => {
           const r = stdRecord(prof, r0, M);
           // a Survey Solutions interview can change hands: each call goes to the interviewer who held the interview when it started
           if (f.suso && f.suso.timeline && (prof.columns || {}).enumerator === 'suso__interviewer') { const w = susoWho(f.suso.timeline.get(r0.interview__id), r.call_start, tz); if (w) r.enumerator = w; }
           if (roundCol && r.round && +r.round !== +M.round) { otherRound++; return; }
+          if (!(roundCol && r.round) && w0) { const t = startMs(r.call_start) || startMs(r.call_end); if (t && t < w0) { before++; return; } }
           if (r.phone && !r.phone_slot) { const s = slots.find(r.phone); if (s && s.hhid === r.hhid) r.phone_slot = String(s.slot); else noSlot++; }
           if (!r.hhid) { noId++; return; }
           const e = enumOf(r.enumerator);
@@ -915,7 +919,8 @@
           const loggedAt = loggedOf(r.logged_at, r);
           recs.push({ r, e, eid, loggedAt, when: Date.parse(loggedAt) || stamp(r.call_end) || stamp(r.call_start) });
         });
-        const so = f.suso, left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : '',
+        const so = f.suso, left = [otherRound ? `${R.plural(otherRound, 'row')} of other rounds left out` : '',
+          before ? `${R.plural(before, 'row')} from before the round window left out (the layout has no round column, so they are taken as earlier rounds' calls)` : '', noId ? `${R.plural(noId, 'row')} without a household ID left out` : '', noSlot ? `${noSlot} dialed numbers not in the household list` : '',
           so && so.orphans ? `${R.plural(so.orphans, 'row')} without their interview left out` : '', so && !so.actions && !so.diagnostics ? 'no interview__actions file: each record goes to the interview\'s own interviewer column' : ''].filter(Boolean);
         const parts = emit(f, prof.id, recs);
         extra.push({ name: f.name, kind: prof.name, suso: so ? 1 : undefined, enumerator_id: '', exported_at: '', count: f.rows.length, use: `${so ? `${R.plural(so.interviews, 'interview')}, ` : ''}${R.plural(recs.length, 'call record')}, split into ${R.plural(parts, 'export')} by enumerator${left.length ? `; ${left.join('; ')}` : ''}` });
@@ -1060,7 +1065,7 @@
         if (code === L.SUSO_ACTION.completed) { done = a.ms; if (isInterviewer(a.role) && a.originator) doneBy = String(a.originator).trim(); }
         if (code === L.SUSO_ACTION.received && !received) received = a.ms;
       });
-      info.set(id, { tl, started: first, completed: done, received, by: doneBy || (tl.length ? tl[tl.length - 1][1] : ''), responsible: '', minutes: '', status: '', interviewers: '' });
+      info.set(id, { tl, started: first, completed: done, received, first: as.length ? as[0].ms : 0, by: doneBy || (tl.length ? tl[tl.length - 1][1] : ''), responsible: '', minutes: '', status: '', interviewers: '' });
     }
     (diags || []).forEach(d => {
       const x = info.get(d.interview__id) || { tl: [], started: 0, completed: 0, by: '' };
@@ -1124,12 +1129,12 @@
     return { rows, orphans, deleted };
   };
   // what the export says of its interviews: by status, with errors, held by more than one interviewer, rejected (with the household when known)
-  const susoSummary = (g, info, hhOf) => {
+  const susoSummary = (g, info, hhOf, keep) => {
     const status = {}, rejected = [];
     let errors = 0, handovers = 0;
     g.main.rows.forEach(m => {
       const st_ = String(m.interview__status).trim(), lab = L.SUSO_STATUS[st_] || st_ || 'unknown';
-      if (st_ === '-1') return;
+      if (st_ === '-1' || (keep && !keep(m))) return;
       status[lab] = (status[lab] || 0) + 1;
       if (String(m.has__errors).trim() === '1') errors++;
       const i = info.get(m.interview__id) || {};
@@ -1161,7 +1166,21 @@
       meta.received = new Map([...info].filter(([, x]) => x.received).map(([id, x]) => [id, x.received]));
       meta.assign = assignIndex(g.assigns);
       meta.orphans = T.orphans; meta.deleted = T.deleted;
-      // the interviews each household has, for the list of moves (step 4), and the export's summary (step 3)
+      // this round's interviews only: one questionnaire may serve every round, and its export is then cumulative. By the round
+      // column when the layout has one, else by the interview's first action (on or after the round window's first day)
+      const rc = prof && prof.columns && prof.columns.round, tz = M && M.calendar && M.calendar.time_zone;
+      const w0 = M && M.calendar && M.calendar.window_start ? R.zoned(M.calendar.window_start, 0, 0, tz).getTime() : 0;
+      const inRound = m => {
+        const v = rc && m[rc] !== undefined ? String(m[rc]).trim() : '';
+        if (v) return +v === +M.round;
+        const i = info.get(m.interview__id);
+        return !i || !i.first || !w0 || i.first >= w0;
+      };
+      const live = g.main.rows.filter(m => String(m.interview__status).trim() !== '-1');
+      meta.otherRounds = live.filter(m => !inRound(m)).length;
+      meta.interviews = live.length - meta.otherRounds + (g.main.rows.length - live.length);
+      meta.roundBy = rc && g.main.header.includes(rc) ? 'column' : 'date';
+      // the interviews each household has, for the lists of step 4, and the export's summary (step 3)
       const hc = prof && prof.columns && prof.columns.hhid;
       if (hc) {
         const seen = new Set();
@@ -1169,13 +1188,13 @@
         // from the main file when it carries the household ID: an interview opened without a call yet has no roster row,
         // and it must still be found for the list of moves (seen on a live server: a reassigned interview with no answer)
         const src = level !== 'main' && g.main.header.includes(hc)
-          ? g.main.rows.filter(m => String(m.interview__status).trim() !== '-1').map(m => { const i = info.get(m.interview__id) || {}; const st_ = String(m.interview__status == null ? '' : m.interview__status).trim();
+          ? live.filter(inRound).map(m => { const i = info.get(m.interview__id) || {}; const st_ = String(m.interview__status == null ? '' : m.interview__status).trim();
               return { [hc]: m[hc], interview__key: m.interview__key, interview__id: m.interview__id, assignment__id: m.assignment__id, suso__status: L.SUSO_STATUS[st_] || st_, suso__responsible: i.responsible || '', suso__interviewer: i.by || '' }; })
-          : T.rows;
+          : T.rows.filter(inRound);
         src.forEach(r => { const h = String(r[hc] || '').trim(), k = r.interview__key || r.interview__id; if (!h || seen.has(k)) return; seen.add(k);
           (meta.byHH[h] = meta.byHH[h] || []).push({ key: k, iid: r.interview__id, assignment: r.assignment__id || '', status: r.suso__status, responsible: r.suso__responsible || r.suso__interviewer }); });
       }
-      meta.summary = susoSummary(g, info, hc && level === 'main' ? m => String(m[hc] || '').trim() : hc ? m => { const r = T.rows.find(x => x.interview__id === m.interview__id); return r ? String(r[hc] || '').trim() : ''; } : null);
+      meta.summary = susoSummary(g, info, hc && level === 'main' ? m => String(m[hc] || '').trim() : hc ? m => { const r = T.rows.find(x => x.interview__id === m.interview__id); return r ? String(r[hc] || '').trim() : ''; } : null, inRound);
       const name = `${g.label} › ${level === 'main' ? 'interviews' : level}`;
       out.push(Object.assign({ name, sha, base: name, header, rows: T.rows, count: T.rows.length, delimiter: '\t', enumerator_id: '', exported_at: '', suso: meta },
         prof ? { kind: 'platform', profile: prof } : { kind: 'unmapped', problem: 'a Survey Solutions table whose columns are not known: map them on the Survey Solutions tab' }));
@@ -1187,12 +1206,13 @@
   // column as an identifying question; a program's own questionnaire takes the household ID alone, under its variable's name.
   L.SUSO_COLS = ['hhid', 'program', 'round', 'contact_name', 'phone_1', 'phone_1_label', 'phone_2', 'phone_2_label', 'phone_3', 'phone_3_label', 'planned_date', 'planned_hour',
     'psu', 'stratum', 'kind', 'replaces', 'rank'];
+  // opt.only: the households to write (the new ones since the last upload); every one of the manifest when it is not given
   L.susoAssignments = (M, Hl, plans, codes, o) => {
     const opt = Object.assign({ layout: 'rtm', idVar: 'hhid', quantity: 1 }, o || {}), codeOf = L.codeOf(M, codes), only = listedReplacements(M);
     const idVar = String(opt.idVar || '').trim() || 'hhid';
     const cols = (opt.layout === 'id' ? [idVar] : [idVar].concat(L.SUSO_COLS.slice(1))).concat(['_responsible', '_quantity']);
     const cell = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' '), rows = [];
-    const add = (id, H, h, x) => rows.push(Object.assign({ [idVar]: id, program: M.program, round: M.round, contact_name: H.name || '', psu: h.psu || '', stratum: h.stratum || '',
+    const add = (id, H, h, x) => (opt.only && !opt.only.has(id)) || rows.push(Object.assign({ [idVar]: id, program: M.program, round: M.round, contact_name: H.name || '', psu: h.psu || '', stratum: h.stratum || '',
       _responsible: codeOf(h.enumerator_id), _quantity: opt.quantity }, contactCols(H), x));
     for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
       const pl = planOf(plans, h.hhid);
@@ -1231,6 +1251,98 @@
         assignment_id: aids.join(' '), interview_keys: ints.map(i => i.key).join(' '), interview_status: ints.map(i => i.status).join(' '),
         in_hq: done ? 'done' : known ? 'pending' : 'no interview yet', received_on_tablet: known ? (got ? 'yes' : 'no') : '' };
     });
+  };
+  // ---- Headquarters follows the manifest, as the KoBoToolbox list does ----
+  // A KoBoToolbox list is written whole and redeployed, so the form holds whatever the manifest says. Survey Solutions takes
+  // assignments one upload at a time and keeps each until it is used up or closed. So the tool keeps a record of what it wrote
+  // (uploads), and from the manifest, the cases and the latest export lists what Headquarters still needs: assignments to upload
+  // (households added or replacements released since), households to reassign (moves, above) and assignments to close.
+
+  // what the full assignments file carries: every household of the manifest and its listed reserves, with who holds it
+  L.susoTargets = M => {
+    const only = listedReplacements(M), out = [];
+    for (const h of M.households.slice().sort((a, b) => cmpStr(a.hhid, b.hhid))) {
+      out.push({ hhid: h.hhid, enumerator_id: h.enumerator_id, kind: 'main', replaces: '' });
+      (h.replacements || []).forEach(id => (only && !only.has(id)) || out.push({ hhid: id, enumerator_id: h.enumerator_id, kind: 'replacement', replaces: h.hhid }));
+    }
+    return out;
+  };
+  // the households Headquarters already has an assignment for: every upload recorded and not undone, and every household the
+  // latest export holds an interview of (its assignment exists, whoever uploaded it)
+  L.susoInHQ = (uploads, metas) => {
+    const s = new Set();
+    (uploads || []).filter(u => !u.undone).forEach(u => (u.hhids || []).forEach(h => s.add(h)));
+    (metas || []).forEach(m => Object.keys(m.byHH || {}).forEach(h => s.add(h)));
+    return s;
+  };
+  L.susoNew = (M, uploads, metas) => { const have = L.susoInHQ(uploads, metas); return L.susoTargets(M).filter(t => !have.has(t.hhid)); };
+  // the assignments to close (or interviews to finish) in Headquarters. Now: a household released for the round, replaced, or
+  // whose removal is asked; a reserve whose household is complete; with unlimited assignments (one interview per call), a
+  // household complete. At the end of the round: every other assignment still open. An assignment of 1 is used up once its
+  // interview is opened, and the interview stays on the interviewer's list until it is completed: the interviewer completes it
+  // (its calls are kept). An assignment still open (no interview, or unlimited) is closed under Assignments.
+  L.SUSO_CLOSE_COLS = ['when', 'hhid', 'reason', 'login', 'assignment_id', 'interview_keys', 'interview_status', 'what_to_do'];
+  L.susoClose = (M, C, codes, metas, o) => {
+    const opt = Object.assign({ quantity: 1, inHQ: null }, o || {}), codeOf = L.codeOf(M, codes), byHH = new Map(), unlimited = +opt.quantity === -1;
+    (metas || []).forEach(s => Object.entries(s.byHH || {}).forEach(([h, xs]) => { if (!byHH.has(h)) byHH.set(h, new Map()); xs.forEach(x => byHH.get(h).set(x.key, x)); }));
+    const DONE = new Set(['Completed', 'Approved by supervisor', 'Approved by headquarters']);
+    const REASON = { released: 'released for the round', replaced: 'replaced', remove_requested: 'removal asked' };
+    const holder = new Map(M.households.map(h => [h.hhid, h.enumerator_id]));
+    const rows = [];
+    for (const t of L.susoTargets(M)) {
+      if (opt.inHQ && !opt.inHQ.has(t.hhid)) continue;                       // never uploaded: nothing to close
+      const c = C.get(t.hhid), state = c ? c.state : t.kind === 'replacement' ? 'reserve' : 'not_started';
+      const ints = byHH.has(t.hhid) ? [...byHH.get(t.hhid).values()] : [], open = ints.filter(i => !DONE.has(i.status));
+      const assignmentOpen = unlimited || !ints.length, done = !assignmentOpen && !open.length;
+      if (done) continue;                                                     // used up and its interview completed
+      let when = 'round end', reason = state === 'reserve' ? 'reserve not used' : state === 'complete' ? 'complete' : 'still open at the end of the round';
+      if (REASON[state]) { when = 'now'; reason = REASON[state]; }
+      else if (state === 'reserve' && (C.get(t.replaces) || {}).state === 'complete') { when = 'now'; reason = 'reserve no longer needed: its household is complete'; }
+      else if (state === 'complete' && unlimited) { when = 'now'; reason = 'complete'; }
+      else if (state === 'complete' && ints.length) continue;                  // complete in the tool, its interview still open: listed below
+      const what = [assignmentOpen ? 'Assignments: filter by the login, tick the assignment, Close' : '', open.length ? `the interviewer completes ${open.length === 1 ? 'the interview' : 'the interviews'} (the calls are kept)` : '']
+        .filter(Boolean).join('; then ');
+      rows.push({ when, hhid: t.hhid, reason, login: codeOf(holder.get(t.hhid) || t.enumerator_id), assignment_id: [...new Set(ints.map(i => i.assignment).filter(Boolean))].join(' '),
+        interview_keys: ints.map(i => i.key).join(' '), interview_status: ints.map(i => i.status).join(' '), what_to_do: what });
+    }
+    // the households complete in the tool whose interview is still open: the interviewer completes it before the round closes
+    for (const t of L.susoTargets(M)) {
+      if (unlimited || (opt.inHQ && !opt.inHQ.has(t.hhid))) continue;
+      const c = C.get(t.hhid);
+      if (!c || c.state !== 'complete') continue;
+      const ints = byHH.has(t.hhid) ? [...byHH.get(t.hhid).values()] : [], open = ints.filter(i => !DONE.has(i.status));
+      if (!open.length) continue;
+      rows.push({ when: 'round end', hhid: t.hhid, reason: 'complete', login: codeOf(holder.get(t.hhid) || t.enumerator_id), assignment_id: [...new Set(ints.map(i => i.assignment).filter(Boolean))].join(' '),
+        interview_keys: ints.map(i => i.key).join(' '), interview_status: ints.map(i => i.status).join(' '), what_to_do: 'the interviewer completes the interview (the calls are kept)' });
+    }
+    return rows.sort((a, b) => (a.when === b.when ? cmpStr(a.hhid, b.hhid) : a.when === 'now' ? -1 : 1));
+  };
+  // Headquarters' list of interviewers (Teams and Roles › Interviewers › Download report as TAB or CSV, seen on release 26.11): the
+  // tool reads the login (i_name) and the supervisor (i_supervisorName) and nothing else; names, e-mails and phones are not kept
+  L.readHqUsers = (name, text) => {
+    const t = String(text).replace(/^﻿/, ''), first = t.split(/\r?\n/)[0] || '', tab = first.includes('\t');
+    let header, rows;
+    if (tab) { const T = tsvTable(t); header = T.header; rows = T.rows; }
+    else { const a = R.parseCSV(t); header = (a[0] || []).map(h => String(h).trim()); rows = a.slice(1).map(v => Object.fromEntries(header.map((h, i) => [h, v[i] === undefined ? '' : String(v[i])]))); }
+    const pick = res => header.find(h => res.some(re => re.test(h)));
+    const lc = pick([/^i_name$/i, /^login( ?name)?$/i, /^user ?name$/i]), sc = pick([/^i_supervisorName$/i, /^supervisor( ?name)?$/i]);
+    if (!lc) return { name, error: `no login column (Headquarters writes i_name): its columns are ${header.slice(0, 6).join(', ')}` };
+    const logins = rows.map(r => ({ login: String(r[lc] || '').trim(), supervisor: sc ? String(r[sc] || '').trim() : '' })).filter(u => u.login);
+    return { name, logins };
+  };
+  // the team's logins against Headquarters' list: exact, the same but for case or punctuation (corrected to Headquarters' spelling),
+  // or missing; and the accounts no enumerator uses
+  L.matchLogins = (ids, codeOf, hq) => {
+    const exact = new Set(hq.map(u => u.login)), byKey = new Map(hq.map(u => [codeKey(u.login), u.login])), used = new Set();
+    const out = { ok: [], fixed: [], missing: [], unused: [] };
+    ids.forEach(id => {
+      const cur = codeOf(id);
+      if (exact.has(cur)) { out.ok.push({ id, login: cur }); used.add(cur); return; }
+      const k = byKey.get(codeKey(cur));
+      if (k) { out.fixed.push({ id, from: cur, to: k }); used.add(k); } else out.missing.push({ id, login: cur, own: cur === id });
+    });
+    out.unused = hq.map(u => u.login).filter(l => !used.has(l));
+    return out;
   };
   // a zip archive (a Survey Solutions export) as its tables: the same reader as the workbook's
   L.readZip = async buf => {

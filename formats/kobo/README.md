@@ -79,6 +79,15 @@ dialed, round, record ID, submission time, note), and what each value of the res
 tool's codes (the card lists the values with their counts). The mapping is saved in the leader's session and used
 for every later file with the same columns. A value left unmapped is read as `OTHER`, with the value in the note.
 
+A form's export holds every round so far. With a round column, rows of other rounds are left out; without one, rows
+whose call starts before the first day of the round window are taken as earlier rounds' and left out, with one note.
+The same rule reads a Survey Solutions export.
+
+**During the round.** The list for the form (`choices_households.csv` or `households.csv`) is written whole from the
+manifest. The tool keeps a fingerprint of each list it writes, and step 4 of the KoBoToolbox tab says when the list
+the manifest gives now differs (a move, a household added, a replacement released): write it again and redeploy. The
+Survey Solutions tab does the same with one action per change, since Headquarters takes them one at a time.
+
 ## 4. Platform codes
 
 Where the form knows enumerators by another code than the tool's ID (the L2PHL form's `int_id`, for example),

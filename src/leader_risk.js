@@ -81,6 +81,25 @@
     return row;
   };
 
+  // ---- which programs the model learned from (train_risk.py, calibrations): all six, a region, one program or any group ----
+  // The bundled model learned from all the programs; every other combination was fitted the same way and tested on the
+  // programs it leaves out. A key names the programs, in the training order, joined by '+'; 'all' is the bundled model.
+  K.cal = model => (model && model.calibrations) || null;
+  K.order = model => { const c = K.cal(model); return c ? c.programs.map(p => p.label) : []; };
+  K.keyOf = (model, labels) => K.order(model).filter(l => labels.includes(l)).join('+');
+  K.norm = (model, kind, key) => { const c = K.cal(model); return !c || !key || key === 'all' || key === c.all[kind] || !c[kind][key] ? 'all' : key; };
+  K.base = (model, kind, key) => { const c = K.cal(model); return c ? c[kind][K.norm(model, kind, key) === 'all' ? c.all[kind] : key] || null : null; };
+  K.spec = (model, kind, key) => {
+    const c = K.cal(model), k = K.norm(model, kind, key);
+    if (k === 'all') return model[kind];
+    const b = c[kind][k];
+    return Object.assign({}, model[kind], { mean_intercept: b.mean_intercept, intercepts: b.intercepts, n: b.n, base: k,
+      features: model[kind].features.map((f, j) => Object.assign({}, f, { mean: b.mean[j], sd: b.sd[j], coef: b.coef[j] })) });
+  };
+  // the programs of the region a country belongs to (UN M49), and the program run in that country, if any
+  K.regionOf = (model, country) => { const c = K.cal(model); return c ? c.regions.find(r => r.countries.includes(country)) || null : null; };
+  K.programIn = (model, country) => { const c = K.cal(model); return c ? (c.programs.find(p => p.country === country) || {}).label || null : null; };
+
   // ---- scoring ----
   K.z = (spec, row) => spec.features.map(f => { const v = row[f.key]; return v === null || v === undefined || isNaN(v) ? 0 : (v - f.mean) / f.sd; });
   // version: {kind: 'pooled'} | {kind: 'recalibrated', a, b} | {kind: 'refit', intercept, coef, means, sds}
@@ -231,8 +250,8 @@
   };
   K.auc = auc;
   // rolling origin on the program's own rounds: at each outcome round, use only the outcomes already known
-  K.backtest = (model, X, kind) => {
-    const spec = model[kind], pairs = K.ownPairs(model, X, kind);
+  K.backtest = (model, X, kind, specIn) => {
+    const spec = specIn || model[kind], pairs = K.ownPairs(model, X, kind);
     const outcomes = [...new Set(pairs.map(p => p._.outcome))].sort((a, b) => a - b);
     const res = { pooled: { y: [], p: [], r: [] }, recalibrated: { y: [], p: [], r: [] }, refit: { y: [], p: [], r: [] } };
     let steps = 0, refitSteps = 0;
@@ -269,8 +288,8 @@
   };
   K.REFIT_MIN = 300;     // about 20 events per feature (proposal E)
   // the version the leader may switch to: fitted on every outcome known now
-  K.fitVersion = (model, X, kind, which) => {
-    const spec = model[kind], pairs = K.ownPairs(model, X, kind), y = pairs.map(p => p._.y);
+  K.fitVersion = (model, X, kind, which, specIn) => {
+    const spec = specIn || model[kind], pairs = K.ownPairs(model, X, kind), y = pairs.map(p => p._.y);
     if (which === 'recalibrated') return Object.assign({ kind: 'recalibrated', fitted_on: pairs.length, events: y.reduce((a, b) => a + b, 0) }, K.recalibrate(K.score(spec, pairs, { kind: 'pooled' }).map(s => s.lp), y));
     if (which === 'refit') return Object.assign(K.refit(spec, pairs, 1.0), { fitted_on: pairs.length, events: y.reduce((a, b) => a + b, 0) });
     return { kind: 'pooled' };
